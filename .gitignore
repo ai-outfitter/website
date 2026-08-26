@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+.devenv/
+.direnv/
+devenv.local.nix
+.env.*
+!.env
+!.env.example
