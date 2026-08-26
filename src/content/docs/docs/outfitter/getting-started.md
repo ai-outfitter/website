@@ -39,13 +39,13 @@ not worked manually.
 
 ## 4. Choose the next surface
 
-- Use [Actions](/docs/projects/actions/) when an issue, pull request, push, or
+- Use [Actions](/docs/actions/) when an issue, pull request, push, or
   schedule should run the profile in GitHub Actions.
-- Use [Channels](/docs/projects/channels/) when a message or external event should
+- Use [Channels](/docs/channels/) when a message or external event should
   wake a long-running session.
-- Follow [Agent Operator](/docs/projects/agent-operator/) when a resident agent
+- Follow [Agent Operator](/docs/agent-operator/) when a resident agent
   belongs in Kubernetes. It is currently design-stage software.
-- Add [Evals](/docs/projects/evals/) before changing models or profiles at scale.
+- Add [Evals](/docs/evals/) before changing models or profiles at scale.
 
 For the complete CLI walkthrough, use the
 [canonical Outfitter getting-started guide](https://github.com/ai-outfitter/outfitter/blob/main/docs/documentation/getting-started.md).

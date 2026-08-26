@@ -1,6 +1,6 @@
 ---
-title: The adoption ramp
-description: Move from assisted coding to an autonomous lifecycle one evidence-backed boundary at a time.
+title: Move the control point outward
+description: The Outfitter adoption ramp moves from assisted coding to an autonomous lifecycle one evidence-backed boundary at a time.
 ---
 
 The ramp is a sequence of control boundaries. Each rung changes who initiates
@@ -20,5 +20,5 @@ Two rules keep the climb honest:
 2. Move the human locus of control outward one layer at a time.
 
 Read the [full philosophy](https://github.com/ai-outfitter/outfitter/blob/main/docs/philosophy.md)
-or use [Link](/docs/projects/link/) to assess which measurable signals exist in an
+or use [Link](/docs/link/) to assess which measurable signals exist in an
 organization today.

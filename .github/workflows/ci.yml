@@ -20,4 +20,5 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+      - run: npm run test:search
       - run: npm exec -- wrangler deploy --dry-run

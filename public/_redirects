@@ -1,0 +1,6 @@
+# Repository docs moved out of the generic projects namespace.
+/docs/projects/:repo/* /docs/:repo/:splat 301
+
+# Outfitter foundation pages now live with the Outfitter docs.
+/docs/foundations/* /docs/outfitter/:splat 301
+/docs/getting-started/* /docs/outfitter/getting-started/:splat 301
