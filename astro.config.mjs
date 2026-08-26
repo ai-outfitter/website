@@ -2,7 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://ai-outfitter-website.ncrmro.workers.dev',
+  site: 'https://ai-outfitter.com',
   vite: {
     server: {
       strictPort: true,
