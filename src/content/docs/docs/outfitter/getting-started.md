@@ -44,7 +44,8 @@ not worked manually.
 - Use [Channels](/docs/channels/) when a message or external event should
   wake a long-running session.
 - Follow [Agent Operator](/docs/agent-operator/) when a resident agent
-  belongs in Kubernetes. It is currently design-stage software.
+  belongs in Kubernetes. It is alpha software in active use; pin a release and
+  review its changelog before upgrading.
 - Add [Evals](/docs/evals/) before changing models or profiles at scale.
 
 For the complete CLI walkthrough, use the
