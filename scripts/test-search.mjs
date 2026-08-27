@@ -53,12 +53,17 @@ try {
     url: '/docs/adoption-ramp/',
   });
 
+  const workflowSearch = await pagefind.search('Grafana alert investigation workflow');
+  const workflowResult = await workflowSearch.results[0].data();
+  assert.equal(workflowResult.meta.title, 'Grafana alert investigation');
+  assert.equal(new URL(workflowResult.url).pathname, '/docs/workflows/grafana-alert/');
+
   const agentOperator = await readFile('dist/docs/agent-operator/index.html', 'utf8');
   assert.match(agentOperator, /alpha and actively used/i);
   assert.match(agentOperator, /Synced from/);
   assert.doesNotMatch(agentOperator, /design stage/i);
 
-  console.log('Search and canonical repository documentation regressions pass.');
+  console.log('Search, workflow atlas, and canonical repository documentation regressions pass.');
 } finally {
   await new Promise((resolveClose, rejectClose) =>
     server.close((error) => (error ? rejectClose(error) : resolveClose())),

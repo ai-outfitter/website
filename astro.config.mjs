@@ -61,6 +61,7 @@ export default defineConfig({
             { label: 'Documentation', link: '/docs/' },
             { label: 'Repository documentation', link: '/docs/projects/' },
             { label: 'The adoption ramp', link: '/docs/adoption-ramp/' },
+            { label: 'Workflow atlas', link: '/docs/workflows/' },
           ],
         },
         ...repositorySidebar,

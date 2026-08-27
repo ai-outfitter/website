@@ -16,6 +16,10 @@ the source project repositories and site-owned content in `src/content/docs/`.
 The `docs:sync` step publishes each configured repository's `README.md` and
 complete `docs/` tree under `/docs/<repo>/`.
 
+Organization-wide workflows are declared once in `docs/workflows/factory.yaml`.
+The same sync step validates that YAML and generates the workflow atlas under
+`/docs/workflows/`, including Mermaid diagrams and accessible step tables.
+
 By default, the sync script discovers sibling checkouts under
 `~/repos/ai-outfitter`. Set `AI_OUTFITTER_REPOS_DIR` to use another checkout
 root, or override one repository with a variable such as
@@ -37,6 +41,7 @@ devenv shell -- npm run check
 devenv shell -- npm run build
 devenv shell -- npm run test:links
 devenv shell -- npm run test:search
+devenv shell -- npm run test:workflows
 devenv shell -- npm run deploy:dry-run
 ```
 

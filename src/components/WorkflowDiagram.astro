@@ -1,0 +1,115 @@
+---
+interface Props {
+  title: string;
+  source: string;
+}
+
+const { title, source } = Astro.props;
+const serializedSource = JSON.stringify(source).replaceAll('<', '\\u003c');
+---
+
+<figure class="workflow-diagram" data-workflow-diagram>
+  <div class="workflow-diagram__canvas" role="img" aria-label={`${title} workflow diagram`}>
+    <p class="workflow-diagram__status">Rendering workflow…</p>
+  </div>
+  <details>
+    <summary>View Mermaid source</summary>
+    <pre><code>{source}</code></pre>
+  </details>
+  <script is:inline type="application/json" data-workflow-source set:html={serializedSource}></script>
+</figure>
+
+<script>
+  import mermaid from 'mermaid';
+
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'dark',
+    layout: 'elk',
+    flowchart: {
+      defaultRenderer: 'elk',
+      curve: 'basis',
+      htmlLabels: true,
+      useMaxWidth: false,
+    },
+  });
+
+  const narrowScreen = matchMedia('(max-width: 50rem)');
+
+  async function renderDiagrams() {
+    const diagrams = document.querySelectorAll<HTMLElement>('[data-workflow-diagram]');
+    await Promise.all([...diagrams].map(async (diagram, index) => {
+      const canvas = diagram.querySelector<HTMLElement>('.workflow-diagram__canvas');
+      const data = diagram.querySelector<HTMLScriptElement>('[data-workflow-source]');
+      if (!canvas || !data) return;
+      try {
+        const source = JSON.parse(data.textContent ?? '""').replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrowScreen.matches ? 'TB' : 'LR'}`);
+        const rendered = await mermaid.render(`workflow-${index}-${narrowScreen.matches ? 'tb' : 'lr'}`, source);
+        canvas.innerHTML = rendered.svg;
+        rendered.bindFunctions?.(canvas);
+      } catch (error) {
+        canvas.innerHTML = '';
+        const message = document.createElement('p');
+        message.className = 'workflow-diagram__error';
+        message.textContent = `The workflow diagram could not be rendered: ${error instanceof Error ? error.message : String(error)}`;
+        canvas.append(message);
+      }
+    }));
+  }
+
+  void renderDiagrams();
+  narrowScreen.addEventListener('change', () => void renderDiagrams());
+</script>
+
+<style>
+  .workflow-diagram {
+    margin-block: 2rem;
+  }
+
+  .workflow-diagram__canvas {
+    display: grid;
+    min-height: 26rem;
+    place-items: center;
+    overflow: auto;
+    padding: 1.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    background: #0f1728;
+  }
+
+  .workflow-diagram__canvas :global(svg) {
+    min-width: 62rem;
+    max-width: none;
+    height: auto;
+  }
+
+  .workflow-diagram__status {
+    color: #b7c4dc;
+  }
+
+  .workflow-diagram__error {
+    color: #ff9caf;
+  }
+
+  details {
+    margin-top: 0.75rem;
+  }
+
+  details pre {
+    max-height: 24rem;
+  }
+
+  @media (max-width: 50rem) {
+    .workflow-diagram__canvas {
+      min-height: 18rem;
+      padding: 0.75rem;
+    }
+
+    .workflow-diagram__canvas :global(svg) {
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+</style>
