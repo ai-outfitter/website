@@ -1,6 +1,27 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+import { repositories, repositoryGroups } from './docs/repositories.mjs';
+
+const repositorySidebar = repositoryGroups.map((group) => ({
+  label: group,
+  collapsed: group !== 'Core platform',
+  items: repositories
+    .filter((repository) => repository.group === group)
+    .map((repository) => ({
+      label: repository.title,
+      collapsed: true,
+      items: [
+        {
+          autogenerate: {
+            directory: `docs/${repository.slug}`,
+            collapsed: true,
+          },
+        },
+      ],
+    })),
+}));
+
 export default defineConfig({
   site: 'https://ai-outfitter.com',
   vite: {
@@ -38,44 +59,11 @@ export default defineConfig({
           label: 'Start here',
           items: [
             { label: 'Documentation', link: '/docs/' },
-            { label: 'Choose a project', link: '/docs/projects/' },
+            { label: 'Repository documentation', link: '/docs/projects/' },
+            { label: 'The adoption ramp', link: '/docs/adoption-ramp/' },
           ],
         },
-        {
-          label: 'Outfitter',
-          items: [
-            { label: 'Overview', link: '/docs/outfitter/' },
-            { label: 'Getting started', link: '/docs/outfitter/getting-started/' },
-            { label: 'The adoption ramp', link: '/docs/outfitter/adoption-ramp/' },
-            { label: 'The .agents convention', link: '/docs/outfitter/dotagents/' },
-            { label: 'Architecture', link: '/docs/outfitter/architecture/' },
-          ],
-        },
-        {
-          label: 'Core platform',
-          items: [
-            { label: 'Catalogs', link: '/docs/catalogs/' },
-            { label: 'Actions', link: '/docs/actions/' },
-            { label: 'Channels', link: '/docs/channels/' },
-            { label: 'Agent Operator', link: '/docs/agent-operator/' },
-          ],
-        },
-        {
-          label: 'Quality and evidence',
-          items: [
-            { label: 'Deepwork', link: '/docs/deepwork/' },
-            { label: 'Evals', link: '/docs/evals/' },
-            { label: 'Link', link: '/docs/link/' },
-            { label: 'Pensieve', link: '/docs/pensieve/' },
-            { label: 'Autoimprove', link: '/docs/autoimprove/' },
-          ],
-        },
-        {
-          label: 'Extensions',
-          items: [
-            { label: 'Extension packages', link: '/docs/extensions/' },
-          ],
-        },
+        ...repositorySidebar,
       ],
     }),
   ],

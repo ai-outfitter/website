@@ -19,6 +19,6 @@ Two rules keep the climb honest:
 1. Automate nothing you have not first done manually.
 2. Move the human locus of control outward one layer at a time.
 
-Read the [full philosophy](https://github.com/ai-outfitter/outfitter/blob/main/docs/philosophy.md)
-or use [Link](/docs/link/) to assess which measurable signals exist in an
-organization today.
+Read the [canonical Outfitter philosophy](/docs/outfitter/philosophy/) or use
+[Link](/docs/link/) to assess which measurable signals exist in an organization
+today.

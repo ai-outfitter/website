@@ -3,4 +3,11 @@
 
 # Outfitter foundation pages now live with the Outfitter docs.
 /docs/foundations/* /docs/outfitter/:splat 301
-/docs/getting-started/* /docs/outfitter/getting-started/:splat 301
+/docs/getting-started/* /docs/outfitter/documentation/getting-started/:splat 301
+
+# Preserve routes from the original hand-authored project summaries.
+/docs/outfitter/getting-started/* /docs/outfitter/documentation/getting-started/:splat 301
+/docs/outfitter/adoption-ramp/* /docs/adoption-ramp/:splat 301
+/docs/outfitter/dotagents/* /docs/outfitter/documentation/concepts/:splat 301
+/docs/catalogs/* /docs/outfitter/documentation/catalogs/:splat 301
+/docs/extensions/* /docs/projects/:splat 301

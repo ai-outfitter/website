@@ -7,13 +7,17 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "docs:checkout": "node scripts/checkout-repository-docs.mjs",
+    "docs:sync": "node scripts/sync-repository-docs.mjs",
+    "dev": "npm run docs:sync && astro dev",
+    "build": "npm run docs:sync && astro build",
     "preview": "wrangler dev",
-    "check": "astro check",
+    "check": "npm run docs:sync && astro check",
+    "test:links": "node scripts/check-links.mjs",
     "test:search": "node scripts/test-search.mjs",
     "deploy": "npm run build && wrangler deploy",
-    "deploy:dry-run": "npm run build && wrangler deploy --dry-run"
+    "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
+    "publish": "node scripts/publish.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.9",

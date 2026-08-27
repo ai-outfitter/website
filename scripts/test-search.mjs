@@ -50,9 +50,15 @@ try {
 
   assert.deepEqual(results[0], {
     title: 'Move the control point outward',
-    url: '/docs/outfitter/adoption-ramp/',
+    url: '/docs/adoption-ramp/',
   });
-  console.log('Search ranks the canonical Outfitter documentation page first.');
+
+  const agentOperator = await readFile('dist/docs/agent-operator/index.html', 'utf8');
+  assert.match(agentOperator, /alpha and actively used/i);
+  assert.match(agentOperator, /Synced from/);
+  assert.doesNotMatch(agentOperator, /design stage/i);
+
+  console.log('Search and canonical repository documentation regressions pass.');
 } finally {
   await new Promise((resolveClose, rejectClose) =>
     server.close((error) => (error ? rejectClose(error) : resolveClose())),
