@@ -1,0 +1,84 @@
+---
+import DefaultSidebar from '@astrojs/starlight/components/Sidebar.astro';
+import TableOfContents from '@astrojs/starlight/components/TableOfContents.astro';
+
+const isWorkflow = Astro.url.pathname.startsWith('/docs/workflows/');
+---
+
+{
+  isWorkflow ? (
+    <div class="workflow-sidebar">
+      <div class="workflow-sidebar__toc">
+        <TableOfContents />
+      </div>
+      <details class="workflow-sidebar__docs">
+        <summary>Browse all documentation</summary>
+        <div class="workflow-sidebar__docs-content">
+          <DefaultSidebar />
+        </div>
+      </details>
+    </div>
+  ) : (
+    <DefaultSidebar />
+  )
+}
+
+<style>
+  .workflow-sidebar {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .workflow-sidebar__toc {
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+  }
+
+  .workflow-sidebar__toc :global(h2) {
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-lg);
+    font-weight: 650;
+  }
+
+  .workflow-sidebar__toc :global(a) {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+  }
+
+  .workflow-sidebar__toc :global(a:hover),
+  .workflow-sidebar__toc :global(a:focus),
+  .workflow-sidebar__toc :global(a[aria-current='true']) {
+    color: var(--sl-color-white);
+  }
+
+  .workflow-sidebar__docs > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+    font-weight: 650;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .workflow-sidebar__docs > summary::after {
+    content: '›';
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .workflow-sidebar__docs[open] > summary::after {
+    transform: rotate(90deg);
+  }
+
+  .workflow-sidebar__docs-content {
+    margin-top: 1rem;
+  }
+</style>

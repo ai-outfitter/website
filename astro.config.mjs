@@ -49,6 +49,11 @@ export default defineConfig({
         },
       ],
       customCss: ['./src/styles/custom.css'],
+      components: {
+        Sidebar: './src/components/StarlightSidebar.astro',
+        PageSidebar: './src/components/StarlightPageSidebar.astro',
+        TwoColumnContent: './src/components/StarlightTwoColumnContent.astro',
+      },
       editLink: {
         baseUrl: 'https://github.com/ai-outfitter/website/edit/main/',
       },
