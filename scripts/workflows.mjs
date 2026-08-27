@@ -14,11 +14,39 @@ const list = (value) => {
   return value.map(String);
 };
 
+function assertAcyclic(graph, message) {
+  const visiting = new Set();
+  const visited = new Set();
+  const visit = (id) => {
+    if (visiting.has(id)) throw new Error(message(id));
+    if (visited.has(id)) return;
+    visiting.add(id);
+    for (const dependency of graph.get(id) ?? []) visit(dependency);
+    visiting.delete(id);
+    visited.add(id);
+  };
+  graph.forEach((_, id) => visit(id));
+}
+
+function reachable(graph, id) {
+  const seen = new Set();
+  const visit = (current) => {
+    for (const target of graph.get(current) ?? []) {
+      if (seen.has(target)) continue;
+      seen.add(target);
+      visit(target);
+    }
+  };
+  visit(id);
+  return seen;
+}
+
 function workflowMap(factory) {
   if (!Array.isArray(factory.workflows)) throw new Error('Factory "workflows" MUST be a list.');
   const workflows = new Map();
   for (const workflow of factory.workflows) {
     if (!workflow?.id) throw new Error('Every workflow MUST have an id.');
+    if (!workflow.title) throw new Error(`Workflow "${workflow.id}" MUST have a title.`);
     if (workflows.has(workflow.id)) throw new Error(`Duplicate workflow id "${workflow.id}".`);
     if (!Array.isArray(workflow.nodes)) throw new Error(`Workflow "${workflow.id}" nodes MUST be a list.`);
     workflows.set(workflow.id, workflow);
@@ -69,36 +97,23 @@ function validate(factory, workflows) {
       if (trigger.environment && !factory.environments?.[trigger.environment]) throw new Error(`Workflow "${workflowId}" trigger ${index} references unknown environment "${trigger.environment}".`);
     }
 
-    const visiting = new Set();
-    const visited = new Set();
-    const visit = (id) => {
-      if (visiting.has(id)) throw new Error(`Workflow "${workflowId}" contains a needs cycle at node "${id}".`);
-      if (visited.has(id)) return;
-      visiting.add(id);
-      for (const dependency of list(nodes.get(id)?.needs)) visit(dependency);
-      visiting.delete(id);
-      visited.add(id);
-    };
-    nodes.forEach((_, id) => visit(id));
+    const dependencyGraph = new Map([...nodes].map(([id, node]) => [id, list(node.needs)]));
+    assertAcyclic(dependencyGraph, (id) => `Workflow "${workflowId}" contains a needs cycle at node "${id}".`);
     invocationGraph.set(workflowId, [...new Set(references)]);
   }
 
-  const visiting = new Set();
-  const visited = new Set();
-  const visitWorkflow = (id) => {
-    if (visiting.has(id)) throw new Error(`Blocking workflow references contain a cycle at "${id}".`);
-    if (visited.has(id)) return;
-    visiting.add(id);
-    for (const dependency of invocationGraph.get(id) ?? []) visitWorkflow(dependency);
-    visiting.delete(id);
-    visited.add(id);
-  };
-  invocationGraph.forEach((_, id) => visitWorkflow(id));
+  assertAcyclic(invocationGraph, (id) => `Blocking workflow references contain a cycle at "${id}".`);
   return invocationGraph;
 }
 
-const environmentName = (factory, reference) => ({ local: 'Local', 'agent-operator': 'Kubernetes', 'github-actions': 'GitHub Actions' }[factory.environments?.[reference]] ?? title(factory.environments?.[reference] ?? reference));
-const environmentClass = (factory, reference) => ({ local: 'local', 'agent-operator': 'resident', 'github-actions': 'actions' }[factory.environments?.[reference]] ?? 'default');
+const environmentDefinitions = {
+  local: { name: 'Local', className: 'local' },
+  'agent-operator': { name: 'Kubernetes', className: 'resident' },
+  'github-actions': { name: 'GitHub Actions', className: 'actions' },
+};
+const environmentDefinition = (factory, reference) => environmentDefinitions[factory.environments?.[reference]];
+const environmentName = (factory, reference) => environmentDefinition(factory, reference)?.name ?? title(factory.environments?.[reference] ?? reference);
+const environmentClass = (factory, reference) => environmentDefinition(factory, reference)?.className ?? 'default';
 const actorName = (factory, reference) => `${title(reference)} (${words(factory.actors?.[reference]?.kind ?? 'actor')})`;
 
 function integrationLabel(factory, reference) {
@@ -150,7 +165,9 @@ function renderWorkflow(factory, workflows, workflow) {
   }
   const roots = workflow.nodes.filter((node) => list(node.needs).length === 0);
   for (const trigger of triggers) for (const root of roots) lines.push(`  ${trigger.id} --> ${root.id}`);
-  workflow.nodes.forEach((node) => lines.push(`  class ${node.id} ${node.workflow ? 'workflowAction' : factory.actors[node.actor].kind === 'agent' ? 'agentAction' : 'humanAction'}`));
+  workflow.nodes
+    .filter((node) => node.workflow || factory.actors[node.actor].kind === 'human')
+    .forEach((node) => lines.push(`  class ${node.id} ${node.workflow ? 'workflowAction' : 'humanAction'}`));
   lines.push(
     '  classDef local fill:#123039,stroke:#71dfd0,color:#e8fffb,stroke-width:2px',
     '  classDef resident fill:#172c4d,stroke:#78a9ff,color:#edf4ff,stroke-width:2px',
@@ -158,7 +175,6 @@ function renderWorkflow(factory, workflows, workflow) {
     '  classDef default fill:#252b38,stroke:#aab7ce,color:#f1f5ff,stroke-width:2px',
     '  classDef workflowRef fill:#202a3d,stroke:#f5c96b,color:#fff8df,stroke-width:3px',
     '  classDef humanAction stroke-dasharray:7 4',
-    '  classDef agentAction stroke-dasharray:0',
     '  classDef workflowAction stroke-dasharray:4 3',
   );
   return lines.join('\n');
@@ -169,29 +185,18 @@ export async function loadWorkflows(source) {
   const factory = parse(yaml);
   const workflows = workflowMap(factory);
   const invocationGraph = validate(factory, workflows);
-  const descendants = (id) => {
-    const seen = new Set();
-    const visit = (current) => {
-      for (const target of invocationGraph.get(current) ?? []) {
-        if (seen.has(target)) continue;
-        seen.add(target);
-        visit(target);
-      }
-    };
-    visit(id);
-    return seen;
-  };
+  const revision = createHash('sha256').update(yaml).digest('hex').slice(0, 12);
   const items = [...workflows].map(([id, workflow]) => {
     const invokes = invocationGraph.get(id) ?? [];
     return {
       ...workflow,
-      revision: createHash('sha256').update(yaml).digest('hex').slice(0, 12),
+      revision,
       mermaid: renderWorkflow(factory, workflows, workflow),
       invokes: invokes.map((target) => ({ id: target, title: workflows.get(target).title ?? title(target) })),
-      canInvoke: [...descendants(id)].filter((target) => !invokes.includes(target)).map((target) => ({ id: target, title: workflows.get(target).title ?? title(target) })),
+      canInvoke: [...reachable(invocationGraph, id)].filter((target) => !invokes.includes(target)).map((target) => ({ id: target, title: workflows.get(target).title ?? title(target) })),
     };
   });
   return { factory, items, yaml };
 }
 
-export { environmentName, title };
+export { actorName, environmentName, title };

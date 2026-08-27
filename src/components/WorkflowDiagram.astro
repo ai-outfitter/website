@@ -5,18 +5,15 @@ interface Props {
 }
 
 const { title, source } = Astro.props;
-const serializedSource = JSON.stringify(source).replaceAll('<', '\\u003c');
 ---
 
 <figure class="workflow-diagram" data-workflow-diagram>
-  <div class="workflow-diagram__canvas" role="img" aria-label={`${title} workflow diagram`}>
-    <p class="workflow-diagram__status">Rendering workflow…</p>
-  </div>
+  <div class="workflow-diagram__canvas" role="img" aria-label={`${title} workflow diagram`}></div>
+  <p class="workflow-diagram__status" aria-live="polite">Rendering workflow…</p>
   <details>
     <summary>View Mermaid source</summary>
-    <pre><code>{source}</code></pre>
+    <pre><code data-workflow-source>{source}</code></pre>
   </details>
-  <script is:inline type="application/json" data-workflow-source set:html={serializedSource}></script>
 </figure>
 
 <script>
@@ -26,9 +23,7 @@ const serializedSource = JSON.stringify(source).replaceAll('<', '\\u003c');
     startOnLoad: false,
     securityLevel: 'strict',
     theme: 'dark',
-    layout: 'elk',
     flowchart: {
-      defaultRenderer: 'elk',
       curve: 'basis',
       htmlLabels: true,
       useMaxWidth: false,
@@ -41,19 +36,20 @@ const serializedSource = JSON.stringify(source).replaceAll('<', '\\u003c');
     const diagrams = document.querySelectorAll<HTMLElement>('[data-workflow-diagram]');
     await Promise.all([...diagrams].map(async (diagram, index) => {
       const canvas = diagram.querySelector<HTMLElement>('.workflow-diagram__canvas');
-      const data = diagram.querySelector<HTMLScriptElement>('[data-workflow-source]');
-      if (!canvas || !data) return;
+      const data = diagram.querySelector<HTMLElement>('[data-workflow-source]');
+      const status = diagram.querySelector<HTMLElement>('.workflow-diagram__status');
+      if (!canvas || !data || !status) return;
       try {
-        const source = JSON.parse(data.textContent ?? '""').replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrowScreen.matches ? 'TB' : 'LR'}`);
+        const source = (data.textContent ?? '').replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrowScreen.matches ? 'TB' : 'LR'}`);
         const rendered = await mermaid.render(`workflow-${index}-${narrowScreen.matches ? 'tb' : 'lr'}`, source);
         canvas.innerHTML = rendered.svg;
         rendered.bindFunctions?.(canvas);
+        status.textContent = '';
+        status.classList.remove('workflow-diagram__error');
       } catch (error) {
         canvas.innerHTML = '';
-        const message = document.createElement('p');
-        message.className = 'workflow-diagram__error';
-        message.textContent = `The workflow diagram could not be rendered: ${error instanceof Error ? error.message : String(error)}`;
-        canvas.append(message);
+        status.classList.add('workflow-diagram__error');
+        status.textContent = `The workflow diagram could not be rendered: ${error instanceof Error ? error.message : String(error)}`;
       }
     }));
   }
@@ -85,6 +81,8 @@ const serializedSource = JSON.stringify(source).replaceAll('<', '\\u003c');
   }
 
   .workflow-diagram__status {
+    min-height: 1.5rem;
+    margin-block: 0.5rem 0;
     color: #b7c4dc;
   }
 

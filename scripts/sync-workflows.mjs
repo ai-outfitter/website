@@ -1,6 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { environmentName, loadWorkflows, title } from './workflows.mjs';
+import { actorName, environmentName, loadWorkflows, title } from './workflows.mjs';
 
 const source = resolve('docs/workflows/factory.yaml');
 const output = resolve('src/content/docs/docs/workflows');
@@ -9,6 +9,7 @@ const sourceUrl = 'https://github.com/ai-outfitter/website/blob/main/docs/workfl
 const editUrl = 'https://github.com/ai-outfitter/website/edit/main/docs/workflows/factory.yaml';
 const md = (value) => String(value).replaceAll('|', '\\|');
 const links = (items) => items.length ? items.map((item) => `[${item.title}](/docs/workflows/${item.id}/)`).join(', ') : 'None';
+const yamlQuote = (value) => JSON.stringify(String(value).replaceAll(/\s+/g, ' ').trim());
 
 const { factory, items } = await loadWorkflows(source);
 await rm(output, { recursive: true, force: true });
@@ -33,7 +34,7 @@ ${cards}
 
 ## How to read the diagrams
 
-- A solid border identifies an agent action; a dashed border identifies a human action.
+- A solid border identifies an agent action; a widely dashed border identifies a human action.
 - Teal nodes run locally, blue nodes run in Agent Operator on Kubernetes, and purple nodes run in GitHub Actions.
 - A gold, double-edged node is another blocking workflow. Open its linked page for that workflow's steps.
 - Diamonds and branches show decisions and their declared conditions.
@@ -47,21 +48,21 @@ for (const workflow of items) {
     : '- This workflow has no automatic trigger in the declaration. A person or another workflow starts it.';
   const rows = workflow.nodes.map((node) => {
     const operation = node.workflow ? `[Workflow: ${factory.workflows.find((item) => item.id === node.workflow).title}](/docs/workflows/${node.workflow}/)` : title(node.action);
-    const actor = node.workflow ? 'Blocking workflow' : `${title(node.actor)} (${factory.actors[node.actor].kind})`;
+    const actor = node.workflow ? 'Blocking workflow' : actorName(factory, node.actor);
     const environment = node.workflow ? '—' : environmentName(factory, node.environment);
     const after = node.needs?.length ? node.needs.map((dependency) => `\`${dependency}\``).join(', ') : 'Start';
     const condition = node.if ? `\`${md(node.if)}\`` : '—';
     return `| \`${node.id}\` | ${operation} | ${actor} | ${environment} | ${after} | ${condition} |`;
   }).join('\n');
   await writeFile(resolve(output, `${workflow.id}.mdx`), `---
-title: ${workflow.title}
-description: YAML-derived diagram and step reference for the ${workflow.title} workflow.
+title: ${yamlQuote(workflow.title)}
+description: ${yamlQuote(`YAML-derived diagram and step reference for the ${workflow.title} workflow.`)}
 editUrl: ${editUrl}
 ---
 
 import WorkflowDiagram from '${component}';
 
-This page is generated from the [AI Outfitter workflow declaration](${sourceUrl}) at revision \`${workflow.revision}\`. Edit the YAML—not this generated page—to change the workflow.
+This page is generated from the [AI Outfitter workflow declaration](${sourceUrl}) with declaration hash \`${workflow.revision}\`. Edit the YAML—not this generated page—to change the workflow.
 
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
 
