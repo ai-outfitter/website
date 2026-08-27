@@ -1,12 +1,12 @@
 ---
 import DefaultTwoColumnContent from '@astrojs/starlight/components/TwoColumnContent.astro';
 
-const isWorkflow = Astro.url.pathname.startsWith('/docs/workflows/');
+const isDocumentation = Astro.url.pathname.startsWith('/docs/');
 ---
 
 {
-  isWorkflow ? (
-    <div class="workflow-main-pane">
+  isDocumentation ? (
+    <div class="documentation-main-pane">
       <slot />
     </div>
   ) : (
@@ -18,13 +18,13 @@ const isWorkflow = Astro.url.pathname.startsWith('/docs/workflows/');
 }
 
 <style is:global>
-  .workflow-main-pane {
+  .documentation-main-pane {
     --sl-content-width: 100%;
     width: 100%;
   }
 
   @media (max-width: 71.999rem) {
-    .main-frame:has(.workflow-main-pane) {
+    .main-frame:has(.documentation-main-pane) {
       padding-top: var(--sl-nav-height);
     }
   }
