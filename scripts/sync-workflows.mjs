@@ -1,5 +1,6 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { actorName, environmentName, loadWorkflows, title } from './workflows.mjs';
 
 const source = resolve('docs/workflows/factory.yaml');
@@ -15,7 +16,14 @@ const { factory, items } = await loadWorkflows(source);
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 
-const cards = items.map((workflow) => `- [**${workflow.title}**](/docs/workflows/${workflow.id}/) — ${workflow.nodes.length} declared steps${workflow.triggers?.length ? `, triggered by ${workflow.triggers.map((trigger) => `\`${trigger.event ?? trigger.integration}\``).join(', ')}` : ''}.`).join('\n');
+// A workflow with a `<id>.run.md` beside its YAML is runnable today: that
+// file is the walkthrough for running it on a real repository, and the
+// generated page carries it under "Run it".
+const runGuide = (workflow) => {
+  const path = resolve(dirname(source), `${workflow.id}.run.md`);
+  return existsSync(path) ? readFile(path, 'utf8') : null;
+};
+const cards = (await Promise.all(items.map(async (workflow) => `- [**${workflow.title}**](/docs/workflows/${workflow.id}/) — ${workflow.nodes.length} declared steps${workflow.triggers?.length ? `, triggered by ${workflow.triggers.map((trigger) => `\`${trigger.event ?? trigger.integration}\``).join(', ')}` : ''}.${(await runGuide(workflow)) ? ` **Runnable** — [run it](/docs/workflows/${workflow.id}/#run-it).` : ''}`))).join('\n');
 await writeFile(resolve(output, 'index.md'), `---
 title: Workflow atlas
 description: YAML-defined maps of how people, agents, environments, and integrations compose across AI Outfitter.
@@ -84,7 +92,7 @@ ${triggers}
 | ID | Action | Actor | Environment | After | Condition |
 | --- | --- | --- | --- | --- | --- |
 ${rows}
-`);
+${(await runGuide(workflow)) ? `\n## Run it\n\n${await runGuide(workflow)}` : ''}`);
 }
 
 console.log(`Generated ${items.length} workflow pages from ${source}.`);
