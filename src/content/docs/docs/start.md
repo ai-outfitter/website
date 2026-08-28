@@ -1,26 +1,28 @@
 ---
 title: Start your first software factory
-description: Install the AI Outfitter GitHub App and trigger the agent on an issue. Your first pull request is the feature, adversarially reviewed.
+description: Install the AI Outfitter GitHub App, pick inference, and label an issue. Your first pull request is the feature, adversarially reviewed and merged.
 ---
 
-Two steps, nothing added to your repository. This is the [Software factory](/docs/workflows/factory/) workflow running on hosted runners; the App routes events, scopes a one-hour token to your repository, and merges.
+Three clicks, nothing added to your repository. AI Outfitter hosts your organization's resident agent — the App itself is the agent — and merges the reviewed pull request for you.
 
 ## 1. Install the App
 
-[Install AI Outfitter](https://github.com/apps/ai-outfitter) on the repository you want to try it on. That is the whole setup — no workflow file, no secret, no settings change.
+[Install AI Outfitter](https://github.com/apps/ai-outfitter) on the repository you want to try it on. GitHub sends you back to the setup page for your installation.
 
-## 2. Trigger the agent on an issue
+## 2. Choose inference and provision
 
-Open an issue with acceptance criteria a reviewer can check, then do one of:
+On the setup page pick **AI Outfitter inference** (nothing to configure) or **bring your own key** (provider, API key, optional endpoint and model), then press **Provision**. Within about a minute the page reports the resident ready: an agent running in our cluster in its own namespace, with your key — if you brought one — stored only there.
 
-- add the `ai-outfitter` label;
-- comment `@ai-outfitter implement this`;
-- assign the agent login, where your organization has one.
+No workflow file, no repository secret, no settings change. Your key is never stored by the setup page.
 
-Within seconds a run starts on our runners. You get a pull request named `agent/issue-<n>` opened by `ai-outfitter[bot]`, your own CI runs on it, and a second agent posts an adversarial review with findings and a verdict. `approve` merges and closes the issue; `request-changes` triggers one revision and a second review, then a human decides.
+## 3. Label an issue
+
+Open an issue with acceptance criteria a reviewer can check and add the `ai-outfitter` label (a `@ai-outfitter` mention from a collaborator works too). The resident wakes, implements on `agent/issue-<n>`, opens the pull request as `ai-outfitter[bot]`, and your own CI runs on it. A second run reviews it adversarially in a fresh conversation and returns a verdict over the task plane; `approve` merges and closes the issue, `request-changes` revises once and reviews again, then a human decides.
 
 ## What just ran
 
-Every step above is a node of the declared workflow — [see how they map](/docs/workflows/factory/#run-it) — and you can watch the reference run on [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target/issues/1), a repository with no agent configuration at all.
+Every step is a node of the declared [Software factory](/docs/workflows/factory/) workflow — [see how they map](/docs/workflows/factory/#run-it) — and the reference run lives on [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target/issues/1), a repository with no agent configuration at all.
 
-Inference runs on AI Outfitter's key for now; bringing your own key arrives with the setup page.
+## Self-host it
+
+The same `forge-app` image and operator CRDs run on your own cluster with your own GitHub App (or a Forgejo bot): the [agent-operator](/docs/agent-operator/) `ForgeIntegration` resource deploys the webhook endpoint per organization, and nothing is hosted by us.

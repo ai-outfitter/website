@@ -1,18 +1,18 @@
-This workflow runs today on any GitHub repository through the [AI Outfitter GitHub App](https://github.com/apps/ai-outfitter). Nothing is added to your repository: the App dispatches a hosted runner with a one-hour token scoped to your repository, and your first pull request is the feature itself. The experience mirrors assigning an issue to a coding agent: trigger, wait, review the pull request.
+This workflow runs today on any GitHub repository through the [AI Outfitter GitHub App](https://github.com/apps/ai-outfitter). Nothing is added to your repository: the App **is** your organization's resident agent, hosted in our cluster (or self-hosted with the agent-operator), and your first pull request is the feature itself. The experience mirrors assigning an issue to a coding agent: trigger, wait, review the pull request.
 
 How the declaration maps to what actually runs:
 
 | Declared step | What runs | Identity |
 | --- | --- | --- |
 | `assign_issue` | You trigger the agent on the issue: assign the agent login, add the `ai-outfitter` label, or mention `@ai-outfitter`. GitHub cannot assign issues to an app, so the App is the router. | you |
-| `implement`, `ready` | The `implement` job of the hosted runner: the `luce` profile implements on `agent/issue-<n>`, runs the tests, opens the pull request. Your CI runs on it. | `ai-outfitter[bot]` |
-| `review` | The `review` job: a second agent run with an adversarial brief posts one review ending in a machine-readable verdict, `<!-- outfitter-verdict: approve -->` or `request-changes`. It shares the author's identity, so it cannot use GitHub's approve state. | `ai-outfitter[bot]` |
-| `revise` | On `request-changes` the App dispatches the runner once more with the pull request number; after that round a human decides. | App → runner |
+| `implement`, `ready` | An `AgentTask(implement)` wakes the resident (scaled up from zero if idle); it implements on `agent/issue-<n>`, runs the tests, opens the pull request. Your CI runs on it. | `ai-outfitter[bot]` |
+| `review` | An `AgentTask(review)` in a fresh conversation reviews adversarially and returns its verdict over the internal task plane, bound to the task and the PR head SHA; the App posts the visible review. It shares the author's identity, so it cannot use GitHub's approve state. | `ai-outfitter[bot]` |
+| `revise` | On `request-changes` the App creates one `AgentTask(revise)`; after that round a human decides. | App → resident |
 | `merge` | On `approve` the App merges. Branch protection you configure still applies; the App comments when a merge is refused. | `ai-outfitter[bot]` |
 
 ### Install
 
-[Install the App](https://github.com/apps/ai-outfitter) on the repository. There is no step two.
+[Install the App](https://github.com/apps/ai-outfitter), choose inference, press **Provision** — see [Start your first software factory](/docs/start/).
 
 ### Run
 
@@ -26,8 +26,8 @@ How the declaration maps to what actually runs:
 The reference run lives in [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target), a deliberately tiny project with no agent configuration:
 
 - the task: [issue #1](https://github.com/ai-outfitter/factory-demo-target/issues/1);
-- the runs: [factory-runner Actions](https://github.com/ai-outfitter/factory-runner/actions) (private to the AI Outfitter organization; the pull request and review are public on the target repository).
+- the runs: the resident's task timeline in our cluster (private); the pull request and review are public on the target repository.
 
 ### What the declaration still promises that the app does not yet do
 
-The YAML places `implement` in Kubernetes woken by Channels and `merge` in a separate merge bot. The shipped loop runs on hosted GitHub Actions and lets the App merge. Resident execution and a second App identity for a formal GitHub approval are later milestones of the [plan](https://github.com/ai-outfitter/gh-app/pull/10).
+The YAML wakes `implement` through Channels and gives `merge` to a separate merge bot. The shipped loop wakes the resident by a pushed `AgentTask` and lets the App merge; a second App identity for a formal GitHub approval and Forgejo support are the next milestones.
