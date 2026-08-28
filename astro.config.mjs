@@ -63,6 +63,7 @@ export default defineConfig({
         {
           label: 'Start here',
           items: [
+            { label: 'Start your first software factory', link: '/docs/start/' },
             { label: 'Documentation', link: '/docs/' },
             { label: 'Repository documentation', link: '/docs/projects/' },
             { label: 'The adoption ramp', link: '/docs/adoption-ramp/' },
