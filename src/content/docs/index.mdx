@@ -20,21 +20,21 @@ hero:
 
 ## Assign an issue. Get a reviewed pull request.
 
-Install the GitHub App on one repository. It opens a pull request adding a
-single workflow file; merge it. Assign any issue to the agent login, and your
-own GitHub Actions implement it, review it adversarially, and hand the App a
-verdict to merge on. Nothing else is added to your repository.
+Install the GitHub App on one repository. Label an issue, mention the agent,
+or assign it, and a hosted run implements it, reviews it adversarially, and
+hands the App a verdict to merge on. Nothing is added to your repository —
+your first pull request is the feature.
 
 <div class="signal-grid">
   <div>
     <span class="number">01 / INSTALL</span>
-    <h3>One click, one file</h3>
-    <p><a href="https://github.com/apps/ai-outfitter">Install the App</a>, pick the repository, merge the workflow pull request it opens.</p>
+    <h3>One click, nothing to merge</h3>
+    <p><a href="https://github.com/apps/ai-outfitter">Install the App</a> on a repository. No workflow file, no secret, no settings.</p>
   </div>
   <div>
-    <span class="number">02 / ASSIGN</span>
+    <span class="number">02 / TRIGGER</span>
     <h3>Like assigning a teammate</h3>
-    <p>Assign an issue to the agent login. The run starts in your Actions within seconds.</p>
+    <p>Label an issue <code>ai-outfitter</code>, mention <code>@ai-outfitter</code>, or assign the agent. A hosted run starts within seconds.</p>
   </div>
   <div>
     <span class="number">03 / REVIEW</span>

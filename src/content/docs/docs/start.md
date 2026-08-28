@@ -1,27 +1,26 @@
 ---
 title: Start your first software factory
-description: Install the AI Outfitter GitHub App, merge one workflow file, assign an issue, and get an adversarially reviewed pull request.
+description: Install the AI Outfitter GitHub App and trigger the agent on an issue. Your first pull request is the feature, adversarially reviewed.
 ---
 
-Ten minutes, one repository, one file. This is the [Software factory](/docs/workflows/factory/) workflow running on your own GitHub Actions; the App routes events and merges, nothing else.
+Two steps, nothing added to your repository. This is the [Software factory](/docs/workflows/factory/) workflow running on hosted runners; the App routes events, scopes a one-hour token to your repository, and merges.
 
 ## 1. Install the App
 
-[Install AI Outfitter](https://github.com/apps/ai-outfitter) on the organization or repository you want to try it on. GitHub sends you back to the setup page for that installation.
+[Install AI Outfitter](https://github.com/apps/ai-outfitter) on the repository you want to try it on. That is the whole setup — no workflow file, no secret, no settings change.
 
-## 2. Merge the one file
+## 2. Trigger the agent on an issue
 
-On the setup page choose the repository and the login that will receive assignments, then **Open the workflow PR**. The App opens a pull request adding `.github/workflows/outfitter-agent.yml` — the whole footprint. Before merging it:
+Open an issue with acceptance criteria a reviewer can check, then do one of:
 
-- add `OPENAI_API_KEY` as a repository or organization secret (bring your own key; hosted inference is coming);
-- turn on *Settings → Actions → General → Allow GitHub Actions to create and approve pull requests*.
+- add the `ai-outfitter` label;
+- comment `@ai-outfitter implement this`;
+- assign the agent login, where your organization has one.
 
-Merge it.
-
-## 3. Assign an issue
-
-Open an issue with acceptance criteria a reviewer can check, and assign it to the login you chose. Under **Actions → AI Outfitter agent** the `implement` job starts, then the `review` job. You get a pull request named `agent/issue-<n>` and a review ending in a verdict; `approve` merges and closes the issue, `request-changes` revises once and reviews again.
+Within seconds a run starts on our runners. You get a pull request named `agent/issue-<n>` opened by `ai-outfitter[bot]`, your own CI runs on it, and a second agent posts an adversarial review with findings and a verdict. `approve` merges and closes the issue; `request-changes` triggers one revision and a second review, then a human decides.
 
 ## What just ran
 
-Every step above is a node of the declared workflow — [see how they map](/docs/workflows/factory/#run-it) — and you can watch the reference run on [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target/actions/workflows/outfitter-agent.yml).
+Every step above is a node of the declared workflow — [see how they map](/docs/workflows/factory/#run-it) — and you can watch the reference run on [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target/issues/1), a repository with no agent configuration at all.
+
+Inference runs on AI Outfitter's key for now; bringing your own key arrives with the setup page.
