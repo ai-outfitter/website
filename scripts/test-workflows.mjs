@@ -41,6 +41,9 @@ assert.match(index, /Organization-wide delegation/);
 assert.match(index, /Target state/);
 
 const homepage = await readFile('dist/index.html', 'utf8');
+assert.match(homepage, /Agentic workflows/);
+assert.match(homepage, /Rollout/);
+assert.match(homepage, /Software factory/);
 assert.match(homepage, /Organization-wide delegation/);
 assert.match(homepage, /org\/.agents/);
 assert.match(homepage, /subagent-delegation/);
