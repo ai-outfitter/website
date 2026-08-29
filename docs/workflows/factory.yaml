@@ -1,8 +1,17 @@
 version: 2
 
+prompt_fragments:
+  subagent-delegation:
+    source: ai-outfitter/community-profiles
+    status: planned
+
 actors:
-  nicholas: {kind: human}
-  claude: {kind: agent, harness: claude-code, profile: engineer, can: [issues:write]}
+  org-admin: {kind: human}
+  employee: {kind: human}
+  employee-agent: {kind: agent, profile: engineer, can: [issues:write]}
+  outfitter: {kind: tool}
+  resident-agent: {kind: agent, profile: engineer, can: [contents:write, pull-requests:write]}
+  implementation-agent: {kind: agent, profile: engineer, can: [contents:write, pull-requests:write]}
   luce: {kind: agent, harness: pi, profile: luce, can: [contents:write, pull-requests:write]}
   review-bot: {kind: agent, harness: pi, profile: code-review, can: [reviews:approve]}
   merge-bot: {kind: agent, harness: codex, profile: git-forge-delegator, can: [pull-requests:merge]}
@@ -16,6 +25,7 @@ environments:
   kubernetes: agent-operator
   actions: github-actions
   observability: grafana
+  delegated-runtime: delegated-runtime
 
 integrations:
   channels-github: {kind: wake, label: Channels / GitHub, provider: ai-outfitter/channels, source: github}
@@ -26,6 +36,8 @@ integrations:
   github-merge: {kind: mcp, label: GitHub, server: github-merge, tools: [pull_request_read, merge_pull_request]}
   playwright-browser: {kind: mcp, label: "Chrome / Playwright (optional)", server: playwright, tools: [browser_navigate, browser_snapshot, browser_take_screenshot]}
   outfitter-cli: {kind: cli, label: Outfitter}
+  pi-harness: {kind: harness, label: Pi}
+  claude-code-harness: {kind: harness, label: Claude Code}
   gh: {kind: cli, label: gh}
   git-https: {kind: transport, label: Git HTTPS}
 
@@ -36,16 +48,25 @@ checks:
     required_status: test
 
 workflows:
+  - id: organization-delegation
+    title: Organization-wide delegation
+    status: target-state
+    nodes:
+      - {id: publish_catalog, action: publish-organization-catalog, actor: org-admin, environment: workstation, path: org/.agents, uses: [github-write]}
+      - {id: sync_catalog, action: run-outfitter-sync, actor: employee, environment: workstation, needs: [publish_catalog], uses: [outfitter-cli]}
+      - {id: project_pi, action: compose-prompt-in-pi, actor: outfitter, environment: workstation, needs: [sync_catalog], prompt_fragment: subagent-delegation, uses: [outfitter-cli, pi-harness]}
+      - {id: project_claude, action: compose-prompt-in-claude-code, actor: outfitter, environment: workstation, needs: [sync_catalog], prompt_fragment: subagent-delegation, uses: [outfitter-cli, claude-code-harness]}
+      - {id: request, action: request-delegated-work, actor: employee, environment: workstation, needs: [project_pi, project_claude]}
+      - {id: create_issue, action: create-scoped-issue, actor: employee-agent, environment: workstation, needs: [request], prompt_fragment: subagent-delegation, uses: [github-write]}
+      - {id: triage, workflow: issue-triage, needs: [create_issue]}
+
   - id: factory
     title: Software factory
     nodes:
-      - {id: request, action: request-change, actor: nicholas, environment: workstation}
-      - {id: issue, action: create-issue, actor: claude, environment: workstation, needs: [request], uses: [github-write]}
-      - {id: assign_issue, action: assign-issue, actor: claude, environment: workstation, assignee: luce, event: issues.assigned, needs: [issue], uses: [github-write], shape: event}
-      - {id: implement, action: draft-pr, actor: luce, environment: kubernetes, needs: [assign_issue], uses: [channels-github, github-write, git-https]}
-      - {id: ready, action: pr-undrafted, actor: luce, environment: kubernetes, needs: [implement], checks: [verify], uses: [github-write]}
+      - {id: implement, action: draft-pr, actor: implementation-agent, environment: delegated-runtime, uses: [channels-github, github-write, git-https]}
+      - {id: ready, action: pr-undrafted, actor: implementation-agent, environment: delegated-runtime, needs: [implement], checks: [verify], uses: [github-write]}
       - {id: review, workflow: adversarial-review, needs: [ready]}
-      - {id: revise, action: address-findings, actor: luce, environment: kubernetes, needs: [review], if: "review.outcome == 'request-changes'", uses: [channels-github, github-write, git-https]}
+      - {id: revise, action: address-findings, actor: implementation-agent, environment: delegated-runtime, needs: [review], if: "review.outcome == 'request-changes'", uses: [channels-github, github-write, git-https]}
       - {id: merge, action: merge, actor: merge-bot, environment: actions, needs: [review], if: "review.outcome == 'approve'", checks: [verify], uses: [github-merge]}
 
   - id: adversarial-review
@@ -73,7 +94,11 @@ workflows:
       - {integration: github-actions-events, event: issues.opened, environment: actions}
     nodes:
       - {id: classify, action: classify-issue, actor: outfitter-bot, environment: actions, skill: issue-triage, templates: [feat.yml, fix.yml, research.yml], outputs: [kind], uses: [gh], shape: decision}
-      - {id: feature, workflow: factory, needs: [classify], if: "classify.kind == 'feat'"}
+      - {id: route_feature, action: choose-implementation-route, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'feat'", outputs: [executor], rule: "matching deployed resident; otherwise app", uses: [gh], shape: decision}
+      - {id: assign_resident, action: assign-resident-agent, actor: outfitter-bot, environment: actions, assignee: resident-agent, event: issues.assigned, needs: [route_feature], if: "route_feature.executor == 'resident'", uses: [gh], shape: event}
+      - {id: trigger_app, action: add-ai-outfitter-label, actor: outfitter-bot, environment: actions, label: ai-outfitter, event: issues.labeled, needs: [route_feature], if: "route_feature.executor == 'app'", uses: [gh], shape: event}
+      - {id: resident_factory, workflow: factory, needs: [assign_resident]}
+      - {id: app_factory, workflow: factory, needs: [trigger_app]}
       - {id: bug, workflow: bug-issue, needs: [classify], if: "classify.kind == 'fix'"}
       - {id: research, workflow: research-triage, needs: [classify], if: "classify.kind == 'research'"}
 

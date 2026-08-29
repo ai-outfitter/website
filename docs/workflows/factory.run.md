@@ -1,11 +1,10 @@
-This workflow runs today on any GitHub repository through the [AI Outfitter GitHub App](https://github.com/apps/ai-outfitter). Nothing is added to your repository: the App **is** your organization's resident agent, hosted in our cluster (or self-hosted with the agent-operator), and your first pull request is the feature itself. The experience mirrors assigning an issue to a coding agent: trigger, wait, review the pull request.
+This delivery workflow runs today on any GitHub repository through the [AI Outfitter GitHub App](https://github.com/apps/ai-outfitter). The declaration starts after issue triage has selected an implementation agent: either a deployed resident or the App-routed hosted agent. Nothing is added to your repository for the hosted path; your first pull request is the feature itself.
 
 How the declaration maps to what actually runs:
 
 | Declared step | What runs | Identity |
 | --- | --- | --- |
-| `assign_issue` | You trigger the agent on the issue: assign the agent login, add the `ai-outfitter` label, or mention `@ai-outfitter`. GitHub cannot assign issues to an app, so the App is the router. | you |
-| `implement`, `ready` | An `AgentTask(implement)` wakes the resident (scaled up from zero if idle); it implements on `agent/issue-<n>`, runs the tests, opens the pull request. Your CI runs on it. | `ai-outfitter[bot]` |
+| `implement`, `ready` | A direct assignment wakes a deployed resident through its forge channel. Otherwise the `ai-outfitter` label wakes the App router, which creates an `AgentTask(implement)` for the hosted agent. The selected agent implements on `agent/issue-<n>`, runs the tests, and opens the pull request. | resident identity or `ai-outfitter[bot]` |
 | `review` | An `AgentTask(review)` in a fresh conversation reviews adversarially and returns its verdict over the internal task plane, bound to the task and the PR head SHA; the App posts the visible review. It shares the author's identity, so it cannot use GitHub's approve state. | `ai-outfitter[bot]` |
 | `revise` | On `request-changes` the App creates one `AgentTask(revise)`; after that round a human decides. | App → resident |
 | `merge` | On `approve` the App merges. Branch protection you configure still applies; the App comments when a merge is refused. | `ai-outfitter[bot]` |
@@ -17,7 +16,7 @@ How the declaration maps to what actually runs:
 ### Run
 
 1. Open an issue with acceptance criteria a reviewer can check.
-2. Label it `ai-outfitter`, comment `@ai-outfitter`, or assign the agent login.
+2. Assign a deployed resident, or label it `ai-outfitter` (mentioning `@ai-outfitter` is an equivalent App trigger).
 3. A pull request named `agent/issue-<n>` appears, then a review with findings and a verdict.
 4. `approve` merges and closes the issue; `request-changes` triggers one revision, then a second review.
 
@@ -30,4 +29,4 @@ The reference run lives in [`ai-outfitter/factory-demo-target`](https://github.c
 
 ### What the declaration still promises that the app does not yet do
 
-The YAML wakes `implement` through Channels and gives `merge` to a separate merge bot. The shipped loop wakes the resident by a pushed `AgentTask` and lets the App merge; a second App identity for a formal GitHub approval and Forgejo support are the next milestones.
+The YAML supports direct resident assignment and gives `merge` to a separate merge bot. The shipped hosted loop wakes its resident by a pushed `AgentTask` and lets the App merge; direct organization-resident routing, a second App identity for a formal GitHub approval, and Forgejo support remain next milestones.

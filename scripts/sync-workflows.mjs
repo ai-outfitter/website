@@ -23,7 +23,7 @@ const runGuide = (workflow) => {
   const path = resolve(dirname(source), `${workflow.id}.run.md`);
   return existsSync(path) ? readFile(path, 'utf8') : null;
 };
-const cards = (await Promise.all(items.map(async (workflow) => `- [**${workflow.title}**](/docs/workflows/${workflow.id}/) — ${workflow.nodes.length} declared steps${workflow.triggers?.length ? `, triggered by ${workflow.triggers.map((trigger) => `\`${trigger.event ?? trigger.integration}\``).join(', ')}` : ''}.${(await runGuide(workflow)) ? ` **Runnable** — [run it](/docs/workflows/${workflow.id}/#run-it).` : ''}`))).join('\n');
+const cards = (await Promise.all(items.map(async (workflow) => `- [**${workflow.title}**](/docs/workflows/${workflow.id}/) — ${workflow.nodes.length} declared steps${workflow.triggers?.length ? `, triggered by ${workflow.triggers.map((trigger) => `\`${trigger.event ?? trigger.integration}\``).join(', ')}` : ''}.${workflow.status === 'target-state' ? ' **Target state.**' : ''}${(await runGuide(workflow)) ? ` **Runnable** — [run it](/docs/workflows/${workflow.id}/#run-it).` : ''}`))).join('\n');
 await writeFile(resolve(output, 'index.md'), `---
 title: Workflow atlas
 description: YAML-defined maps of how people, agents, environments, and integrations compose across AI Outfitter.
@@ -75,7 +75,7 @@ This page is generated from the [AI Outfitter workflow declaration](${sourceUrl}
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
 
 :::caution[Declaration is not deployment]
-This diagram describes declared behavior. It does not prove that every credential, event source, policy, or runtime control is deployed.
+This diagram describes declared behavior. It does not prove that every credential, event source, policy, or runtime control is deployed.${workflow.status === 'target-state' ? ' This workflow is explicitly a target-state design, not a claim of current availability.' : ''}
 :::
 
 ## Starts when

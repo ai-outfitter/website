@@ -87,6 +87,9 @@ function validate(factory, workflows) {
       for (const integration of list(node.uses)) {
         if (!factory.integrations?.[integration]) throw new Error(`Workflow "${workflowId}" node "${nodeId}" references unknown integration "${integration}".`);
       }
+      if (node.prompt_fragment && !factory.prompt_fragments?.[node.prompt_fragment]) {
+        throw new Error(`Workflow "${workflowId}" node "${nodeId}" references unknown prompt fragment "${node.prompt_fragment}".`);
+      }
       for (const check of list(node.checks)) {
         if (!factory.checks?.[check]) throw new Error(`Workflow "${workflowId}" node "${nodeId}" references unknown check "${check}".`);
       }
@@ -128,6 +131,7 @@ function actionNode(factory, node) {
   if (node.assignee) label += `<br/>Assignee · ${actorName(factory, node.assignee)}`;
   if (node.event) label += `<br/>Event · ${escapeHtml(node.event)}`;
   if (node.skill) label += `<br/>Skill · ${escapeHtml(node.skill)}`;
+  if (node.prompt_fragment) label += `<br/>Prompt fragment · ${escapeHtml(node.prompt_fragment)}`;
   if (node.label) label += `<br/>Label · ${escapeHtml(node.label)}`;
   if (node.rule) label += `<br/>Rule · ${escapeHtml(node.rule)}`;
   if (node.path) label += `<br/>Path · ${escapeHtml(node.path)}`;

@@ -16,6 +16,8 @@ hero:
       variant: minimal
 ---
 
+import WorkflowFromDeclaration from '../../components/WorkflowFromDeclaration.astro';
+
 <p class="eyebrow">Your first software factory · three steps</p>
 
 ## Assign an issue. Get a reviewed pull request.
@@ -71,6 +73,25 @@ then reuse the same composition wherever the work runs.
     <p>Measure outcomes, preserve session evidence, and make improvement a checked loop instead of a guess.</p>
   </div>
 </div>
+
+<p class="eyebrow">Organization-wide delegation · target state</p>
+
+## Publish once. Delegate from every harness.
+
+An admin publishes the organization’s shared agent context once. A non-admin
+employee syncs it, then Pi and Claude Code receive the same delegation prompt:
+turn bounded work into a durable issue and let issue triage route it to a
+deployed resident or the AI Outfitter GitHub App.
+
+<WorkflowFromDeclaration id="organization-delegation" />
+
+:::note[Target-state declaration]
+This graph describes the intended community prompt-fragment composition. It
+does not claim that named community prompt fragments or every routing control
+are deployed today.
+:::
+
+[Follow the handoff through issue triage and the software factory →](/docs/workflows/issue-triage/)
 
 <p class="eyebrow">The adoption ramp</p>
 
