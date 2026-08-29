@@ -9,7 +9,6 @@ const component = '../../../../components/WorkflowDiagram.astro';
 const sourceUrl = 'https://github.com/ai-outfitter/website/blob/main/docs/workflows/factory.yaml';
 const editUrl = 'https://github.com/ai-outfitter/website/edit/main/docs/workflows/factory.yaml';
 const md = (value) => String(value).replaceAll('|', '\\|');
-const links = (items) => items.length ? items.map((item) => `[${item.title}](/docs/workflows/${item.id}/)`).join(', ') : 'None';
 const yamlQuote = (value) => JSON.stringify(String(value).replaceAll(/\s+/g, ' ').trim());
 
 const { factory, items } = await loadWorkflows(source);
@@ -73,11 +72,6 @@ import WorkflowDiagram from '${component}';
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
 ${(await afterDiagram(workflow)) ? `\n${await afterDiagram(workflow)}` : ''}
 ${triggers ? `\n## Starts when\n\n${triggers}\n` : ''}
-
-## Relationships
-
-- **Invokes directly:** ${links(workflow.invokes)}
-- **Can invoke transitively:** ${links(workflow.canInvoke)}
 
 ## Declared steps
 
