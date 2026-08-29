@@ -34,7 +34,3 @@ The reference run lives in [`ai-outfitter/factory-demo-target`](https://github.c
 
 - the task: [issue #1](https://github.com/ai-outfitter/factory-demo-target/issues/1);
 - the runs: the resident's task timeline in our cluster (private); the pull request and review are public on the target repository.
-
-### What the declaration still promises that the app does not yet do
-
-The YAML supports direct resident assignment and gives `merge` to a separate merge bot. The shipped hosted loop wakes its resident by a pushed `AgentTask` and lets the App merge; direct organization-resident routing, a second App identity for a formal GitHub approval, and Forgejo support remain next milestones.
