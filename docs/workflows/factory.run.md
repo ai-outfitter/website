@@ -20,6 +20,15 @@ How the declaration maps to what actually runs:
 3. A pull request named `agent/issue-<n>` appears, then a review with findings and a verdict.
 4. `approve` merges and closes the issue; `request-changes` triggers one revision, then a second review.
 
+### Repository controls drive the process
+
+- **Issue templates** give agents a clear starting point: a typed request, the
+  context they need, and acceptance criteria they can verify.
+- **CODEOWNERS** requests the right agent or human reviewers when a pull request
+  becomes ready, starting adversarial review without another handoff.
+- **Branch protection and auto-merge** hold the branch until required reviews
+  and checks pass, then merge it without another manual step.
+
 ### See it on a real repository
 
 The reference run lives in [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target), a deliberately tiny project with no agent configuration:
