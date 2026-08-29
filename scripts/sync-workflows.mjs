@@ -66,8 +66,6 @@ editUrl: ${editUrl}
 
 import WorkflowDiagram from '${component}';
 
-This page is generated from the [AI Outfitter workflow declaration](${sourceUrl}) with declaration hash \`${workflow.revision}\`. Edit the YAML—not this generated page—to change the workflow.
-
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
 
 ## Starts when
