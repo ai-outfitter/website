@@ -53,7 +53,7 @@ The step table beneath each diagram carries the same information in text for acc
 for (const workflow of items) {
   const triggers = workflow.triggers?.length
     ? workflow.triggers.map((trigger) => `- **${trigger.event ?? title(trigger.integration)}** via ${factory.integrations[trigger.integration].label ?? trigger.integration}${trigger.rule ? ` when \`${trigger.rule}\`` : ''}${trigger.environment ? ` in ${environmentName(factory, trigger.environment)}` : ''}`).join('\n')
-    : '- This workflow has no automatic trigger in the declaration. A person or another workflow starts it.';
+    : null;
   const rows = workflow.nodes.map((node) => {
     const operation = node.workflow ? `[Workflow: ${factory.workflows.find((item) => item.id === node.workflow).title}](/docs/workflows/${node.workflow}/)` : title(node.action);
     const actor = node.workflow ? 'Blocking workflow' : actorName(factory, node.actor);
@@ -72,10 +72,7 @@ import WorkflowDiagram from '${component}';
 
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
 ${(await afterDiagram(workflow)) ? `\n${await afterDiagram(workflow)}` : ''}
-
-## Starts when
-
-${triggers}
+${triggers ? `\n## Starts when\n\n${triggers}\n` : ''}
 
 ## Relationships
 
