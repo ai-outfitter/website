@@ -148,6 +148,14 @@ body {
     border-inline-end: 0;
     background-color: var(--sl-color-black);
   }
+
+  starlight-menu-button[aria-expanded='true'] ~ .sidebar-pane {
+    --sl-sidebar-visibility: visible;
+  }
+
+  [data-mobile-menu-expanded] {
+    overflow: hidden;
+  }
 }
 
 @media (max-width: 52rem) {
