@@ -22,12 +22,11 @@ How the declaration maps to what actually runs:
 
 ### Repository controls drive the process
 
-- **Issue templates** give agents a clear starting point: a typed request, the
-  context they need, and acceptance criteria they can verify.
-- **CODEOWNERS** requests the right agent or human reviewers when a pull request
-  becomes ready, starting adversarial review without another handoff.
-- **Branch protection and auto-merge** hold the branch until required reviews
-  and checks pass, then merge it without another manual step.
+| Repository control | How it enables the agentic process |
+| --- | --- |
+| **Issue templates** | Give agents a clear starting point: a typed request, the context they need, and acceptance criteria they can verify. |
+| **CODEOWNERS** | Requests the right agent or human reviewers when a pull request becomes ready, starting adversarial review without another handoff. |
+| **Branch protection and auto-merge** | Hold the branch until required reviews and checks pass, then merge it without another manual step. |
 
 ### See it on a real repository
 
