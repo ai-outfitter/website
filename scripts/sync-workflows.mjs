@@ -32,10 +32,6 @@ editUrl: ${editUrl}
 
 The workflow atlas turns one [validated YAML declaration](${sourceUrl}) into navigable diagrams. Use it to understand who acts, where the work runs, what wakes an agent, and which workflow blocks on another workflow.
 
-:::caution[Declaration is not deployment]
-These diagrams describe declared workflows. A diagram does not prove that every credential, event source, policy, or runtime control is deployed. Follow the linked project documentation and runbooks before relying on a workflow in production.
-:::
-
 ## Workflows
 
 ${cards}
@@ -73,10 +69,6 @@ import WorkflowDiagram from '${component}';
 This page is generated from the [AI Outfitter workflow declaration](${sourceUrl}) with declaration hash \`${workflow.revision}\`. Edit the YAML—not this generated page—to change the workflow.
 
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
-
-:::caution[Declaration is not deployment]
-This diagram describes declared behavior. It does not prove that every credential, event source, policy, or runtime control is deployed.${workflow.status === 'target-state' ? ' This workflow is explicitly a target-state design, not a claim of current availability.' : ''}
-:::
 
 ## Starts when
 

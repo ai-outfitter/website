@@ -31,12 +31,14 @@ for (const workflow of items) {
   const parsed = await mermaid.parse(workflow.mermaid);
   assert.equal(parsed.diagramType, 'flowchart-v2');
   assert.doesNotMatch(workflow.mermaid, /#[0-9a-f]{3,8}/i);
-  await access(resolve(`dist/docs/workflows/${workflow.id}/index.html`));
+  const page = resolve(`dist/docs/workflows/${workflow.id}/index.html`);
+  await access(page);
+  assert.doesNotMatch(await readFile(page, 'utf8'), /Declaration is not deployment/);
 }
 
 const index = await readFile('dist/docs/workflows/index.html', 'utf8');
 assert.match(index, /Workflow atlas/);
-assert.match(index, /Declaration is not deployment/);
+assert.doesNotMatch(index, /Declaration is not deployment/);
 assert.match(index, /Software factory/);
 assert.match(index, /Organization-wide delegation/);
 assert.match(index, /Target state/);
