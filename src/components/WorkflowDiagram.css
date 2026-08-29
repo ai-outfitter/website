@@ -1,0 +1,99 @@
+.workflow-diagram {
+  margin-block: 2rem;
+}
+
+.workflow-diagram__canvas {
+  display: grid;
+  min-height: 26rem;
+  place-items: center;
+  overflow: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.75rem;
+  background: var(--sl-color-black);
+}
+
+.workflow-diagram__canvas svg {
+  min-width: 62rem;
+  max-width: none;
+  height: auto;
+}
+
+.workflow-diagram__status {
+  min-height: 1.5rem;
+  margin-block: 0.5rem 0;
+  color: var(--sl-color-gray-2);
+}
+
+.workflow-diagram__error {
+  color: var(--sl-color-accent-high);
+}
+
+.workflow-diagram__canvas .node rect,
+.workflow-diagram__canvas .node polygon,
+.workflow-diagram__canvas .node path {
+  fill: var(--sl-color-gray-6) !important;
+  stroke: var(--sl-color-gray-3) !important;
+}
+
+.workflow-diagram__canvas .node.local rect,
+.workflow-diagram__canvas .node.local polygon,
+.workflow-diagram__canvas .node.local path {
+  fill: var(--sl-color-gray-6) !important;
+  stroke: var(--sl-color-accent) !important;
+}
+
+.workflow-diagram__canvas .node.resident rect,
+.workflow-diagram__canvas .node.resident polygon,
+.workflow-diagram__canvas .node.resident path {
+  fill: var(--sl-color-gray-5) !important;
+  stroke: var(--sl-color-gray-2) !important;
+}
+
+.workflow-diagram__canvas .node.actions rect,
+.workflow-diagram__canvas .node.actions polygon,
+.workflow-diagram__canvas .node.actions path {
+  fill: var(--sl-color-accent-low) !important;
+  stroke: var(--sl-color-accent) !important;
+}
+
+.workflow-diagram__canvas .node.workflowRef rect,
+.workflow-diagram__canvas .node.workflowRef polygon,
+.workflow-diagram__canvas .node.workflowRef path {
+  fill: var(--sl-color-accent-low) !important;
+  stroke: var(--sl-color-accent-high) !important;
+}
+
+.workflow-diagram__canvas .nodeLabel,
+.workflow-diagram__canvas .label text,
+.workflow-diagram__canvas .edgeLabel {
+  color: var(--sl-color-white) !important;
+  fill: var(--sl-color-white) !important;
+}
+
+.workflow-diagram__canvas .edgeLabel,
+.workflow-diagram__canvas .edgeLabel p {
+  background: var(--sl-color-black) !important;
+}
+
+.workflow-diagram__canvas .flowchart-link {
+  stroke: var(--sl-color-gray-2) !important;
+}
+
+.workflow-diagram__canvas marker path {
+  fill: var(--sl-color-gray-2) !important;
+  stroke: var(--sl-color-gray-2) !important;
+}
+
+@media (max-width: 50rem) {
+  .workflow-diagram__canvas {
+    min-height: 18rem;
+    padding: 0.75rem;
+  }
+
+  .workflow-diagram__canvas svg {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+}

@@ -173,11 +173,11 @@ function renderWorkflow(factory, workflows, workflow) {
     .filter((node) => node.workflow || factory.actors[node.actor].kind === 'human')
     .forEach((node) => lines.push(`  class ${node.id} ${node.workflow ? 'workflowAction' : 'humanAction'}`));
   lines.push(
-    '  classDef local fill:#123039,stroke:#71dfd0,color:#e8fffb,stroke-width:2px',
-    '  classDef resident fill:#172c4d,stroke:#78a9ff,color:#edf4ff,stroke-width:2px',
-    '  classDef actions fill:#302450,stroke:#bc9cff,color:#f5efff,stroke-width:2px',
-    '  classDef default fill:#252b38,stroke:#aab7ce,color:#f1f5ff,stroke-width:2px',
-    '  classDef workflowRef fill:#202a3d,stroke:#f5c96b,color:#fff8df,stroke-width:3px',
+    '  classDef local stroke-width:2px',
+    '  classDef resident stroke-width:2px',
+    '  classDef actions stroke-width:2px',
+    '  classDef default stroke-width:2px',
+    '  classDef workflowRef stroke-width:3px',
     '  classDef humanAction stroke-dasharray:7 4',
     '  classDef workflowAction stroke-dasharray:4 3',
   );

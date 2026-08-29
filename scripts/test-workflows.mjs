@@ -30,6 +30,7 @@ mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
 for (const workflow of items) {
   const parsed = await mermaid.parse(workflow.mermaid);
   assert.equal(parsed.diagramType, 'flowchart-v2');
+  assert.doesNotMatch(workflow.mermaid, /#[0-9a-f]{3,8}/i);
   await access(resolve(`dist/docs/workflows/${workflow.id}/index.html`));
 }
 
