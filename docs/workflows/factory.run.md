@@ -9,10 +9,6 @@ How the declaration maps to what actually runs:
 | `revise` | On `request-changes` the App creates one `AgentTask(revise)`; after that round a human decides. | App → resident |
 | `merge` | On `approve` the App merges. Branch protection you configure still applies; the App comments when a merge is refused. | `ai-outfitter[bot]` |
 
-### Install
-
-[Install the App](https://github.com/apps/ai-outfitter), choose inference, press **Provision** — see [Start your first software factory](/docs/start/).
-
 ### Run
 
 1. Open an issue with acceptance criteria a reviewer can check.
