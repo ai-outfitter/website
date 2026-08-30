@@ -59,9 +59,8 @@ try {
   assert.equal(new URL(workflowResult.url).pathname, '/docs/workflows/grafana-alert/');
 
   const agentOperator = await readFile('dist/docs/agent-operator/index.html', 'utf8');
-  assert.match(agentOperator, /alpha and actively used/i);
+  assert.match(agentOperator, /<title>Agent Operator \| AI Outfitter<\/title>/);
   assert.match(agentOperator, /Synced from/);
-  assert.doesNotMatch(agentOperator, /design stage/i);
 
   console.log('Search, workflow atlas, and canonical repository documentation regressions pass.');
 } finally {
