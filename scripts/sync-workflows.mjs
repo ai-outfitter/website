@@ -49,6 +49,21 @@ ${cards}
 The step table beneath each diagram carries the same information in text for accessibility and precise review.
 `);
 
+
+// Every agent profile a workflow's steps run as. The App's store installs
+// these into an organization's or user's `.agents` repository — pushed to
+// the default branch or opened as a pull request — so a reader can adopt a
+// workflow's agents from the page that describes it.
+const STORE_URL = 'https://app.ai-outfitter.com/store';
+const agentProfiles = (workflow) => [...new Set(workflow.nodes
+  .filter((node) => !node.workflow && factory.actors[node.actor]?.kind === 'agent' && factory.actors[node.actor].profile)
+  .map((node) => factory.actors[node.actor].profile))];
+const installSection = (workflow) => {
+  const profiles = agentProfiles(workflow);
+  if (!profiles.length) return '';
+  return `\n## Install the agents\n\nThis workflow runs as ${profiles.map((profile) => `\`${profile}\``).join(', ')}. [Install them from the App's store](${STORE_URL}): pick your organization or account and the App commits each agent into its \`.agents\` repository, straight to the default branch or as a pull request you merge.\n`;
+};
+
 for (const workflow of items) {
   const triggers = workflow.triggers?.length
     ? workflow.triggers.map((trigger) => `- **${trigger.event ?? title(trigger.integration)}** via ${factory.integrations[trigger.integration].label ?? trigger.integration}${trigger.rule ? ` when \`${trigger.rule}\`` : ''}${trigger.environment ? ` in ${environmentName(factory, trigger.environment)}` : ''}`).join('\n')
@@ -78,7 +93,7 @@ ${triggers ? `\n## Starts when\n\n${triggers}\n` : ''}
 | ID | Action | Actor | Environment | After | Condition |
 | --- | --- | --- | --- | --- | --- |
 ${rows}
-${(await runGuide(workflow)) ? `\n## Run it\n\n${await runGuide(workflow)}` : ''}`);
+${installSection(workflow)}${(await runGuide(workflow)) ? `\n## Run it\n\n${await runGuide(workflow)}` : ''}`);
 }
 
 console.log(`Generated ${items.length} workflow pages from ${source}.`);

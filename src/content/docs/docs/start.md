@@ -19,6 +19,10 @@ No workflow file, no repository secret, no settings change. Your key is never st
 
 Open an issue with acceptance criteria a reviewer can check and add the `ai-outfitter` label (a `@ai-outfitter` mention from a collaborator works too). The resident wakes, implements on `agent/issue-<n>`, opens the pull request as `ai-outfitter[bot]`, and your own CI runs on it. A second run reviews it adversarially in a fresh conversation and returns a verdict over the task plane; `approve` merges and closes the issue, `request-changes` revises once and reviews again, then a human decides.
 
+## Add more agents
+
+The [App's store](https://app.ai-outfitter.com/store) lists the catalog agents each [workflow](/docs/workflows/) runs as. Pick one and the App commits it into your organization's or account's `.agents` repository — pushed to the default branch or opened as a pull request — with nothing to clone.
+
 ## What just ran
 
 Every step is a node of the declared [Software factory](/docs/workflows/factory/) workflow — [see how they map](/docs/workflows/factory/#run-it) — and the reference run lives on [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target/issues/1), a repository with no agent configuration at all.
