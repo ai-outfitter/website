@@ -14,9 +14,10 @@
     "preview": "wrangler dev",
     "check": "npm run docs:sync && astro check",
     "test:links": "node scripts/check-links.mjs",
+    "test:publish": "node scripts/test-publish.mjs",
     "test:search": "node scripts/test-search.mjs",
     "test:workflows": "npm run docs:sync && node scripts/test-workflows.mjs",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "node scripts/publish.mjs",
     "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
     "publish": "node scripts/publish.mjs"
   },

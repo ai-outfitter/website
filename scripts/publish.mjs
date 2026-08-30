@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { productionEnvironment, publishCommands } from './publish-plan.mjs';
+
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function findOwnerEnvironment() {
@@ -39,16 +41,14 @@ function parseEnvironment(path) {
   return parsed;
 }
 
-const env = { ...parseEnvironment(findOwnerEnvironment()), ...process.env };
+const env = productionEnvironment(
+  { ...parseEnvironment(findOwnerEnvironment()), ...process.env },
+  projectRoot,
+);
 if (!env.CLOUDFLARE_API_TOKEN) {
   throw new Error(
     'CLOUDFLARE_API_TOKEN is required. Set it in the environment or the AI Outfitter owner .env file.',
   );
-}
-
-const providedRepositoriesRoot = Boolean(env.AI_OUTFITTER_REPOS_DIR);
-if (!providedRepositoriesRoot) {
-  env.AI_OUTFITTER_REPOS_DIR = resolve(projectRoot, '.cache/docs-repositories');
 }
 
 function run(command, args) {
@@ -61,10 +61,4 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-if (!providedRepositoriesRoot) run('npm', ['run', 'docs:checkout']);
-run('npm', ['run', 'check']);
-run('npm', ['run', 'build']);
-run('npm', ['run', 'test:links']);
-run('npm', ['run', 'test:search']);
-run('npm', ['run', 'test:workflows']);
-run('npm', ['exec', '--', 'wrangler', 'deploy']);
+for (const [command, args] of publishCommands) run(command, args);

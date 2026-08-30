@@ -40,6 +40,7 @@ The checkout command uses SSH by default. Public CI can set
 devenv shell -- npm run check
 devenv shell -- npm run build
 devenv shell -- npm run test:links
+devenv shell -- npm run test:publish
 devenv shell -- npm run test:search
 devenv shell -- npm run test:workflows
 devenv shell -- npm run deploy:dry-run
@@ -47,13 +48,13 @@ devenv shell -- npm run deploy:dry-run
 
 ## Deploy
 
-The publish script updates its clean source-repository cache, syncs the docs,
+The deploy command updates its clean source-repository cache, syncs the docs,
 checks and builds the site, validates generated links and search, and deploys
 the Worker. It uses `CLOUDFLARE_API_TOKEN` from the environment, or from the AI
-Outfitter owner `.env` during local use:
+Outfitter owner `.env` during local use. `publish` is an equivalent alias:
 
 ```sh
-devenv shell -- npm run publish
+devenv shell -- npm run deploy
 ```
 
 `wrangler.jsonc` is the source of truth for the Worker. The site is fully
