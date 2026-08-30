@@ -13,6 +13,7 @@
     "build": "npm run docs:sync && astro build",
     "preview": "wrangler dev",
     "check": "npm run docs:sync && astro check",
+    "test:analytics": "node scripts/test-analytics.mjs",
     "test:links": "node scripts/check-links.mjs",
     "test:publish": "node scripts/test-publish.mjs",
     "test:search": "node scripts/test-search.mjs",

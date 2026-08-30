@@ -51,6 +51,7 @@ export default defineConfig({
       ],
       customCss: ['./src/styles/custom.css'],
       components: {
+        Head: './src/components/StarlightHead.astro',
         Sidebar: './src/components/StarlightSidebar.astro',
         PageSidebar: './src/components/StarlightPageSidebar.astro',
         TwoColumnContent: './src/components/StarlightTwoColumnContent.astro',

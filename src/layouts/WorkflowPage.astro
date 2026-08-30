@@ -1,5 +1,6 @@
 ---
 import logo from '../assets/logo.svg';
+import PostHogAnalytics from '../components/PostHogAnalytics.astro';
 
 const { title, description } = Astro.props.frontmatter;
 ---
@@ -12,6 +13,7 @@ const { title, description } = Astro.props.frontmatter;
     <meta name="description" content={description} />
     <link rel="icon" href="/favicon.svg" />
     <title>{title} · AI Outfitter</title>
+    <PostHogAnalytics />
   </head>
   <body>
     <header>

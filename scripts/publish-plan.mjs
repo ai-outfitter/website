@@ -9,6 +9,7 @@ export const publishCommands = [
   ['npm', ['run', 'docs:checkout']],
   ['npm', ['run', 'check']],
   ['npm', ['run', 'build']],
+  ['npm', ['run', 'test:analytics']],
   ['npm', ['run', 'test:links']],
   ['npm', ['run', 'test:search']],
   ['npm', ['run', 'test:workflows']],
