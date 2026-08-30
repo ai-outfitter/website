@@ -23,6 +23,7 @@ jobs:
           AI_OUTFITTER_GIT_BASE_URL: https://github.com/ai-outfitter
       - run: npm run check
       - run: npm run build
+      - run: npm run test:analytics
       - run: npm run test:links
       - run: npm run test:publish
       - run: npm run test:search

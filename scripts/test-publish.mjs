@@ -23,8 +23,16 @@ assert.equal(environment.AI_OUTFITTER_GIT_BASE_URL, 'https://github.com/ai-outfi
 for (const variable of Object.keys(overrides)) assert.equal(environment[variable], undefined);
 assert.equal(environment.CLOUDFLARE_API_TOKEN, 'test-token');
 assert.equal(environment.UNRELATED, 'preserved');
-assert.deepEqual(publishCommands[0], ['npm', ['run', 'docs:checkout']]);
-assert.deepEqual(publishCommands.at(-1), ['npm', ['exec', '--', 'wrangler', 'deploy']]);
+assert.deepEqual(publishCommands, [
+  ['npm', ['run', 'docs:checkout']],
+  ['npm', ['run', 'check']],
+  ['npm', ['run', 'build']],
+  ['npm', ['run', 'test:analytics']],
+  ['npm', ['run', 'test:links']],
+  ['npm', ['run', 'test:search']],
+  ['npm', ['run', 'test:workflows']],
+  ['npm', ['exec', '--', 'wrangler', 'deploy']],
+]);
 
 const expectedUrl = repositoryUrl('https://github.com/ai-outfitter', 'outfitter');
 assert.equal(expectedUrl, 'https://github.com/ai-outfitter/outfitter.git');
