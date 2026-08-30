@@ -250,7 +250,6 @@ async function buildRepository(repository) {
       outputs,
       trackedFiles,
     });
-    const sourceUrl = `https://github.com/ai-outfitter/${repository.name}/blob/${commit}/${sourceRelative}`;
     const editUrl = `https://github.com/ai-outfitter/${repository.name}/edit/main/${sourceRelative}`;
     const generatedFrontmatter = [
       '---',
@@ -260,12 +259,10 @@ async function buildRepository(repository) {
       lastUpdated ? `lastUpdated: ${lastUpdated}` : undefined,
       '---',
     ].filter(Boolean);
-    const provenance = `> Synced from [\`${repository.name}/${sourceRelative}\`](${sourceUrl}). The repository is the source of truth.`;
-
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(
       outputPath,
-      `${generatedFrontmatter.join('\n')}\n\n${marker}\n\n${provenance}\n\n${rewritten.trim()}\n`,
+      `${generatedFrontmatter.join('\n')}\n\n${marker}\n\n${rewritten.trim()}\n`,
     );
   }
 

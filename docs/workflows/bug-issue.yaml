@@ -1,0 +1,7 @@
+id: bug-issue
+title: Bug issue
+triggers:
+  - {integration: github-actions-events, event: issues.labeled, rule: "label = fix", environment: actions}
+nodes:
+  - {id: investigate, action: quick-investigation, actor: outfitter-bot, environment: actions, skill: issue-triage, uses: [gh]}
+  - {id: assign, action: assign-issue, actor: outfitter-bot, environment: actions, assignee: luce, target_environment: kubernetes, needs: [investigate], uses: [gh], shape: event}

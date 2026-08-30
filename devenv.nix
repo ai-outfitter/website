@@ -49,7 +49,7 @@
 
   processes.web.exec = ''
     port=$(dev-port 4321 "$PWD")
-    exec node node_modules/.bin/astro dev --host 127.0.0.1 --port "$port"
+    exec node node_modules/.bin/astro dev --host 0.0.0.0 --port "$port"
   '';
 
   enterShell = ''

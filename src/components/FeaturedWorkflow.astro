@@ -1,0 +1,165 @@
+---
+import { resolve } from 'node:path';
+
+import { loadWorkflows } from '../../scripts/workflows.mjs';
+import WorkflowDiagram from './WorkflowDiagram.astro';
+
+const { items } = await loadWorkflows(resolve('docs/workflows'));
+const workflows = [...items].sort((left, right) =>
+  left.id === 'factory' ? -1 : right.id === 'factory' ? 1 : left.title.localeCompare(right.title)
+);
+---
+
+<div class="workflow-tabs" data-workflow-tabs>
+  <div class="workflow-tabs__list" role="tablist" aria-label="Workflow diagrams">
+    {workflows.map((workflow, index) => (
+      <button
+        type="button"
+        id={`workflow-tab-${workflow.id}`}
+        role="tab"
+        aria-selected={index === 0 ? 'true' : 'false'}
+        aria-controls={`workflow-panel-${workflow.id}`}
+        tabindex={index === 0 ? 0 : -1}
+      >
+        {workflow.title}
+      </button>
+    ))}
+  </div>
+
+  {workflows.map((workflow, index) => (
+    <section
+      id={`workflow-panel-${workflow.id}`}
+      class="workflow-tabs__panel"
+      role="tabpanel"
+      aria-labelledby={`workflow-tab-${workflow.id}`}
+      tabindex="0"
+      hidden={index !== 0}
+    >
+      <WorkflowDiagram
+        title={workflow.title}
+        source={workflow.mermaid}
+        links={workflow.workflowLinks}
+        showSource={false}
+        defer={index !== 0}
+      />
+      <div class="workflow-tabs__footer">
+        <div class="workflow-tabs__links">
+          <a href={`/docs/workflows/${workflow.id}/`}>Open the full workflow →</a>
+          <a href="/docs/workflows/">Explore the workflow atlas →</a>
+        </div>
+      </div>
+    </section>
+  ))}
+</div>
+
+<script>
+  const tabSets = document.querySelectorAll<HTMLElement>('[data-workflow-tabs]');
+
+  for (const tabSet of tabSets) {
+    const tabs = [...tabSet.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...tabSet.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+
+    function activateTab(tab: HTMLButtonElement, moveFocus = true) {
+      const panelId = tab.getAttribute('aria-controls');
+      const panel = panels.find((candidate) => candidate.id === panelId);
+      if (!panel) return;
+
+      for (const candidate of tabs) {
+        const selected = candidate === tab;
+        candidate.setAttribute('aria-selected', String(selected));
+        candidate.tabIndex = selected ? 0 : -1;
+      }
+      for (const candidate of panels) candidate.hidden = candidate !== panel;
+
+      if (moveFocus) tab.focus();
+      requestAnimationFrame(() => {
+        panel.querySelector<HTMLElement>('[data-workflow-diagram]')
+          ?.dispatchEvent(new Event('workflow-diagram:render'));
+      });
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => activateTab(tab, false));
+      tab.addEventListener('keydown', (event) => {
+        let nextIndex;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
+        else return;
+
+        event.preventDefault();
+        activateTab(tabs[nextIndex]);
+      });
+    });
+  }
+</script>
+
+<style>
+  .workflow-tabs {
+    margin-block: 2rem 4rem;
+  }
+
+  .workflow-tabs__list {
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    scrollbar-width: thin;
+  }
+
+  .workflow-tabs__list button {
+    flex: 0 0 auto;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 0.75rem 1rem;
+    color: var(--sl-color-gray-2);
+    background: transparent;
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .workflow-tabs__list button:hover,
+  .workflow-tabs__list button:focus-visible {
+    color: var(--sl-color-white);
+  }
+
+  .workflow-tabs__list button[aria-selected='true'] {
+    border-bottom-color: var(--sl-color-accent);
+    color: var(--sl-color-white);
+  }
+
+  .workflow-tabs__panel:focus {
+    outline: none;
+  }
+
+  .workflow-tabs__footer {
+    display: flex;
+    align-items: start;
+    justify-content: flex-end;
+    margin-top: -0.75rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    padding-top: 1rem;
+  }
+
+  .workflow-tabs__links {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    align-items: end;
+    gap: 0.4rem;
+    font-size: var(--sl-text-sm);
+  }
+
+  @media (max-width: 52rem) {
+    .workflow-tabs__footer {
+      justify-content: flex-start;
+    }
+
+    .workflow-tabs__links {
+      align-items: start;
+    }
+  }
+</style>

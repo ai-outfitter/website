@@ -1,0 +1,8 @@
+id: grafana-alert
+title: Grafana alert investigation
+triggers:
+  - {integration: channels-email, event: jmap.Email/new, source: grafana, environment: kubernetes}
+nodes:
+  - {id: investigate, action: investigate-alert, actor: incident-bot, environment: kubernetes, skill: incident-investigation, uses: [grafana-read]}
+  - {id: issue, action: create-fix-issue, actor: incident-bot, environment: kubernetes, needs: [investigate], event: issues.opened, template: fix.yml, uses: [github-write]}
+  - {id: triage, workflow: issue-triage, needs: [issue]}

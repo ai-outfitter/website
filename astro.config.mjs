@@ -26,6 +26,7 @@ export default defineConfig({
   site: 'https://ai-outfitter.com',
   vite: {
     server: {
+      allowedHosts: ['ncrmro-workstation'],
       strictPort: true,
     },
   },

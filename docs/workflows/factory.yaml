@@ -1,106 +1,11 @@
-version: 2
-
-actors:
-  nicholas: {kind: human}
-  claude: {kind: agent, harness: claude-code, profile: engineer, can: [issues:write]}
-  luce: {kind: agent, harness: pi, profile: luce, can: [contents:write, pull-requests:write]}
-  review-bot: {kind: agent, harness: pi, profile: code-review, can: [reviews:approve]}
-  merge-bot: {kind: agent, harness: codex, profile: git-forge-delegator, can: [pull-requests:merge]}
-  incident-bot: {kind: agent, harness: pi, profile: incident-investigation, can: [issues:write]}
-  outfitter-bot: {kind: agent, harness: pi, profile: actions-agent, can: [issues:write]}
-  review-coordinator: {kind: agent, harness: pi, profile: founder, skills: [persona-review], can: [contents:read, contents:write]}
-  persona-reviewer: {kind: agent, harness: pi, profile: persona-reviewer, skills: [persona-review], can: [contents:read]}
-
-environments:
-  workstation: local
-  kubernetes: agent-operator
-  actions: github-actions
-  observability: grafana
-
-integrations:
-  channels-github: {kind: wake, label: Channels / GitHub, provider: ai-outfitter/channels, source: github}
-  channels-email: {kind: wake, label: Channels / Email, provider: ai-outfitter/channels, source: jmap}
-  github-actions-events: {kind: trigger, label: GitHub Actions, provider: github, source: github}
-  grafana-read: {kind: mcp, label: Grafana, server: grafana-read, tools: [get_alert_rule_by_uid, query_prometheus, query_loki_logs, get_dashboard_by_uid]}
-  github-write: {kind: mcp, label: GitHub, server: github-write, tools: [issue_read, issue_write, create_pull_request, update_pull_request, pull_request_read, pull_request_review_write, add_comment_to_pending_review, add_issue_comment]}
-  github-merge: {kind: mcp, label: GitHub, server: github-merge, tools: [pull_request_read, merge_pull_request]}
-  playwright-browser: {kind: mcp, label: "Chrome / Playwright (optional)", server: playwright, tools: [browser_navigate, browser_snapshot, browser_take_screenshot]}
-  outfitter-cli: {kind: cli, label: Outfitter}
-  gh: {kind: cli, label: gh}
-  git-https: {kind: transport, label: Git HTTPS}
-
-checks:
-  verify:
-    commands: [outfitter validate --strict, git diff --check origin/main...HEAD]
-    local: pre-commit
-    required_status: test
-
-workflows:
-  - id: factory
-    title: Software factory
-    nodes:
-      - {id: request, action: request-change, actor: nicholas, environment: workstation}
-      - {id: issue, action: create-issue, actor: claude, environment: workstation, needs: [request], uses: [github-write]}
-      - {id: assign_issue, action: assign-issue, actor: claude, environment: workstation, assignee: luce, event: issues.assigned, needs: [issue], uses: [github-write], shape: event}
-      - {id: implement, action: draft-pr, actor: luce, environment: kubernetes, needs: [assign_issue], uses: [channels-github, github-write, git-https]}
-      - {id: ready, action: pr-undrafted, actor: luce, environment: kubernetes, needs: [implement], checks: [verify], uses: [github-write]}
-      - {id: review, workflow: adversarial-review, needs: [ready]}
-      - {id: revise, action: address-findings, actor: luce, environment: kubernetes, needs: [review], if: "review.outcome == 'request-changes'", uses: [channels-github, github-write, git-https]}
-      - {id: merge, action: merge, actor: merge-bot, environment: actions, needs: [review], if: "review.outcome == 'approve'", checks: [verify], uses: [github-merge]}
-
-  - id: adversarial-review
-    title: Adversarial review
-    triggers:
-      - {integration: channels-github, event: pull_request.review_requested, rule: CODEOWNERS, environment: kubernetes}
-    outputs: [outcome]
-    nodes:
-      - {id: inspect, action: inspect-change, actor: review-bot, environment: kubernetes, uses: [github-write]}
-      - {id: decide, action: decide-review, actor: review-bot, environment: kubernetes, needs: [inspect], outputs: [outcome], shape: decision}
-      - {id: approve, action: approve, actor: review-bot, environment: kubernetes, needs: [decide], if: "decide.outcome == 'approve'", result: {outcome: approve}, uses: [github-write]}
-      - {id: request_changes, action: request-changes, actor: review-bot, environment: kubernetes, needs: [decide], if: "decide.outcome == 'request-changes'", result: {outcome: request-changes}, uses: [github-write]}
-
-  - id: bug-issue
-    title: Bug issue
-    triggers:
-      - {integration: github-actions-events, event: issues.labeled, rule: "label = fix", environment: actions}
-    nodes:
-      - {id: investigate, action: quick-investigation, actor: outfitter-bot, environment: actions, skill: issue-triage, uses: [gh]}
-      - {id: assign, action: assign-issue, actor: outfitter-bot, environment: actions, assignee: luce, target_environment: kubernetes, needs: [investigate], uses: [gh], shape: event}
-
-  - id: issue-triage
-    title: Issue triage
-    triggers:
-      - {integration: github-actions-events, event: issues.opened, environment: actions}
-    nodes:
-      - {id: classify, action: classify-issue, actor: outfitter-bot, environment: actions, skill: issue-triage, templates: [feat.yml, fix.yml, research.yml], outputs: [kind], uses: [gh], shape: decision}
-      - {id: feature, workflow: factory, needs: [classify], if: "classify.kind == 'feat'"}
-      - {id: bug, workflow: bug-issue, needs: [classify], if: "classify.kind == 'fix'"}
-      - {id: research, workflow: research-triage, needs: [classify], if: "classify.kind == 'research'"}
-
-  - id: research-triage
-    title: Research triage
-    triggers:
-      - {integration: github-actions-events, event: issues.labeled, rule: "label = research", environment: actions}
-    nodes:
-      - {id: classify, action: classify-research, actor: outfitter-bot, environment: actions, skill: research-triage, templates: [research.yml], outputs: [kind], uses: [gh], shape: decision}
-      - {id: market_competitive, action: label-market-competitive, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'market/competitive'", label: "research:market-competitive", uses: [gh]}
-      - {id: technical_spike, action: label-technical-spike, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'technical/spike'", label: "research:technical-spike", uses: [gh]}
-      - {id: business_finance, action: label-business-finance, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'business/finance'", label: "research:business-finance", uses: [gh]}
-
-  - id: grafana-alert
-    title: Grafana alert investigation
-    triggers:
-      - {integration: channels-email, event: jmap.Email/new, source: grafana, environment: kubernetes}
-    nodes:
-      - {id: investigate, action: investigate-alert, actor: incident-bot, environment: kubernetes, skill: incident-investigation, uses: [grafana-read]}
-      - {id: issue, action: create-fix-issue, actor: incident-bot, environment: kubernetes, needs: [investigate], event: issues.opened, template: fix.yml, uses: [github-write]}
-      - {id: triage, workflow: issue-triage, needs: [issue]}
-
-  - id: persona-review
-    title: Persona review
-    nodes:
-      - {id: select_context, action: select-persona-and-artifact, actor: review-coordinator, environment: workstation, skill: persona-review}
-      - {id: launch, action: launch-isolated-reviewer, actor: review-coordinator, environment: workstation, assignee: persona-reviewer, needs: [select_context], uses: [outfitter-cli]}
-      - {id: inspect, action: inspect-artifact, actor: persona-reviewer, environment: workstation, needs: [launch], skill: persona-review, uses: [playwright-browser]}
-      - {id: report, action: write-sourced-report, actor: persona-reviewer, environment: workstation, needs: [inspect], outputs: [report]}
-      - {id: capture, action: atomically-save-report, actor: review-coordinator, environment: workstation, needs: [report], path: docs/persona-reviews/, uses: [outfitter-cli]}
+id: factory
+title: Software factory
+nodes:
+  - {id: request, action: request-change, actor: nicholas, environment: workstation}
+  - {id: issue, action: create-issue, actor: claude, environment: workstation, needs: [request], uses: [github-write]}
+  - {id: assign_issue, action: assign-issue, actor: claude, environment: workstation, assignee: luce, event: issues.assigned, needs: [issue], uses: [github-write], shape: event}
+  - {id: implement, action: draft-pr, actor: luce, environment: kubernetes, needs: [assign_issue], uses: [channels-github, github-write, git-https]}
+  - {id: ready, action: pr-undrafted, actor: luce, environment: kubernetes, needs: [implement], checks: [verify], uses: [github-write]}
+  - {id: review, workflow: adversarial-review, needs: [ready]}
+  - {id: revise, action: address-findings, actor: luce, environment: kubernetes, needs: [review], if: "review.outcome == 'request-changes'", uses: [channels-github, github-write, git-https]}
+  - {id: merge, action: merge, actor: merge-bot, environment: actions, needs: [review], if: "review.outcome == 'approve'", checks: [verify], uses: [github-merge]}

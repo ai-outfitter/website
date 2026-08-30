@@ -1,0 +1,9 @@
+id: research-triage
+title: Research triage
+triggers:
+  - {integration: github-actions-events, event: issues.labeled, rule: "label = research", environment: actions}
+nodes:
+  - {id: classify, action: classify-research, actor: outfitter-bot, environment: actions, skill: research-triage, templates: [research.yml], outputs: [kind], uses: [gh], shape: decision}
+  - {id: market_competitive, action: label-market-competitive, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'market/competitive'", label: "research:market-competitive", uses: [gh]}
+  - {id: technical_spike, action: label-technical-spike, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'technical/spike'", label: "research:technical-spike", uses: [gh]}
+  - {id: business_finance, action: label-business-finance, actor: outfitter-bot, environment: actions, needs: [classify], if: "classify.kind == 'business/finance'", label: "research:business-finance", uses: [gh]}

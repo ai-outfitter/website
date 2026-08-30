@@ -2,11 +2,11 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { actorName, environmentName, loadWorkflows, title } from './workflows.mjs';
 
-const source = resolve('docs/workflows/factory.yaml');
+const source = resolve('docs/workflows');
 const output = resolve('src/content/docs/docs/workflows');
 const component = '../../../../components/WorkflowDiagram.astro';
-const sourceUrl = 'https://github.com/ai-outfitter/website/blob/main/docs/workflows/factory.yaml';
-const editUrl = 'https://github.com/ai-outfitter/website/edit/main/docs/workflows/factory.yaml';
+const sourceRootUrl = 'https://github.com/ai-outfitter/website/tree/main/docs/workflows';
+const registryEditUrl = 'https://github.com/ai-outfitter/website/edit/main/docs/workflows/registry.yaml';
 const md = (value) => String(value).replaceAll('|', '\\|');
 const links = (items) => items.length ? items.map((item) => `[${item.title}](/docs/workflows/${item.id}/)`).join(', ') : 'None';
 const yamlQuote = (value) => JSON.stringify(String(value).replaceAll(/\s+/g, ' ').trim());
@@ -15,18 +15,17 @@ const { factory, items } = await loadWorkflows(source);
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 
-const cards = items.map((workflow) => `- [**${workflow.title}**](/docs/workflows/${workflow.id}/) — ${workflow.nodes.length} declared steps${workflow.triggers?.length ? `, triggered by ${workflow.triggers.map((trigger) => `\`${trigger.event ?? trigger.integration}\``).join(', ')}` : ''}.`).join('\n');
+const displayItems = [...items].sort((left, right) =>
+  left.id === 'factory' ? -1 : right.id === 'factory' ? 1 : left.title.localeCompare(right.title)
+);
+const cards = displayItems.map((workflow) => `- [**${workflow.title}**](/docs/workflows/${workflow.id}/) — ${workflow.nodes.length} declared steps${workflow.triggers?.length ? `, triggered by ${workflow.triggers.map((trigger) => `\`${trigger.event ?? trigger.integration}\``).join(', ')}` : ''}.`).join('\n');
 await writeFile(resolve(output, 'index.md'), `---
 title: Workflow atlas
 description: YAML-defined maps of how people, agents, environments, and integrations compose across AI Outfitter.
-editUrl: ${editUrl}
+editUrl: ${registryEditUrl}
 ---
 
-The workflow atlas turns one [validated YAML declaration](${sourceUrl}) into navigable diagrams. Use it to understand who acts, where the work runs, what wakes an agent, and which workflow blocks on another workflow.
-
-:::caution[Declaration is not deployment]
-These diagrams describe declared workflows. A diagram does not prove that every credential, event source, policy, or runtime control is deployed. Follow the linked project documentation and runbooks before relying on a workflow in production.
-:::
+The workflow atlas turns [validated YAML declarations](${sourceRootUrl}) into navigable diagrams. Use it to understand who acts, where the work runs, what wakes an agent, and which workflow blocks on another workflow.
 
 ## Workflows
 
@@ -43,6 +42,8 @@ The step table beneath each diagram carries the same information in text for acc
 `);
 
 for (const workflow of items) {
+  const sourceUrl = `https://github.com/ai-outfitter/website/blob/main/docs/workflows/${workflow.sourceFile}`;
+  const editUrl = `https://github.com/ai-outfitter/website/edit/main/docs/workflows/${workflow.sourceFile}`;
   const triggers = workflow.triggers?.length
     ? workflow.triggers.map((trigger) => `- **${trigger.event ?? title(trigger.integration)}** via ${factory.integrations[trigger.integration].label ?? trigger.integration}${trigger.rule ? ` when \`${trigger.rule}\`` : ''}${trigger.environment ? ` in ${environmentName(factory, trigger.environment)}` : ''}`).join('\n')
     : '- This workflow has no automatic trigger in the declaration. A person or another workflow starts it.';
@@ -64,11 +65,7 @@ import WorkflowDiagram from '${component}';
 
 This page is generated from the [AI Outfitter workflow declaration](${sourceUrl}) with declaration hash \`${workflow.revision}\`. Edit the YAML—not this generated page—to change the workflow.
 
-<WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} />
-
-:::caution[Declaration is not deployment]
-This diagram describes declared behavior. It does not prove that every credential, event source, policy, or runtime control is deployed.
-:::
+<WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} links={${JSON.stringify(workflow.workflowLinks)}} />
 
 ## Starts when
 
@@ -87,4 +84,4 @@ ${rows}
 `);
 }
 
-console.log(`Generated ${items.length} workflow pages from ${source}.`);
+console.log(`Generated ${items.length} workflow pages from separate declarations in ${source}.`);

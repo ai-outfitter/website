@@ -1,0 +1,36 @@
+version: 2
+
+actors:
+  nicholas: {kind: human}
+  claude: {kind: agent, harness: claude-code, profile: engineer, can: [issues:write]}
+  luce: {kind: agent, harness: pi, profile: luce, can: [contents:write, pull-requests:write]}
+  review-bot: {kind: agent, harness: pi, profile: code-review, can: [reviews:approve]}
+  merge-bot: {kind: agent, harness: codex, profile: git-forge-delegator, can: [pull-requests:merge]}
+  incident-bot: {kind: agent, harness: pi, profile: incident-investigation, can: [issues:write]}
+  outfitter-bot: {kind: agent, harness: pi, profile: actions-agent, can: [issues:write]}
+  review-coordinator: {kind: agent, harness: pi, profile: founder, skills: [persona-review], can: [contents:read, contents:write]}
+  persona-reviewer: {kind: agent, harness: pi, profile: persona-reviewer, skills: [persona-review], can: [contents:read]}
+
+environments:
+  workstation: local
+  kubernetes: agent-operator
+  actions: github-actions
+  observability: grafana
+
+integrations:
+  channels-github: {kind: wake, label: Channels / GitHub, provider: ai-outfitter/channels, source: github}
+  channels-email: {kind: wake, label: Channels / Email, provider: ai-outfitter/channels, source: jmap}
+  github-actions-events: {kind: trigger, label: GitHub Actions, provider: github, source: github}
+  grafana-read: {kind: mcp, label: Grafana, server: grafana-read, tools: [get_alert_rule_by_uid, query_prometheus, query_loki_logs, get_dashboard_by_uid]}
+  github-write: {kind: mcp, label: GitHub, server: github-write, tools: [issue_read, issue_write, create_pull_request, update_pull_request, pull_request_read, pull_request_review_write, add_comment_to_pending_review, add_issue_comment]}
+  github-merge: {kind: mcp, label: GitHub, server: github-merge, tools: [pull_request_read, merge_pull_request]}
+  playwright-browser: {kind: mcp, label: "Chrome / Playwright (optional)", server: playwright, tools: [browser_navigate, browser_snapshot, browser_take_screenshot]}
+  outfitter-cli: {kind: cli, label: Outfitter}
+  gh: {kind: cli, label: gh}
+  git-https: {kind: transport, label: Git HTTPS}
+
+checks:
+  verify:
+    commands: [outfitter validate --strict, git diff --check origin/main...HEAD]
+    local: pre-commit
+    required_status: test

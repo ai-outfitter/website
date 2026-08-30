@@ -1,0 +1,8 @@
+id: persona-review
+title: Persona review
+nodes:
+  - {id: select_context, action: select-persona-and-artifact, actor: review-coordinator, environment: workstation, skill: persona-review}
+  - {id: launch, action: launch-isolated-reviewer, actor: review-coordinator, environment: workstation, assignee: persona-reviewer, needs: [select_context], uses: [outfitter-cli]}
+  - {id: inspect, action: inspect-artifact, actor: persona-reviewer, environment: workstation, needs: [launch], skill: persona-review, uses: [playwright-browser]}
+  - {id: report, action: write-sourced-report, actor: persona-reviewer, environment: workstation, needs: [inspect], outputs: [report]}
+  - {id: capture, action: atomically-save-report, actor: review-coordinator, environment: workstation, needs: [report], path: docs/persona-reviews/, uses: [outfitter-cli]}

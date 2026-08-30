@@ -16,9 +16,11 @@ the source project repositories and site-owned content in `src/content/docs/`.
 The `docs:sync` step publishes each configured repository's `README.md` and
 complete `docs/` tree under `/docs/<repo>/`.
 
-Organization-wide workflows are declared once in `docs/workflows/factory.yaml`.
-The same sync step validates that YAML and generates the workflow atlas under
-`/docs/workflows/`, including Mermaid diagrams and accessible step tables.
+Organization-wide workflows are declared separately in `docs/workflows/`,
+with shared actors, environments, and integrations in `registry.yaml`. The
+same sync step validates those YAML files and generates the workflow atlas
+under `/docs/workflows/`, including Mermaid diagrams and accessible step
+tables.
 
 By default, the sync script discovers sibling checkouts under
 `~/repos/ai-outfitter`. Set `AI_OUTFITTER_REPOS_DIR` to use another checkout

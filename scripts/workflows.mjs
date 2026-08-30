@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { basename, extname, resolve } from 'node:path';
 import { parse } from 'yaml';
 
 const words = (value) => String(value).replaceAll('-', ' ').replaceAll('_', ' ');
@@ -180,23 +181,57 @@ function renderWorkflow(factory, workflows, workflow) {
   return lines.join('\n');
 }
 
-export async function loadWorkflows(source) {
-  const yaml = await readFile(source, 'utf8');
-  const factory = parse(yaml);
+export async function loadWorkflows(directory) {
+  const registryPath = resolve(directory, 'registry.yaml');
+  const registryYaml = await readFile(registryPath, 'utf8');
+  const registry = parse(registryYaml);
+  if (registry.workflows) {
+    throw new Error('Workflow definitions MUST live in separate YAML files, not registry.yaml.');
+  }
+
+  const filenames = (await readdir(directory))
+    .filter((filename) => /\.ya?ml$/i.test(filename) && filename !== 'registry.yaml')
+    .sort();
+  if (filenames.length === 0) throw new Error('At least one workflow YAML file is required.');
+
+  const documents = await Promise.all(filenames.map(async (filename) => {
+    const yaml = await readFile(resolve(directory, filename), 'utf8');
+    const workflow = parse(yaml);
+    const expectedId = basename(filename, extname(filename));
+    if (workflow?.id !== expectedId) {
+      throw new Error(`Workflow file "${filename}" MUST declare id "${expectedId}".`);
+    }
+    return { filename, workflow, yaml };
+  }));
+  const sourceFiles = new Map(documents.map(({ filename, workflow }) => [workflow.id, filename]));
+  const factory = { ...registry, workflows: documents.map(({ workflow }) => workflow) };
   const workflows = workflowMap(factory);
   const invocationGraph = validate(factory, workflows);
-  const revision = createHash('sha256').update(yaml).digest('hex').slice(0, 12);
+  const revision = createHash('sha256')
+    .update(registryYaml)
+    .update(documents.map(({ filename, yaml }) => `\n--- ${filename} ---\n${yaml}`).join(''))
+    .digest('hex')
+    .slice(0, 12);
   const items = [...workflows].map(([id, workflow]) => {
     const invokes = invocationGraph.get(id) ?? [];
+    const workflowLinks = workflow.nodes
+      .filter((node) => node.workflow)
+      .map((node) => ({
+        nodeId: node.id,
+        href: `/docs/workflows/${node.workflow}/`,
+        title: workflows.get(node.workflow).title ?? title(node.workflow),
+      }));
     return {
       ...workflow,
       revision,
+      sourceFile: sourceFiles.get(id),
       mermaid: renderWorkflow(factory, workflows, workflow),
+      workflowLinks,
       invokes: invokes.map((target) => ({ id: target, title: workflows.get(target).title ?? title(target) })),
       canInvoke: [...reachable(invocationGraph, id)].filter((target) => !invokes.includes(target)).map((target) => ({ id: target, title: workflows.get(target).title ?? title(target) })),
     };
   });
-  return { factory, items, yaml };
+  return { factory, items };
 }
 
 export { actorName, environmentName, title };

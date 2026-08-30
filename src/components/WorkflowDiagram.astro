@@ -2,18 +2,29 @@
 interface Props {
   title: string;
   source: string;
+  links?: Array<{ nodeId: string; href: string; title: string }>;
+  showSource?: boolean;
+  defer?: boolean;
 }
 
-const { title, source } = Astro.props;
+const { title, source, links = [], showSource = true, defer = false } = Astro.props;
 ---
 
-<figure class="workflow-diagram" data-workflow-diagram>
+<figure
+  class="workflow-diagram"
+  data-workflow-diagram
+  data-workflow-defer={defer ? '' : undefined}
+  data-workflow-links={links.length ? JSON.stringify(links) : undefined}
+>
   <div class="workflow-diagram__canvas" role="img" aria-label={`${title} workflow diagram`}></div>
   <p class="workflow-diagram__status" aria-live="polite">Rendering workflow…</p>
-  <details>
-    <summary>View Mermaid source</summary>
-    <pre><code data-workflow-source>{source}</code></pre>
-  </details>
+  {showSource && (
+    <details>
+      <summary>View Mermaid source</summary>
+      <pre><code data-workflow-source>{source}</code></pre>
+    </details>
+  )}
+  {!showSource && <code data-workflow-source hidden>{source}</code>}
 </figure>
 
 <script>
@@ -31,31 +42,70 @@ const { title, source } = Astro.props;
   });
 
   const narrowScreen = matchMedia('(max-width: 50rem)');
+  let renderVersion = 0;
 
-  async function renderDiagrams() {
-    const diagrams = document.querySelectorAll<HTMLElement>('[data-workflow-diagram]');
-    await Promise.all([...diagrams].map(async (diagram, index) => {
-      const canvas = diagram.querySelector<HTMLElement>('.workflow-diagram__canvas');
-      const data = diagram.querySelector<HTMLElement>('[data-workflow-source]');
-      const status = diagram.querySelector<HTMLElement>('.workflow-diagram__status');
-      if (!canvas || !data || !status) return;
-      try {
-        const source = (data.textContent ?? '').replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrowScreen.matches ? 'TB' : 'LR'}`);
-        const rendered = await mermaid.render(`workflow-${index}-${narrowScreen.matches ? 'tb' : 'lr'}`, source);
-        canvas.innerHTML = rendered.svg;
-        rendered.bindFunctions?.(canvas);
-        status.textContent = '';
-        status.classList.remove('workflow-diagram__error');
-      } catch (error) {
-        canvas.innerHTML = '';
-        status.classList.add('workflow-diagram__error');
-        status.textContent = `The workflow diagram could not be rendered: ${error instanceof Error ? error.message : String(error)}`;
-      }
-    }));
+  function bindWorkflowLinks(diagram: HTMLElement, canvas: HTMLElement) {
+    const encodedLinks = diagram.dataset.workflowLinks;
+    if (!encodedLinks) return;
+
+    const links = JSON.parse(encodedLinks) as Array<{ nodeId: string; href: string; title: string }>;
+    const nodes = [...canvas.querySelectorAll<SVGGElement>('g.node.workflowRef')];
+    for (const link of links) {
+      const escapedNodeId = link.nodeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const nodeId = new RegExp(`-flowchart-${escapedNodeId}-\\d+$`);
+      const node = nodes.find((candidate) => nodeId.test(candidate.id));
+      if (!node) continue;
+
+      const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'a');
+      anchor.setAttribute('href', link.href);
+      anchor.setAttribute('aria-label', `Open ${link.title} workflow`);
+      anchor.setAttribute('class', 'workflow-diagram__link');
+      while (node.firstChild) anchor.appendChild(node.firstChild);
+      node.appendChild(anchor);
+    }
   }
 
-  void renderDiagrams();
-  narrowScreen.addEventListener('change', () => void renderDiagrams());
+  async function renderDiagram(diagram: HTMLElement, force = false) {
+    if (diagram.dataset.workflowRendered === 'true' && !force) return;
+
+    const canvas = diagram.querySelector<HTMLElement>('.workflow-diagram__canvas');
+    const data = diagram.querySelector<HTMLElement>('[data-workflow-source]');
+    const status = diagram.querySelector<HTMLElement>('.workflow-diagram__status');
+    if (!canvas || !data || !status) return;
+
+    status.hidden = false;
+    status.textContent = 'Rendering workflow…';
+    status.classList.remove('workflow-diagram__error');
+    try {
+      const source = (data.textContent ?? '').replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrowScreen.matches ? 'TB' : 'LR'}`);
+      const rendered = await mermaid.render(
+        `workflow-${narrowScreen.matches ? 'tb' : 'lr'}-${renderVersion++}`,
+        source,
+      );
+      canvas.innerHTML = rendered.svg;
+      rendered.bindFunctions?.(canvas);
+      bindWorkflowLinks(diagram, canvas);
+      diagram.dataset.workflowRendered = 'true';
+      status.textContent = '';
+      status.hidden = true;
+    } catch (error) {
+      canvas.innerHTML = '';
+      status.hidden = false;
+      status.classList.add('workflow-diagram__error');
+      status.textContent = `The workflow diagram could not be rendered: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  const diagrams = [...document.querySelectorAll<HTMLElement>('[data-workflow-diagram]')];
+  for (const diagram of diagrams) {
+    diagram.addEventListener('workflow-diagram:render', () => void renderDiagram(diagram));
+    if (!diagram.hasAttribute('data-workflow-defer')) void renderDiagram(diagram);
+  }
+  narrowScreen.addEventListener('change', () => {
+    for (const diagram of diagrams) {
+      if (diagram.dataset.workflowRendered === 'true') void renderDiagram(diagram, true);
+    }
+  });
 </script>
 
 <style>
@@ -78,6 +128,16 @@ const { title, source } = Astro.props;
     min-width: 62rem;
     max-width: none;
     height: auto;
+  }
+
+  .workflow-diagram__canvas :global(.workflow-diagram__link) {
+    cursor: pointer;
+  }
+
+  .workflow-diagram__canvas :global(.workflow-diagram__link:hover .label-container),
+  .workflow-diagram__canvas :global(.workflow-diagram__link:focus-visible .label-container) {
+    filter: brightness(1.2);
+    stroke-width: 5px !important;
   }
 
   .workflow-diagram__status {

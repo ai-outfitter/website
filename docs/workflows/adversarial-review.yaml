@@ -1,0 +1,10 @@
+id: adversarial-review
+title: Adversarial review
+triggers:
+  - {integration: channels-github, event: pull_request.review_requested, rule: CODEOWNERS, environment: kubernetes}
+outputs: [outcome]
+nodes:
+  - {id: inspect, action: inspect-change, actor: review-bot, environment: kubernetes, uses: [github-write]}
+  - {id: decide, action: decide-review, actor: review-bot, environment: kubernetes, needs: [inspect], outputs: [outcome], shape: decision}
+  - {id: approve, action: approve, actor: review-bot, environment: kubernetes, needs: [decide], if: "decide.outcome == 'approve'", result: {outcome: approve}, uses: [github-write]}
+  - {id: request_changes, action: request-changes, actor: review-bot, environment: kubernetes, needs: [decide], if: "decide.outcome == 'request-changes'", result: {outcome: request-changes}, uses: [github-write]}

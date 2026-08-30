@@ -1,0 +1,9 @@
+id: issue-triage
+title: Issue triage
+triggers:
+  - {integration: github-actions-events, event: issues.opened, environment: actions}
+nodes:
+  - {id: classify, action: classify-issue, actor: outfitter-bot, environment: actions, skill: issue-triage, templates: [feat.yml, fix.yml, research.yml], outputs: [kind], uses: [gh], shape: decision}
+  - {id: feature, workflow: factory, needs: [classify], if: "classify.kind == 'feat'"}
+  - {id: bug, workflow: bug-issue, needs: [classify], if: "classify.kind == 'fix'"}
+  - {id: research, workflow: research-triage, needs: [classify], if: "classify.kind == 'research'"}
