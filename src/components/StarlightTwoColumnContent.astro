@@ -1,0 +1,31 @@
+---
+import DefaultTwoColumnContent from '@astrojs/starlight/components/TwoColumnContent.astro';
+
+const isDocumentation = Astro.url.pathname.startsWith('/docs/');
+---
+
+{
+  isDocumentation ? (
+    <div class="documentation-main-pane">
+      <slot />
+    </div>
+  ) : (
+    <DefaultTwoColumnContent>
+      <slot name="right-sidebar" slot="right-sidebar" />
+      <slot />
+    </DefaultTwoColumnContent>
+  )
+}
+
+<style is:global>
+  .documentation-main-pane {
+    --sl-content-width: 100%;
+    width: 100%;
+  }
+
+  @media (max-width: 71.999rem) {
+    .main-frame:has(.documentation-main-pane) {
+      padding-top: var(--sl-nav-height);
+    }
+  }
+</style>

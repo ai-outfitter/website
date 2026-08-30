@@ -1,0 +1,130 @@
+---
+interface Props {
+  title: string;
+  source: string;
+  nodes: Array<{
+    id: string;
+    title: string;
+    kind: 'step' | 'workflow';
+    href?: string;
+    details: Array<{ label: string; value: string }>;
+  }>;
+}
+
+import './WorkflowDiagram.css';
+
+const { title, source, nodes } = Astro.props;
+---
+
+<figure class="workflow-diagram" data-workflow-diagram>
+  <div class="workflow-diagram__canvas" role="group" aria-label={`${title} workflow diagram`}></div>
+  <p class="workflow-diagram__status" aria-live="polite">Rendering workflow…</p>
+  <script is:inline type="text/plain" data-workflow-source set:html={source}></script>
+  <script is:inline type="application/json" data-workflow-nodes set:html={JSON.stringify(nodes).replaceAll('<', '\\u003c')}></script>
+  <dialog class="workflow-node-dialog" data-workflow-node-dialog>
+    <form method="dialog" class="workflow-node-dialog__close-form">
+      <button class="workflow-node-dialog__close" aria-label="Close step details">×</button>
+    </form>
+    <p class="workflow-node-dialog__eyebrow">Workflow step</p>
+    <h2 data-node-title></h2>
+    <dl data-node-details></dl>
+  </dialog>
+</figure>
+
+<script>
+  import mermaid from 'mermaid';
+
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'base',
+    themeVariables: {
+      background: 'transparent',
+      fontSize: '17px',
+    },
+    flowchart: {
+      curve: 'basis',
+      htmlLabels: true,
+      padding: 20,
+      useMaxWidth: false,
+    },
+  });
+
+  const narrowScreen = matchMedia('(max-width: 50rem)');
+
+  async function renderDiagrams() {
+    const diagrams = document.querySelectorAll<HTMLElement>('[data-workflow-diagram]');
+    await Promise.all([...diagrams].map(async (diagram, index) => {
+      const canvas = diagram.querySelector<HTMLElement>('.workflow-diagram__canvas');
+      const data = diagram.querySelector<HTMLElement>('[data-workflow-source]');
+      const nodeData = diagram.querySelector<HTMLElement>('[data-workflow-nodes]');
+      const status = diagram.querySelector<HTMLElement>('.workflow-diagram__status');
+      const dialog = diagram.querySelector<HTMLDialogElement>('[data-workflow-node-dialog]');
+      if (!canvas || !data || !nodeData || !status || !dialog) return;
+      try {
+        const source = (data.textContent ?? '').replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrowScreen.matches ? 'TB' : 'LR'}`);
+        const rendered = await mermaid.render(`workflow-${index}-${narrowScreen.matches ? 'tb' : 'lr'}`, source);
+        canvas.innerHTML = rendered.svg;
+        rendered.bindFunctions?.(canvas);
+        const nodes = JSON.parse(nodeData.textContent ?? '[]') as Array<{
+          id: string;
+          title: string;
+          kind: 'step' | 'workflow';
+          href?: string;
+          details: Array<{ label: string; value: string }>;
+        }>;
+        const renderedNodeFor = (nodeId: string) => [...canvas.querySelectorAll<SVGGElement>('g.node')]
+          .find((element) => element.id.includes(`flowchart-${nodeId}-`));
+        for (const node of nodes) {
+          const renderedNode = renderedNodeFor(node.id);
+          if (!renderedNode) continue;
+          renderedNode.classList.add('workflow-diagram__interactive-node');
+          renderedNode.setAttribute('role', node.href ? 'link' : 'button');
+          renderedNode.setAttribute('tabindex', '0');
+          renderedNode.setAttribute('aria-label', node.href ? `Open ${node.title} workflow` : `View details for ${node.title}`);
+          const activate = () => {
+            if (node.href) {
+              window.location.assign(node.href);
+              return;
+            }
+            const heading = dialog.querySelector<HTMLElement>('[data-node-title]');
+            const details = dialog.querySelector<HTMLElement>('[data-node-details]');
+            if (!heading || !details) return;
+            heading.textContent = node.title;
+            details.replaceChildren(...node.details.flatMap((detail) => {
+              const term = document.createElement('dt');
+              const description = document.createElement('dd');
+              term.textContent = detail.label;
+              description.textContent = detail.value;
+              return [term, description];
+            }));
+            dialog.showModal();
+          };
+          renderedNode.addEventListener('click', activate);
+          renderedNode.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            activate();
+          });
+        }
+        if (narrowScreen.matches && nodes[0]) {
+          const firstNode = renderedNodeFor(nodes[0].id);
+          if (firstNode) {
+            const canvasBounds = canvas.getBoundingClientRect();
+            const nodeBounds = firstNode.getBoundingClientRect();
+            canvas.scrollLeft += nodeBounds.left + nodeBounds.width / 2 - canvasBounds.left - canvas.clientWidth / 2;
+          }
+        }
+        status.textContent = '';
+        status.classList.remove('workflow-diagram__error');
+      } catch (error) {
+        canvas.innerHTML = '';
+        status.classList.add('workflow-diagram__error');
+        status.textContent = `The workflow diagram could not be rendered: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }));
+  }
+
+  void renderDiagrams();
+  narrowScreen.addEventListener('change', () => void renderDiagrams());
+</script>

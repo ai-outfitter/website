@@ -1,0 +1,84 @@
+---
+import DefaultSidebar from '@astrojs/starlight/components/Sidebar.astro';
+import TableOfContents from '@astrojs/starlight/components/TableOfContents.astro';
+
+const isDocumentation = Astro.url.pathname.startsWith('/docs/');
+---
+
+{
+  isDocumentation ? (
+    <div class="documentation-sidebar">
+      <div class="documentation-sidebar__toc">
+        <TableOfContents />
+      </div>
+      <details class="documentation-sidebar__docs">
+        <summary>Browse all documentation</summary>
+        <div class="documentation-sidebar__docs-content">
+          <DefaultSidebar />
+        </div>
+      </details>
+    </div>
+  ) : (
+    <DefaultSidebar />
+  )
+}
+
+<style>
+  .documentation-sidebar {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .documentation-sidebar__toc {
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+  }
+
+  .documentation-sidebar__toc :global(h2) {
+    margin-bottom: 0.5rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-lg);
+    font-weight: 650;
+  }
+
+  .documentation-sidebar__toc :global(a) {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+  }
+
+  .documentation-sidebar__toc :global(a:hover),
+  .documentation-sidebar__toc :global(a:focus),
+  .documentation-sidebar__toc :global(a[aria-current='true']) {
+    color: var(--sl-color-white);
+  }
+
+  .documentation-sidebar__docs > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+    font-weight: 650;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .documentation-sidebar__docs > summary::after {
+    content: '›';
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .documentation-sidebar__docs[open] > summary::after {
+    transform: rotate(90deg);
+  }
+
+  .documentation-sidebar__docs-content {
+    margin-top: 1rem;
+  }
+</style>

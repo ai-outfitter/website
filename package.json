@@ -1,0 +1,36 @@
+{
+  "name": "@ai-outfitter/website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "docs:checkout": "node scripts/checkout-repository-docs.mjs",
+    "docs:sync": "node scripts/sync-repository-docs.mjs && node scripts/sync-workflows.mjs",
+    "dev": "npm run docs:sync && astro dev",
+    "build": "npm run docs:sync && astro build",
+    "preview": "wrangler dev",
+    "check": "npm run docs:sync && astro check",
+    "test:links": "node scripts/check-links.mjs",
+    "test:publish": "node scripts/test-publish.mjs",
+    "test:search": "node scripts/test-search.mjs",
+    "test:workflows": "npm run docs:sync && node scripts/test-workflows.mjs",
+    "deploy": "node scripts/publish.mjs",
+    "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
+    "publish": "node scripts/publish.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.41.9",
+    "astro": "^7.2.8",
+    "mermaid": "^11.17.1",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.6",
+    "jsdom": "^27.0.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.126.0"
+  }
+}

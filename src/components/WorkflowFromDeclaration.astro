@@ -1,0 +1,18 @@
+---
+import { resolve } from 'node:path';
+
+import { loadWorkflows, workflowNodeDetails } from '../../scripts/workflows.mjs';
+import WorkflowDiagram from './WorkflowDiagram.astro';
+
+interface Props {
+  id: string;
+}
+
+const { id } = Astro.props;
+const { factory, items } = await loadWorkflows(resolve('docs/workflows/factory.yaml'));
+const workflow = items.find((item) => item.id === id);
+
+if (!workflow) throw new Error(`Unknown declared workflow: ${id}`);
+---
+
+<WorkflowDiagram title={workflow.title} source={workflow.mermaid} nodes={workflowNodeDetails(factory, workflow)} />
