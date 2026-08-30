@@ -53,12 +53,18 @@ try {
     url: '/docs/adoption-ramp/',
   });
 
-  const agentOperator = await readFile('dist/docs/agent-operator/index.html', 'utf8');
-  assert.match(agentOperator, /alpha and actively used/i);
-  assert.match(agentOperator, /Synced from/);
-  assert.doesNotMatch(agentOperator, /design stage/i);
+  const workflowSearch = await pagefind.search('Grafana alert investigation workflow');
+  const workflowResults = await Promise.all(workflowSearch.results.slice(0, 10).map((result) => result.data()));
+  const workflowResult = workflowResults.find((result) => new URL(result.url).pathname === '/workflows/grafana-alert/');
+  assert(workflowResult);
+  assert.equal(workflowResult.meta.title, 'Grafana alert investigation');
+  assert.equal(new URL(workflowResult.url).pathname, '/workflows/grafana-alert/');
 
-  console.log('Search and canonical repository documentation regressions pass.');
+  const agentOperator = await readFile('dist/docs/agent-operator/index.html', 'utf8');
+  assert.match(agentOperator, /<title>Agent Operator \| AI Outfitter<\/title>/);
+  assert.match(agentOperator, /Synced from/);
+
+  console.log('Search, workflow atlas, and canonical repository documentation regressions pass.');
 } finally {
   await new Promise((resolveClose, rejectClose) =>
     server.close((error) => (error ? rejectClose(error) : resolveClose())),

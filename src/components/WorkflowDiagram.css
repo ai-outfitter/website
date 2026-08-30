@@ -1,0 +1,233 @@
+.workflow-diagram {
+  margin: 2rem 0;
+}
+
+.workflow-diagram__canvas {
+  display: grid;
+  min-height: 26rem;
+  place-items: center;
+  overflow: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.75rem;
+  background: var(--sl-color-black);
+}
+
+.workflow-diagram__canvas svg {
+  max-width: none;
+  height: auto;
+}
+
+.workflow-diagram__status {
+  min-height: 1.5rem;
+  margin-block: 0.5rem 0;
+  color: var(--sl-color-gray-2);
+}
+
+.workflow-diagram__error {
+  color: var(--sl-color-accent-high);
+}
+
+.workflow-diagram__canvas .node rect,
+.workflow-diagram__canvas .node polygon,
+.workflow-diagram__canvas .node path {
+  fill: var(--sl-color-black) !important;
+  stroke: var(--sl-color-gray-3) !important;
+  filter: drop-shadow(0 0.45rem 0.75rem color-mix(in srgb, var(--sl-color-black) 45%, transparent));
+}
+
+.workflow-diagram__canvas .node rect {
+  rx: 0.8rem;
+  ry: 0.8rem;
+}
+
+.workflow-diagram__canvas .node.local rect,
+.workflow-diagram__canvas .node.local polygon,
+.workflow-diagram__canvas .node.local path {
+  fill: var(--sl-color-black) !important;
+  stroke: var(--sl-color-accent) !important;
+}
+
+.workflow-diagram__canvas .node.resident rect,
+.workflow-diagram__canvas .node.resident polygon,
+.workflow-diagram__canvas .node.resident path {
+  fill: var(--sl-color-black) !important;
+  stroke: var(--sl-color-gray-2) !important;
+}
+
+.workflow-diagram__canvas .node.actions rect,
+.workflow-diagram__canvas .node.actions polygon,
+.workflow-diagram__canvas .node.actions path,
+.workflow-diagram__canvas .node.workflowRef rect,
+.workflow-diagram__canvas .node.workflowRef polygon,
+.workflow-diagram__canvas .node.workflowRef path {
+  fill: var(--sl-color-accent-low) !important;
+  stroke: var(--sl-color-accent-high) !important;
+}
+
+.workflow-diagram__canvas .nodeLabel,
+.workflow-diagram__canvas .nodeLabel *,
+.workflow-diagram__canvas .label text,
+.workflow-diagram__canvas .edgeLabel {
+  color: var(--sl-color-white) !important;
+  fill: var(--sl-color-white) !important;
+  opacity: 1 !important;
+}
+
+/*
+ * Mermaid measures HTML labels in a body-level container before inserting the
+ * SVG. Keep every metric-affecting card rule unscoped so measuring and painting
+ * use the same typography and dimensions. Canvas-scoped rules may only paint.
+ */
+.workflow-node-card {
+  display: inline-block;
+  width: 15rem;
+  min-height: 10.25rem;
+  white-space: normal;
+  text-align: center !important;
+}
+
+.workflow-node-card > span {
+  display: block;
+}
+
+.workflow-node-title {
+  font-size: 1.08rem;
+  font-weight: 750;
+  line-height: 1.3;
+  min-height: 6.5em;
+  margin-bottom: 0.35rem;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.workflow-node-description {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.workflow-node-meta {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.workflow-diagram__canvas .workflow-node-title {
+  color: var(--sl-color-accent-high) !important;
+}
+
+.workflow-diagram__canvas .workflow-node-meta {
+  color: var(--sl-color-gray-2) !important;
+}
+
+.workflow-diagram__canvas .workflow-node-description {
+  color: var(--sl-color-gray-2) !important;
+}
+
+.workflow-diagram__canvas .workflow-diagram__interactive-node {
+  cursor: pointer;
+}
+
+.workflow-diagram__canvas .workflow-diagram__interactive-node:hover rect,
+.workflow-diagram__canvas .workflow-diagram__interactive-node:hover polygon,
+.workflow-diagram__canvas .workflow-diagram__interactive-node:hover path,
+.workflow-diagram__canvas .workflow-diagram__interactive-node:focus-visible rect,
+.workflow-diagram__canvas .workflow-diagram__interactive-node:focus-visible polygon,
+.workflow-diagram__canvas .workflow-diagram__interactive-node:focus-visible path {
+  filter: brightness(1.18);
+  stroke-width: 4px !important;
+}
+
+.workflow-diagram__canvas .workflow-diagram__interactive-node:focus-visible {
+  outline: none;
+}
+
+.workflow-node-dialog {
+  width: min(34rem, calc(100% - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--sl-color-gray-3);
+  border-radius: 0.9rem;
+  color: var(--sl-color-white);
+  background: var(--sl-color-gray-6);
+  box-shadow: 0 1.5rem 5rem color-mix(in srgb, var(--sl-color-black) 55%, transparent);
+}
+
+.workflow-node-dialog::backdrop {
+  background: color-mix(in srgb, var(--sl-color-black) 76%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.workflow-node-dialog__close-form {
+  float: right;
+}
+
+.workflow-node-dialog__close {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  color: var(--sl-color-white);
+  background: var(--sl-color-gray-5);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.workflow-node-dialog__eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--sl-color-accent-high);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.workflow-node-dialog h2 {
+  margin: 0 2.5rem 1.25rem 0;
+}
+
+.workflow-node-dialog dl {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: 0.65rem 1rem;
+  margin: 0;
+}
+
+.workflow-node-dialog dt {
+  color: var(--sl-color-gray-2);
+  font-weight: 600;
+}
+
+.workflow-node-dialog dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workflow-diagram__canvas .edgeLabel,
+.workflow-diagram__canvas .edgeLabel p {
+  background: var(--sl-color-black) !important;
+}
+
+.workflow-diagram__canvas .flowchart-link {
+  stroke: var(--sl-color-gray-2) !important;
+}
+
+.workflow-diagram__canvas marker path {
+  fill: var(--sl-color-gray-2) !important;
+  stroke: var(--sl-color-gray-2) !important;
+}
+
+@media (max-width: 50rem) {
+  .workflow-diagram__canvas {
+    min-height: 18rem;
+    place-items: center start;
+    padding: 0.75rem;
+  }
+}

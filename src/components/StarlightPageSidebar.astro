@@ -1,0 +1,7 @@
+---
+import DefaultPageSidebar from '@astrojs/starlight/components/PageSidebar.astro';
+
+const isDocumentation = Astro.url.pathname.startsWith('/docs/');
+---
+
+{!isDocumentation && <DefaultPageSidebar />}

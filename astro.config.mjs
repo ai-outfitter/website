@@ -26,6 +26,7 @@ export default defineConfig({
   site: 'https://ai-outfitter.com',
   vite: {
     server: {
+      allowedHosts: ['ncrmro-workstation'],
       strictPort: true,
     },
   },
@@ -49,6 +50,11 @@ export default defineConfig({
         },
       ],
       customCss: ['./src/styles/custom.css'],
+      components: {
+        Sidebar: './src/components/StarlightSidebar.astro',
+        PageSidebar: './src/components/StarlightPageSidebar.astro',
+        TwoColumnContent: './src/components/StarlightTwoColumnContent.astro',
+      },
       editLink: {
         baseUrl: 'https://github.com/ai-outfitter/website/edit/main/',
       },
@@ -58,9 +64,11 @@ export default defineConfig({
         {
           label: 'Start here',
           items: [
+            { label: 'Start your first software factory', link: '/docs/start/' },
             { label: 'Documentation', link: '/docs/' },
             { label: 'Repository documentation', link: '/docs/projects/' },
             { label: 'The adoption ramp', link: '/docs/adoption-ramp/' },
+            { label: 'Workflow atlas', link: '/workflows/' },
           ],
         },
         ...repositorySidebar,

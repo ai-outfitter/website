@@ -13,6 +13,7 @@ quality, and evidence pieces your next adoption rung requires.
 - **New to AI Outfitter:** follow [Getting started](/docs/outfitter/documentation/getting-started/).
 - **Choosing components:** browse the [repository documentation](/docs/projects/).
 - **Designing an adoption plan:** read [Move the control point outward](/docs/adoption-ramp/).
+- **Seeing the system in motion:** explore the [workflow atlas](/workflows/).
 - **Understanding composition:** read [Outfitter concepts](/docs/outfitter/documentation/concepts/).
 - **Evaluating production boundaries:** read [Outfitter architecture](/docs/outfitter/architecture/).
 

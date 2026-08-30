@@ -21,6 +21,8 @@ src/content/docs/docs/link/
 src/content/docs/docs/outfitter/
 src/content/docs/docs/pensieve/
 src/content/docs/docs/projects/
+src/content/docs/docs/workflows/
+src/pages/workflows/
 src/content/docs/docs/ulta-tasklist/
 devenv.local.nix
 .env.*

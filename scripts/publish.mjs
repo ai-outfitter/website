@@ -66,4 +66,5 @@ run('npm', ['run', 'check']);
 run('npm', ['run', 'build']);
 run('npm', ['run', 'test:links']);
 run('npm', ['run', 'test:search']);
+run('npm', ['run', 'test:workflows']);
 run('npm', ['exec', '--', 'wrangler', 'deploy']);

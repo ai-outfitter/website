@@ -1,46 +1,96 @@
 ---
-title: Own the agent lifecycle
-description: Open, vendor-neutral tooling for composing, running, governing, and improving coding agents.
+title: Outfit your team
+description: Roll out a team of agents for you or your team.
 template: splash
 hero:
-  title: Own the agent lifecycle.
-  tagline: Compose agents as reviewed configuration. Run them from a laptop, CI, or a cluster. Keep the evidence and improve what happens next.
+  title: Outfit your team.
+  tagline: Roll out a team of agents for you or your team. Research, market, sell, build, and operate with shared context and skills.
   actions:
-    - text: Start with Outfitter
+    - text: Start with the GitHub App
+      link: https://app.ai-outfitter.com/
+      icon: rocket
+      variant: primary
+    - text: Roll out manually
       link: /docs/outfitter/documentation/getting-started/
       icon: right-arrow
-      variant: primary
-    - text: Explore the projects
-      link: /docs/projects/
-      icon: open-book
       variant: minimal
 ---
 
-<p class="eyebrow">One configuration · every surface</p>
+import WorkflowFromDeclaration from '../../components/WorkflowFromDeclaration.astro';
 
-## Move the control point outward
+<p class="eyebrow">Agentic workflows</p>
 
-AI Outfitter is an open toolchain for the part after “try a coding agent.” Keep
-agent context, skills, tools, and permissions in a reviewable `.agents/` tree,
-then reuse the same composition wherever the work runs.
+## Label an issue. Get a reviewed pull request.
+
+Install the GitHub App, choose inference, press Provision. The App becomes
+your organization's resident agent, hosted by us. Label an issue and it
+implements, requests a distinct adversarial reviewer through CODEOWNERS, and
+auto-merges after required CI and approval. Nothing is added to your repository
+— your first pull request is the feature.
 
 <div class="signal-grid">
   <div>
-    <span class="number">01 / COMPOSE</span>
-    <h3>Configuration you own</h3>
-    <p>Layer personal, organization, and project catalogs by slug. Pin remote sources and review changes like code.</p>
+    <span class="number">01 / INSTALL</span>
+    <h3>Install, choose inference, provision</h3>
+    <p><a href="https://app.ai-outfitter.com/">Install the App</a>, pick our inference or your own key, press Provision. No workflow file, no repository secret, no settings.</p>
   </div>
   <div>
-    <span class="number">02 / OPERATE</span>
-    <h3>Work beyond one laptop</h3>
-    <p>Run the same profile interactively, in GitHub Actions, or as a resident Kubernetes agent.</p>
+    <span class="number">02 / TRIGGER</span>
+    <h3>Trigger from the issue</h3>
+    <p>Label an issue <code>ai-outfitter</code> or mention <code>@ai-outfitter</code>. A hosted run starts within seconds.</p>
   </div>
   <div>
-    <span class="number">03 / VERIFY</span>
-    <h3>Trust through evidence</h3>
-    <p>Measure outcomes, preserve session evidence, and make improvement a checked loop instead of a guess.</p>
+    <span class="number">03 / REVIEW</span>
+    <h3>A second agent pushes back</h3>
+    <p>A distinct CODEOWNER reviews after CI. Request-changes starts another revision, CI, and review pass; approval lets GitHub auto-merge.</p>
   </div>
 </div>
+
+<WorkflowFromDeclaration id="software-factory" />
+
+[Start your first software factory →](/docs/start/) · [Explore the workflow →](/workflows/software-factory/)
+
+<p class="eyebrow">Rollout</p>
+
+## Outfit once. Work everywhere.
+
+Keep agent context, skills, tools, and permissions in a reviewable `.agents/`
+tree. Give one person an agent team—or roll it out across your organization.
+
+<div class="signal-grid">
+  <div>
+    <span class="number">01 / OUTFIT</span>
+    <h3>Specialists for every function</h3>
+    <p>Compose agents for research, marketing, business development, engineering, and operations.</p>
+  </div>
+  <div>
+    <span class="number">02 / ROLL OUT</span>
+    <h3>From one person to every team</h3>
+    <p>Publish shared skills and context once. Let each team adapt them to its work.</p>
+  </div>
+  <div>
+    <span class="number">03 / DELEGATE</span>
+    <h3>Work where your team works</h3>
+    <p>Delegate from a coding harness, GitHub, CI, or a resident agent on your infrastructure.</p>
+  </div>
+</div>
+
+### Publish once. Delegate from every harness.
+
+An admin publishes the organization’s shared agent context once. A non-admin
+employee syncs it, then Pi and Claude Code receive the same delegation prompt:
+turn bounded work into a durable issue and let issue triage assign it to a
+resident agent. A provisioned hosted App is one resident deployment.
+
+<WorkflowFromDeclaration id="organization-delegation" />
+
+:::note[Target-state declaration]
+This graph describes the intended community prompt-fragment composition. It
+does not claim that named community prompt fragments or every routing control
+are deployed today.
+:::
+
+[Follow the handoff through issue triage and the software factory →](/workflows/issue-triage/)
 
 <p class="eyebrow">The adoption ramp</p>
 
