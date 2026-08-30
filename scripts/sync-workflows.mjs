@@ -84,14 +84,14 @@ ${supportingCards}
 // these into an organization's or user's `.agents` repository — pushed to
 // the default branch or opened as a pull request — so a reader can adopt a
 // workflow's agents from the page that describes it.
-const STORE_URL = 'https://app.ai-outfitter.com/store';
+const STORE_URL = '/agents';
 const agentProfiles = (workflow) => [...new Set(workflow.nodes
   .filter((node) => !node.workflow && factory.actors[node.actor]?.kind === 'agent' && factory.actors[node.actor].profile)
   .map((node) => factory.actors[node.actor].profile))];
 const installSection = (workflow) => {
   const profiles = agentProfiles(workflow);
   if (!profiles.length) return '';
-  return `\n## Install the agents\n\nThis workflow runs as ${profiles.map((profile) => `\`${profile}\``).join(', ')}. [Install them from the App's store](${STORE_URL}): pick your organization or account and the App commits each agent into its \`.agents\` repository, straight to the default branch or as a pull request you merge.\n`;
+  return `\n## Install the agents\n\nThis workflow runs as ${profiles.map((profile) => `\`${profile}\``).join(', ')}. [Manage this workflow's agent bundle](${STORE_URL}?workflow=${workflow.id}): choose an existing managed repository, preview the exact structured changes, then open a pull request or commit to its default branch.\n`;
 };
 
 for (const workflow of items) {

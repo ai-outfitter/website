@@ -1,0 +1,104 @@
+[
+  {
+    "id": "organization-delegation",
+    "title": "Organization-wide delegation",
+    "description": "Publish shared agent profiles and delegate scoped work into issue triage.",
+    "resources": [
+      "agents/actions-agent",
+      "agents/code-review",
+      "agents/engineer",
+      "prompts/subagent-delegation",
+      "skills/issue-triage",
+      "skills/research-triage"
+    ]
+  },
+  {
+    "id": "founder",
+    "title": "Founder",
+    "description": "Ship changes locally as a human-authenticated founder agent, with optional worktree isolation and adversarial review.",
+    "resources": [
+      "agents/code-review",
+      "agents/founder"
+    ]
+  },
+  {
+    "id": "engineer",
+    "title": "Engineer",
+    "description": "Research, implement, review, and merge changes locally through a human-authenticated engineering agent.",
+    "resources": [
+      "agents/code-review",
+      "agents/engineer"
+    ]
+  },
+  {
+    "id": "software-factory",
+    "title": "Software factory",
+    "description": "Delegate typed issues to resident agents for CI-gated implementation, adversarial review, and automatic merge.",
+    "resources": [
+      "agents/code-review",
+      "agents/engineer"
+    ]
+  },
+  {
+    "id": "adversarial-review",
+    "title": "Adversarial review",
+    "description": "Assign a distinct review agent to inspect a change and return an approval or actionable findings.",
+    "resources": [
+      "agents/code-review"
+    ]
+  },
+  {
+    "id": "bug-issue",
+    "title": "Bug issue",
+    "description": "Investigate a fix issue and assign the resulting coding work to a resident agent.",
+    "resources": [
+      "agents/actions-agent",
+      "skills/issue-triage"
+    ]
+  },
+  {
+    "id": "issue-triage",
+    "title": "Issue triage",
+    "description": "Classify untyped issues and route features, fixes, and research into their delivery workflows.",
+    "resources": [
+      "agents/actions-agent",
+      "agents/code-review",
+      "agents/engineer",
+      "skills/issue-triage",
+      "skills/research-triage"
+    ]
+  },
+  {
+    "id": "research-triage",
+    "title": "Research triage",
+    "description": "Classify research requests and route them into market, technical, or business investigation tracks.",
+    "resources": [
+      "agents/actions-agent",
+      "skills/research-triage"
+    ]
+  },
+  {
+    "id": "grafana-alert",
+    "title": "Grafana alert investigation",
+    "description": "Investigate a Grafana alert, create a fix issue, and hand it to issue triage.",
+    "resources": [
+      "agents/actions-agent",
+      "agents/code-review",
+      "agents/engineer",
+      "agents/incident-investigation",
+      "skills/incident-investigation",
+      "skills/issue-triage",
+      "skills/research-triage"
+    ]
+  },
+  {
+    "id": "persona-review",
+    "title": "Persona review",
+    "description": "Review website changes, documents, and other artifacts from a selected persona's perspective, then save a sourced report.",
+    "resources": [
+      "agents/founder",
+      "agents/persona-reviewer",
+      "skills/persona-review"
+    ]
+  }
+]
