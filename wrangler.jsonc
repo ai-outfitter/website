@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ai-outfitter-website",
+  "account_id": "52b3dd3372a05fd2be0eb0f8ec36f9d3",
+  "compatibility_date": "2026-08-26",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "ai-outfitter.com",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

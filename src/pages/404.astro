@@ -1,0 +1,77 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+---
+
+<StarlightPage
+  frontmatter={{
+    title: '404',
+    description: 'Page not found.',
+    editUrl: false,
+  }}
+  hasSidebar={false}
+>
+  <section class="not-found">
+    <p class="code">404 / OFF THE MAP</p>
+    <h1>Trail not found.</h1>
+    <p>This route is off the map. Search the docs or return to base camp.</p>
+    <nav aria-label="Page not found actions">
+      <a class="primary" href="/">Return home</a>
+      <a href="/docs/">Read the docs</a>
+    </nav>
+  </section>
+</StarlightPage>
+
+<style>
+  .not-found {
+    display: grid;
+    place-content: center;
+    min-height: 65vh;
+    text-align: center;
+  }
+
+  .code {
+    color: var(--sl-color-accent);
+    font-family: var(--sl-font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+  }
+
+  h1 {
+    margin-block: 0.5rem;
+    font-size: clamp(3rem, 8vw, 6rem);
+    letter-spacing: -0.06em;
+    line-height: 0.95;
+  }
+
+  .not-found > p:not(.code) {
+    color: var(--sl-color-gray-2);
+    font-size: 1.15rem;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
+  }
+
+  a {
+    border: 1px solid var(--sl-color-gray-4);
+    padding: 0.8rem 1rem;
+    color: var(--sl-color-white);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  a.primary {
+    border-color: var(--sl-color-accent-high);
+    background: var(--sl-color-accent-high);
+    color: var(--sl-color-black);
+  }
+</style>
+
