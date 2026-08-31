@@ -5,6 +5,7 @@ dist/
 .devenv/
 .direnv/
 .cache/
+.dev.vars
 public/repository-assets/
 src/content/docs/docs/actions/
 src/content/docs/docs/agent-operator/

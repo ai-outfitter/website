@@ -12,7 +12,7 @@ type Counts = { installed: number; outdated: number; overridden: number };
 type Account = {
   login: string;
   type: "User" | "Organization";
-  installationId: number;
+  installationId: number | null;
   repository: Repository | null;
   active?: boolean;
   counts?: Counts;
@@ -33,6 +33,7 @@ type AccountIndex = {
   activeAccount: Account | null;
   accounts: Account[];
   githubAppSlug: string;
+  authMode: "local" | "oauth";
 };
 
 type WorkflowResponse = {
@@ -105,9 +106,13 @@ export class DashboardController {
     required(this.document, "signed-out").hidden = true;
     required(this.document, "signed-in").hidden = false;
     const install = required<HTMLAnchorElement>(this.document, "install-app");
-    install.href = `https://github.com/apps/${encodeURIComponent(this.index.githubAppSlug)}/installations/new`;
+    const signOut = required<HTMLButtonElement>(this.document, "sign-out");
+    const local = this.index.authMode === "local";
+    install.hidden = local;
+    signOut.hidden = local;
+    if (!local) install.href = `https://github.com/apps/${encodeURIComponent(this.index.githubAppSlug)}/installations/new`;
 
-    await this.acceptInstallationReturn();
+    if (!local) await this.acceptInstallationReturn();
     this.renderAccounts();
     const selected = this.requestedAccount() ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
     if (!selected) {
@@ -162,7 +167,7 @@ export class DashboardController {
     const url = new URL(this.location.href);
     const installationId = url.searchParams.get("installation_id");
     if (!installationId) return;
-    const account = this.index.accounts.find((candidate) => String(candidate.installationId) === installationId);
+    const account = this.index.accounts.find((candidate) => candidate.installationId !== null && String(candidate.installationId) === installationId);
     if (!account) {
       this.status("The returned GitHub App installation is not accessible to this session.");
       return;

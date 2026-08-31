@@ -59,6 +59,7 @@ describe("dashboard client", () => {
         activeAccount: { login: "acme", type: "Organization", installationId: 7, repository: { fullName: "acme/.agents", defaultBranch: "main", private: true, canPush: true } },
         accounts: [{ login: "acme", type: "Organization", installationId: 7, repository: { fullName: "acme/.agents", defaultBranch: "main", private: true, canPush: true }, active: true, counts: { installed: 1, outdated: 0, overridden: 0 } }],
         githubAppSlug: "ai-outfitter",
+        authMode: "oauth",
       });
       if (path === "/api/accounts/acme/workflows") return Response.json({
         login: "acme",
@@ -82,5 +83,27 @@ describe("dashboard client", () => {
       "/api/accounts/acme/workflows",
       "/api/accounts/acme/repository/resources",
     ]);
+  });
+
+  it("hides OAuth-only account controls when a local PAT authenticates the dashboard", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({
+        user: { name: "Octo" },
+        activeAccount: { login: "octo", type: "User", installationId: null, repository: null },
+        accounts: [{ login: "octo", type: "User", installationId: null, repository: null }],
+        githubAppSlug: "ai-outfitter",
+        authMode: "local",
+      });
+      if (path === "/api/accounts/octo/workflows") return Response.json({
+        login: "octo", repository: null, repositoryUrl: "https://github.com/octo/.agents", workflows: [],
+      });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    await startDashboard(document, fetcher as typeof fetch, locationAt());
+
+    expect(document.querySelector<HTMLElement>("#install-app")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>("#sign-out")?.hidden).toBe(true);
   });
 });

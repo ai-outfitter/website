@@ -1,6 +1,8 @@
 import { Octokit } from "@octokit/core";
 import { userToken } from "./auth";
 
+declare const __LOCAL_PAT_DEV__: boolean;
+
 export type Repository = {
   id: number;
   fullName: string;
@@ -13,7 +15,7 @@ export type Repository = {
 export type Account = {
   login: string;
   type: "User" | "Organization";
-  installationId: number;
+  installationId: number | null;
   repository: Repository | null;
 };
 
@@ -23,7 +25,28 @@ type Installation = {
 };
 
 export async function github(env: Env, request: Request) {
-  return new Octokit({ auth: await userToken(env, request.headers) });
+  return new Octokit({ auth: localGitHubToken(env, request) ?? await userToken(env, request.headers) });
+}
+
+export function localGitHubToken(
+  env: Env,
+  request: Request,
+  localRuntime = typeof __LOCAL_PAT_DEV__ !== "undefined" && __LOCAL_PAT_DEV__ === true,
+) {
+  if (env.LOCAL_GITHUB_AUTH !== "true") return null;
+  if (!localRuntime) return null;
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      const parsed = new URL(origin);
+      const loopback = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
+      if (!loopback || parsed.protocol !== "http:" || parsed.port !== env.LOCAL_DEV_PORT) return null;
+    } catch {
+      return null;
+    }
+  }
+  const token = env.LOCAL_GITHUB_TOKEN?.trim();
+  return token || null;
 }
 
 async function allPages<T>(load: (page: number) => Promise<T[]>): Promise<T[]> {
@@ -73,6 +96,67 @@ export async function accounts(client: Octokit): Promise<Account[]> {
   const personal = values.get(String(viewer.data.login));
   if (personal) values.set(personal.login, { ...personal, type: "User" });
   return [...values.values()].sort((left, right) => left.login.localeCompare(right.login));
+}
+
+type Viewer = { id: number; login: string; name?: string | null; email?: string | null };
+
+export async function tokenIdentity(client: Octokit): Promise<Viewer> {
+  const response = await client.request("GET /user");
+  return {
+    id: Number(response.data.id),
+    login: String(response.data.login),
+    name: response.data.name == null ? null : String(response.data.name),
+    email: response.data.email == null ? null : String(response.data.email),
+  };
+}
+
+async function tokenOrganizations(client: Octokit) {
+  try {
+    return await allPages(async (page) => {
+      const response = await client.request("GET /user/orgs", { per_page: 100, page });
+      return response.data;
+    });
+  } catch (error) {
+    if ((error as { status?: number }).status === 403) return [];
+    throw error;
+  }
+}
+
+export async function tokenAccounts(client: Octokit, configured = ""): Promise<Account[]> {
+  const [viewer, organizations] = await Promise.all([
+    tokenIdentity(client),
+    tokenOrganizations(client),
+  ]);
+  const values = new Map<string, Account>([
+    ...configured
+      .split(",")
+      .map((login) => login.trim())
+      .filter(Boolean)
+      .map((login) => [login, {
+        login,
+        type: "Organization" as const,
+        installationId: null,
+        repository: null,
+      }] as const),
+    ...organizations.map((organization) => [String(organization.login), {
+      login: String(organization.login),
+      type: "Organization" as const,
+      installationId: null,
+      repository: null,
+    }] as const),
+  ]);
+  values.set(viewer.login, {
+    login: viewer.login,
+    type: "User",
+    installationId: null,
+    repository: null,
+  });
+  return Promise.all([...values.values()]
+    .sort((left, right) => left.login.localeCompare(right.login))
+    .map(async (account) => ({
+      ...account,
+      repository: await installationAgentsRepository(client, account.login),
+    })));
 }
 
 export async function repository(client: Octokit, owner: string): Promise<Repository> {

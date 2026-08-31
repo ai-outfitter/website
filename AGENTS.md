@@ -10,5 +10,8 @@ documentation with Astro and Starlight.
 - Keep the site fully static unless a requirement genuinely needs server-side
   behavior. Cloudflare Workers serves the generated assets from `dist/`.
 - Run commands through `devenv shell -- <command>`.
+- After creating a worktree, run `devenv shell -- npm run dev:configure`. It
+  copies `GH_TOKEN_RO` from the AI Outfitter owner `.env` into that worktree's
+  ignored mode-`0600` `.dev.vars`. Never print, commit, or manually duplicate
+  the token. `npm run dev` performs this setup and validation automatically.
 - Run `npm run check` before handing off a change.
-

@@ -3,7 +3,7 @@ import { base64url, secureEqual } from "./crypto";
 export type ScopedAccount = {
   login: string;
   type: "User" | "Organization";
-  installationId: number;
+  installationId: number | null;
   repository: { fullName: string } | null;
 };
 

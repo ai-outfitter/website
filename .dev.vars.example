@@ -1,0 +1,14 @@
+# `npm run dev:configure` normally creates .dev.vars from GH_TOKEN_RO in the
+# AI Outfitter owner .env. This template documents the generated bindings and
+# supports manual setup. Wrangler loads .dev.vars only locally. Never commit it.
+LOCAL_GITHUB_TOKEN=
+LOCAL_GITHUB_AUTH=true
+
+# Optional comma-separated organization logins. GitHub intentionally returns
+# no organizations from GET /user/orgs for a fine-grained PAT, so list any
+# organization you want to exercise with that token here.
+LOCAL_GITHUB_ACCOUNTS=ai-outfitter
+
+# Any long, random local value is sufficient. This signs short-lived change
+# previews and active-account cookies; it is not shared with production.
+AGENTS_PLAN_SIGNING_KEY=replace-with-a-long-random-local-value

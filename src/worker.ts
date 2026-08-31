@@ -1,6 +1,6 @@
 import workflows from "./generated/workflow-catalog.json";
 import { createAuth, session } from "./worker/auth";
-import { accounts, createAgentsRepository, github, type Account } from "./worker/github";
+import { accounts, createAgentsRepository, github, localGitHubToken, tokenAccounts, tokenIdentity, type Account } from "./worker/github";
 import {
   applyPlan,
   buildPlan,
@@ -54,29 +54,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function bodyRecord(request: Request) {
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    throw httpError({ error: "Content-Type must be application/json" }, 415);
+  }
   const value: unknown = await request.json();
   if (!isRecord(value)) throw new Error("Invalid request body");
   return value;
 }
 
 async function authenticatedState(env: Env, request: Request) {
-  const current = await session(env, request.headers);
-  if (!current) throw httpError({ error: "Sign in required" }, 401);
+  const local = Boolean(localGitHubToken(env, request));
+  const current = local ? null : await session(env, request.headers);
+  if (!local && !current) throw httpError({ error: "Sign in required" }, 401);
   const client = await github(env, request);
-  const installed = await accounts(client);
+  const user = local ? await tokenIdentity(client) : current!.user;
+  const installed = local ? await tokenAccounts(client, env.LOCAL_GITHUB_ACCOUNTS) : await accounts(client);
   const personal = installed.find((account) => account.type === "User")?.login ?? "";
   const activeLogin = await readActiveAccount(request.headers, installed, personal, env.AGENTS_PLAN_SIGNING_KEY);
   return {
     client,
-    user: current.user,
+    user,
     accounts: installed,
     activeAccount: installed.find((account) => account.login === activeLogin) ?? null,
+    authMode: local ? "local" as const : "oauth" as const,
   };
 }
 
 function allowedAccount(values: Account[], login: string) {
   const account = values.find((candidate) => candidate.login === login);
-  if (!account) throw httpError({ error: "Account is not accessible through the GitHub App" }, 403);
+  if (!account) throw httpError({ error: "Account is not accessible with the authenticated GitHub credential" }, 403);
   return account;
 }
 
@@ -102,6 +108,7 @@ async function accountIndex(env: Env, request: Request) {
     activeAccount: state.activeAccount,
     accounts: values,
     githubAppSlug: env.GITHUB_APP_SLUG,
+    authMode: state.authMode,
   });
 }
 

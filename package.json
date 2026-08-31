@@ -9,7 +9,10 @@
   "scripts": {
     "docs:checkout": "node scripts/checkout-repository-docs.mjs",
     "docs:sync": "node scripts/sync-repository-docs.mjs && node scripts/sync-workflows.mjs",
-    "dev": "npm run docs:sync && astro dev",
+    "dev": "npm run dev:configure && npm run dev:check && npm run build && node scripts/dev-local.mjs",
+    "dev:configure": "node scripts/configure-local-dev.mjs",
+    "dev:check": "node scripts/check-local-dev.mjs",
+    "dev:site": "npm run docs:sync && astro dev --port $(dev-port 4321 .)",
     "build": "npm run docs:sync && npm run agents:catalog && astro build",
     "preview": "wrangler dev",
     "check": "npm run docs:sync && npm run agents:catalog && astro check",
