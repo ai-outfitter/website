@@ -1,4 +1,4 @@
-This delivery workflow begins with an issue created by a human or agent. Coding work is assigned to a resident agent; a provisioned hosted App is one possible resident deployment. Nothing is added to your repository for the hosted path; your first pull request is the feature itself.
+This delivery workflow begins with an issue created by a human or agent. Coding work is assigned to a resident agent running on infrastructure you operate. Managed resident deployment is planned, not available today.
 
 How the declaration maps to what actually runs:
 
@@ -13,7 +13,7 @@ How the declaration maps to what actually runs:
 ### Run
 
 1. Open an issue with acceptance criteria a reviewer can check.
-2. Assign a resident agent; installing and provisioning the hosted App provides one.
+2. Assign a resident agent running through your current harness or infrastructure.
 3. A draft pull request appears and stays draft until required CI passes.
 4. CODEOWNERS requests the distinct adversarial reviewer. Requested changes repeat revision, CI, and review; approval lets GitHub auto-merge.
 
@@ -30,4 +30,4 @@ How the declaration maps to what actually runs:
 The reference run lives in [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target), a deliberately tiny project with no agent configuration:
 
 - the task: [issue #1](https://github.com/ai-outfitter/factory-demo-target/issues/1);
-- the runs: the resident's task timeline in our cluster (private); the pull request and review are public on the target repository.
+- the runs: the pull request and review are public on the target repository.

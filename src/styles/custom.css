@@ -1,3 +1,5 @@
+@import './site.css';
+
 :root {
   --sl-color-accent-low: #3a180f;
   --sl-color-accent: #ff6b35;
@@ -64,6 +66,18 @@ body {
   letter-spacing: 0.08em;
   font-size: 0.78rem;
   font-weight: 750;
+}
+
+.hero .actions a.primary {
+  border-color: var(--sl-color-accent);
+  background: var(--sl-color-accent);
+  color: var(--sl-color-black);
+}
+
+.hero .actions a.primary:hover {
+  border-color: var(--sl-color-accent-high);
+  background: var(--sl-color-accent-high);
+  color: var(--sl-color-black);
 }
 
 .sl-markdown-content h2 {

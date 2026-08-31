@@ -1,114 +1,44 @@
 ---
-import logo from '../assets/logo.svg';
-import PostHogAnalytics from '../components/PostHogAnalytics.astro';
+import SiteShell from './SiteShell.astro';
 
-const { title, description, workflowId } = Astro.props.frontmatter;
+const { title, description } = Astro.props.frontmatter;
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="description" content={description} />
-    <link rel="icon" href="/favicon.svg" />
-    <title>{title} · AI Outfitter</title>
-    <PostHogAnalytics />
-  </head>
-  <body>
-    <header>
-      <a class="brand" href="/" aria-label="AI Outfitter home"><img src={logo.src} alt="" /></a>
-      <nav aria-label="Primary">
-        <a href="/workflows/">Workflows</a>
-        <a href="/docs/">Docs</a>
-        <a href="/agents">Manage agents</a>
-        <a href="https://github.com/ai-outfitter">GitHub</a>
-      </nav>
-    </header>
-    <main data-pagefind-body>
-      <div class="eyebrow">Workflow atlas</div>
-      <h1 data-pagefind-meta="title">{title}</h1>
-      {workflowId && <div class="workflow-detail-state" data-workflow-id={workflowId} hidden></div>}
-      {description && <p class="lede">{description}</p>}
-      <article><slot /></article>
-    </main>
-    <footer>AI Outfitter · Agent workflows you can inspect and adapt.</footer>
-    <script>
-      type Scope = { activeAccount?: { login?: string } };
-      type WorkflowState = { id: string; state: string };
-      type WorkflowResponse = { workflows: WorkflowState[] };
-      const scope = await fetch('/api/scope').then((response) => response.json() as Promise<Scope>).catch(() => null);
-      if (scope?.activeAccount?.login) {
-        const login = scope.activeAccount.login;
-        const data = await fetch(`/api/orgs/${encodeURIComponent(login)}/workflows`).then((response) => response.ok ? response.json() as Promise<WorkflowResponse> : null).catch(() => null);
-        if (data) for (const node of document.querySelectorAll<HTMLElement>('[data-workflow-id]')) {
-          const item = data.workflows.find((candidate) => candidate.id === node.dataset.workflowId);
-          if (!item) continue;
-          const badge = node.matches('.workflow-card') ? node.querySelector<HTMLElement>('.workflow-state') : node;
-          if (!badge) continue;
-          badge.hidden = false;
-          badge.textContent = `${item.state} · ${login}`;
-          badge.classList.add('workflow-state');
-        }
-      }
-    </script>
-  </body>
-</html>
+<SiteShell title={title} description={description}>
+  <main class="site-frame workflow-page" data-pagefind-body>
+    <div class="eyebrow">Workflow atlas</div>
+    <h1 data-pagefind-meta="title">{title}</h1>
+    {description && <p class="lede">{description}</p>}
+    <article><slot /></article>
+  </main>
+</SiteShell>
 
 <style is:global>
-  :root {
-    color-scheme: dark;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-    background: #11110f;
-    color: #f3efe5;
-    --sl-color-black: #11110f;
-    --sl-color-white: #f3efe5;
-    --sl-color-gray-2: #bbb7ae;
-    --sl-color-gray-3: #827f77;
-    --sl-color-gray-5: #2b2924;
-    --sl-color-gray-6: #1c1b18;
-    --sl-color-accent: #ff8b3d;
-    --sl-color-accent-high: #ffb36b;
-    --sl-color-accent-low: #3b2417;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; min-width: 20rem; background: radial-gradient(circle at 80% 0%, #262019 0, transparent 32rem), #11110f; }
-  header, main, footer { width: min(100% - 2rem, 90rem); margin-inline: auto; }
-  header { min-height: 5rem; display: flex; align-items: center; justify-content: space-between; gap: 2rem; border-bottom: 1px solid #3a3933; }
-  .brand img { display: block; width: 9.5rem; height: auto; }
-  nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
-  a { color: #ffb36b; text-underline-offset: .2em; }
-  nav a { font-size: .78rem; font-weight: 750; letter-spacing: .09em; text-decoration: none; text-transform: uppercase; }
-  main { padding-block: clamp(3rem, 7vw, 7rem); }
-  .eyebrow { color: #ff8b3d; font-family: ui-monospace, monospace; font-size: .75rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-  h1 { max-width: 18ch; margin: .55rem 0 0; font-size: clamp(3rem, 8vw, 7.5rem); letter-spacing: -.065em; line-height: .9; }
-  .lede { max-width: 48rem; margin: 1.5rem 0 3rem; color: #bbb7ae; font-size: clamp(1rem, 2vw, 1.25rem); line-height: 1.6; }
-  article { margin-top: 3rem; }
-  article > :not(.workflow-diagram) { max-width: 52rem; }
-  article h2, article h3 { margin-top: 2.5rem; letter-spacing: -.025em; }
-  article p, article li { color: #d0ccc2; line-height: 1.7; }
-  article li + li { margin-top: .6rem; }
-  article code { padding: .12rem .3rem; border: 1px solid #444139; background: #1c1b18; color: #ffd0a4; }
-  article table { width: 100%; border-collapse: collapse; overflow-x: auto; display: block; }
-  article th, article td { padding: .75rem; border-bottom: 1px solid #3a3933; text-align: left; vertical-align: top; }
+  .workflow-page { padding-block: clamp(3rem, 7vw, 7rem); }
+  .workflow-page h1 { max-width: 18ch; margin: .55rem 0 0; font-size: clamp(3rem, 8vw, 7.5rem); letter-spacing: -.065em; line-height: .9; }
+  .workflow-page .lede { max-width: 48rem; margin: 1.5rem 0 3rem; color: var(--site-muted); font-size: clamp(1rem, 2vw, 1.25rem); line-height: 1.6; }
+  .workflow-page article { margin-top: 3rem; }
+  .workflow-page article > :not(.workflow-diagram) { max-width: 52rem; }
+  .workflow-page article h2, .workflow-page article h3 { margin-top: 2.5rem; letter-spacing: -.025em; }
+  .workflow-page article p, .workflow-page article li { color: var(--site-text); line-height: 1.7; }
+  .workflow-page article li + li { margin-top: .6rem; }
+  .workflow-page article code { padding: .12rem .3rem; border: 1px solid var(--site-line); background: var(--site-canvas-raised); color: var(--site-signal-high); }
+  .workflow-page article table { width: 100%; border-collapse: collapse; overflow-x: auto; display: block; }
+  .workflow-page article th, .workflow-page article td { padding: .75rem; border-bottom: 1px solid var(--site-line); text-align: left; vertical-align: top; }
   .workflow-section { max-width: none !important; margin-top: 5rem; }
   .workflow-section > h2 { margin-bottom: .6rem; font-size: clamp(1.6rem, 3vw, 2.3rem); }
   .workflow-section > p { max-width: 52rem; margin-top: 0; }
   .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; margin-top: 1.75rem; }
   .workflow-grid--delivery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .workflow-card { min-height: 17rem; display: flex; flex-direction: column; padding: 1.4rem; border: 1px solid var(--sl-color-gray-5); background: linear-gradient(145deg, var(--sl-color-gray-6), var(--sl-color-black)); color: inherit; text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
-  .workflow-card:hover { border-color: var(--sl-color-accent); transform: translateY(-2px); }
-  .workflow-section--delivery .workflow-card { border-top: 3px solid var(--sl-color-accent); }
-  .workflow-card__meta { min-height: 2.4em; color: var(--sl-color-accent-high); font-family: ui-monospace, monospace; font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-  .workflow-state { width: fit-content; margin-top: .6rem; padding: .2rem .45rem; border: 1px solid var(--sl-color-accent); border-radius: 999px; color: var(--sl-color-accent-high); font-family: ui-monospace, monospace; font-size: .68rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
-  .workflow-detail-state { margin-top: 1rem; }
+  .workflow-card { min-height: 17rem; display: flex; flex-direction: column; padding: 1.4rem; border: 1px solid var(--site-line); background: linear-gradient(145deg, var(--site-canvas-raised), var(--site-canvas)); color: inherit; text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
+  .workflow-card:hover { border-color: var(--site-signal); transform: translateY(-2px); }
+  .workflow-section--delivery .workflow-card { border-top: 3px solid var(--site-signal); }
+  .workflow-card__meta { min-height: 2.4em; color: var(--site-signal-high); font-family: ui-monospace, monospace; font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
   .workflow-card h3 { margin: 1rem 0 .6rem; font-size: 1.55rem; }
-  .workflow-card p { margin: 0; color: var(--sl-color-gray-2); font-size: .95rem; line-height: 1.55; }
+  .workflow-card p { margin: 0; color: var(--site-muted); font-size: .95rem; line-height: 1.55; }
   .workflow-card__tags { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
-  .workflow-card__tags li { display: inline-flex; align-items: center; gap: .35rem; margin: 0; padding: .3rem .55rem; border: 1px solid var(--sl-color-gray-5); border-radius: 999px; background: var(--sl-color-black); color: var(--sl-color-white); font-size: .72rem; line-height: 1.2; }
-  .workflow-card__tags li span { color: var(--sl-color-accent-high); font-weight: 750; }
-  .workflow-card__action { margin-top: auto; padding-top: 1.5rem; color: var(--sl-color-accent-high); font-size: .75rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-  footer { padding-block: 2rem; border-top: 1px solid #3a3933; color: #827f77; font-size: .8rem; }
+  .workflow-card__tags li { display: inline-flex; align-items: center; gap: .35rem; margin: 0; padding: .3rem .55rem; border: 1px solid var(--site-line); border-radius: 999px; background: var(--site-canvas); color: var(--site-text); font-size: .72rem; line-height: 1.2; }
+  .workflow-card__tags li span { color: var(--site-signal-high); font-weight: 750; }
+  .workflow-card__action { margin-top: auto; padding-top: 1.5rem; color: var(--site-signal-high); font-size: .75rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
   @media (max-width: 60rem) { .workflow-grid--delivery { grid-template-columns: 1fr; } }
-  @media (max-width: 40rem) { header { align-items: flex-start; flex-direction: column; padding-block: 1.25rem; } main { padding-top: 3rem; } }
 </style>

@@ -1,0 +1,44 @@
+---
+import logo from '../assets/logo.svg';
+import PostHogAnalytics from '../components/PostHogAnalytics.astro';
+import '../styles/site.css';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" />
+    <title>{title} · AI Outfitter</title>
+    <PostHogAnalytics />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-brand" href="/" aria-label="AI Outfitter home">
+        <img src={logo.src} alt="" />
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="/workflows/">Workflows</a>
+        <a href="/docs/">Docs</a>
+        <a href="/dashboard/">Dashboard</a>
+        <a href="https://github.com/ai-outfitter">GitHub</a>
+        <a id="site-auth" href="/dashboard/">Sign in</a>
+      </nav>
+    </header>
+    <slot />
+    <footer class="site-footer">AI Outfitter · Inspectable configuration for agent teams.</footer>
+    <script>
+      import { startSiteAuth } from '../scripts/site-auth';
+      startSiteAuth();
+    </script>
+  </body>
+</html>

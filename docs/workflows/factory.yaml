@@ -92,7 +92,7 @@ workflows:
     description: Delegate typed issues to resident agents for CI-gated implementation, adversarial review, and automatic merge.
     nodes:
       - {id: prepare_issue, action: receive-issue-and-categorize-only-if-untyped, description: "Accept the issue and add a type only if missing.", actor: resident-agent, environment: delegated-runtime, uses: [channels-github, github]}
-      - {id: assign, action: assign-or-confirm-coding-work-to-resident, description: "Confirm a resident agent owns the coding work.", actor: resident-agent, environment: delegated-runtime, needs: [prepare_issue], rule: "a provisioned hosted App is a resident", uses: [github]}
+      - {id: assign, action: assign-or-confirm-coding-work-to-resident, description: "Confirm a resident agent owns the coding work.", actor: resident-agent, environment: delegated-runtime, needs: [prepare_issue], rule: "a configured resident owns the task", uses: [github]}
       - {id: worktree, action: create-worktree, description: "Isolate implementation in a dedicated worktree.", actor: resident-agent, environment: delegated-runtime, needs: [assign], uses: [git-https]}
       - {id: research, action: research, description: "Investigate the issue and solution space.", actor: resident-agent, environment: delegated-runtime, needs: [worktree], uses: [github]}
       - {id: implement, action: implement-and-iterate, description: "Build, test, and refine the change.", actor: resident-agent, environment: delegated-runtime, needs: [research], uses: [git-https]}
@@ -134,7 +134,7 @@ workflows:
       - {integration: github-actions-events, event: issues.opened, description: "Start when a new issue is opened.", environment: actions}
     nodes:
       - {id: classify, action: classify-issue-when-untyped, description: "Add a type only when the issue is untyped.", actor: outfitter-bot, environment: actions, skill: issue-triage, templates: [feat.yml, fix.yml, research.yml], outputs: [kind], uses: [gh], shape: decision}
-      - {id: assign_resident, action: assign-resident-agent, description: "Assign feature work to a resident agent.", actor: outfitter-bot, environment: actions, assignee: resident-agent, event: issues.assigned, needs: [classify], if: "classify.kind == 'feat'", rule: "provisioned hosted App counts as resident", uses: [gh], shape: event}
+      - {id: assign_resident, action: assign-resident-agent, description: "Assign feature work to a resident agent.", actor: outfitter-bot, environment: actions, assignee: resident-agent, event: issues.assigned, needs: [classify], if: "classify.kind == 'feat'", rule: "a configured resident owns the task", uses: [gh], shape: event}
       - {id: resident_factory, workflow: software-factory, description: "Implement the feature through the software factory.", needs: [assign_resident]}
       - {id: bug, workflow: bug-issue, description: "Investigate and assign the reported fix.", needs: [classify], if: "classify.kind == 'fix'"}
       - {id: research, workflow: research-triage, description: "Route the request to a research track.", needs: [classify], if: "classify.kind == 'research'"}

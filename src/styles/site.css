@@ -1,0 +1,99 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #11110f;
+  color: #f3efe5;
+  --site-ink: #11110f;
+  --site-canvas: #1c1b18;
+  --site-canvas-raised: #26231e;
+  --site-line: #3a3933;
+  --site-text: #f3efe5;
+  --site-muted: #bbb7ae;
+  --site-dim: #827f77;
+  --site-signal: #ff8b3d;
+  --site-signal-high: #ffb36b;
+  --site-signal-low: #3b2417;
+  --site-danger: #ff9c8f;
+  --site-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 20rem;
+  margin: 0;
+  background:
+    linear-gradient(rgba(255, 139, 61, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 139, 61, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 80% 0%, #262019 0, transparent 32rem),
+    var(--site-ink);
+  background-size: 32px 32px, 32px 32px, auto, auto;
+  color: var(--site-text);
+}
+
+a {
+  color: var(--site-signal-high);
+  text-underline-offset: 0.2em;
+}
+
+.site-header,
+.site-footer,
+.site-frame {
+  width: min(100% - 2rem, 90rem);
+  margin-inline: auto;
+}
+
+.site-header {
+  min-height: 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  border-bottom: 1px solid var(--site-line);
+}
+
+.site-brand img {
+  display: block;
+  width: 9.5rem;
+  height: auto;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.site-nav a {
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.site-footer {
+  padding-block: 2rem;
+  border-top: 1px solid var(--site-line);
+  color: var(--site-dim);
+  font-size: 0.8rem;
+}
+
+.eyebrow {
+  color: var(--site-signal);
+  font-family: var(--site-font-mono);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 40rem) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-block: 1.25rem;
+  }
+}

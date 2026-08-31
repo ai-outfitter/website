@@ -21,7 +21,7 @@ are strictly validated and exported by Outfitter during this site's build.
 `docs/workflows/factory.yaml` remains the richer presentation declaration for
 the workflow atlas; it is not an installation source.
 
-The hosted `/install` GitHub App flow manages only personal or organization
+The `/dashboard/` GitHub App flow manages only personal or organization
 repositories named `.agents`. The App needs repository Administration write
 permission to create those repositories, plus Contents and Pull requests write
 permission for later updates. New repositories receive one direct initial

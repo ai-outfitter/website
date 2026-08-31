@@ -3,7 +3,7 @@
     "id": "adversarial-review",
     "title": "Adversarial review",
     "description": "Assign a distinct review agent to inspect a change and return one actionable verdict.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -53,7 +53,7 @@
     "id": "bug-issue",
     "title": "Bug issue",
     "description": "Investigate a fix issue and assign the resulting coding work to a resident agent.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -103,7 +103,7 @@
     "id": "engineer",
     "title": "Engineer",
     "description": "Research, implement, review, and merge changes through a human-authenticated engineering agent.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -209,7 +209,7 @@
     "id": "founder",
     "title": "Founder",
     "description": "Ship a verified local change as a human-authenticated founder agent with independent review.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -280,7 +280,7 @@
     "id": "grafana-alert",
     "title": "Grafana alert investigation",
     "description": "Investigate a Grafana alert, create a fix issue, and hand it to issue triage.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -491,7 +491,7 @@
     "id": "issue-triage",
     "title": "Issue triage",
     "description": "Classify untyped issues and route features, fixes, and research to their delivery workflows.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -660,7 +660,7 @@
     "id": "organization-delegation",
     "title": "Organization-wide delegation",
     "description": "Publish shared agent profiles and delegate bounded work into issue triage.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -850,7 +850,7 @@
     "id": "persona-review",
     "title": "Persona review",
     "description": "Review an artifact from a selected persona's perspective and save a sourced report.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -984,7 +984,7 @@
     "id": "research-triage",
     "title": "Research triage",
     "description": "Classify research requests into market, technical, or business investigation tracks.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",
@@ -1034,7 +1034,7 @@
     "id": "software-factory",
     "title": "Software factory",
     "description": "Delegate typed issues to a resident engineer for CI-gated implementation and independent review.",
-    "sourceSha": "666d9e9648f4c1b3a009a8b8c2da938262a48928",
+    "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
         "path": ".outfitter/workflow-composition.json",

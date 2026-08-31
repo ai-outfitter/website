@@ -28,3 +28,18 @@ export function base64url(bytes: ArrayBuffer | Uint8Array) {
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   return btoa(String.fromCharCode(...view)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
+
+export async function secureEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const [leftHash, rightHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(left)),
+    crypto.subtle.digest("SHA-256", encoder.encode(right)),
+  ]);
+  const leftBytes = new Uint8Array(leftHash);
+  const rightBytes = new Uint8Array(rightHash);
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    difference |= leftBytes[index] ^ rightBytes[index];
+  }
+  return difference === 0;
+}

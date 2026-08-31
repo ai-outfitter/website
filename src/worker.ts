@@ -1,103 +1,250 @@
 import workflows from "./generated/workflow-catalog.json";
 import { createAuth, session } from "./worker/auth";
-import { Octokit } from "@octokit/core";
-import { accounts, createAgentsRepository, github, repositories, repository, tree } from "./worker/github";
-import { agentsPage, organizationsPage, organizationWorkflowsPage } from "./worker/page";
-import { applyPlan, buildPlan, catalogFrom, managedBundleFiles, repositorySnapshot, signPlan, verifyPlan, workflowStatuses, type WorkflowBundle } from "./worker/planner";
-import { activeAccountCookie, installationReturnAccepted, readActiveAccount, viewedLogin } from "./worker/scope";
+import { accounts, createAgentsRepository, github, type Account } from "./worker/github";
+import {
+  applyPlan,
+  buildPlan,
+  catalogFrom,
+  isManagedPath,
+  managedBundleFiles,
+  repositorySnapshot,
+  signPlan,
+  verifyPlan,
+  workflowStatuses,
+  type WorkflowBundle,
+} from "./worker/planner";
+import { activeAccountCookie, readActiveAccount } from "./worker/scope";
+import type { ManagedManifest } from "./worker/planner";
+
 export { GitHubUserGrant } from "./worker/grant";
 
-const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "cache-control": "no-store" } });
 const publicCatalog = workflows.map(({ files: _files, ...workflow }) => workflow);
-function bundle(id: string): WorkflowBundle { const found = workflows.find((workflow) => workflow.id === id); if (!found) throw new Error("Invalid workflow selection"); return found as WorkflowBundle; }
 const catalog = catalogFrom(workflows as WorkflowBundle[]);
 
-async function scoped(env: Env, request: Request) {
-  const current = await session(env, request.headers);
-  if (!current) return { session: null, activeAccount: null, accounts: [], viewedAccount: viewedLogin(new URL(request.url).pathname) };
-  const client = await github(env, request);
-  const repos = await repositories(client);
-  const installed = await accounts(client, repos);
-  const personal = installed.find((account) => account.type === "User")?.login ?? "";
-  const activeLogin = await readActiveAccount(request.headers, installed, personal, env.AGENTS_PLAN_SIGNING_KEY);
-  return { session: { user: current.user }, activeAccount: installed.find((account) => account.login === activeLogin) ?? null, accounts: installed, repositories: repos, viewedAccount: viewedLogin(new URL(request.url).pathname) };
+function json(value: unknown, status = 200, headers?: HeadersInit) {
+  return Response.json(value, {
+    status,
+    headers: { "cache-control": "no-store", ...headers },
+  });
 }
 
-async function withScopeControl(response: Response) {
-  if (!response.headers.get("content-type")?.includes("text/html")) return response;
-  const html = await response.text();
-  const control = `<style>#outfitter-scope{position:fixed;z-index:9999;top:.75rem;right:.75rem;display:flex;align-items:center;gap:.55rem;padding:.5rem .65rem;border:1px solid #4a463e;background:#11110fee;color:#f3efe5;font:12px system-ui}#outfitter-scope a,#outfitter-scope button,#outfitter-scope select{color:#ffb36b;background:#1c1b18;border:1px solid #4a463e;padding:.32rem;font:inherit}</style><div id="outfitter-scope"><a data-signed-out href="/agents">Sign in</a><span data-viewing hidden></span><select data-accounts hidden aria-label="Active account"></select><a data-organizations hidden href="/organizations">Organizations</a></div><script>(async()=>{try{const r=await fetch('/api/scope');const s=await r.json();if(!s.session)return;const root=document.querySelector('#outfitter-scope');root.querySelector('[data-signed-out]').hidden=true;const select=root.querySelector('[data-accounts]');select.hidden=false;root.querySelector('[data-organizations]').hidden=false;for(const a of s.accounts)select.add(new Option(a.login,a.login));select.value=s.activeAccount?.login||'';select.onchange=async()=>{const r=await fetch('/api/scope',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({login:select.value})});if(r.ok)location.reload()};if(s.viewedAccount&&s.viewedAccount!==s.activeAccount?.login){const v=root.querySelector('[data-viewing]');v.hidden=false;v.textContent='Viewing '+s.viewedAccount+' / Back to '+s.activeAccount.login}}catch{}})()</script>`;
-  const headers = new Headers(response.headers); headers.delete("content-length");
-  return new Response(html.includes("</body>") ? html.replace("</body>", `${control}</body>`) : `${html}${control}`, { status: response.status, statusText: response.statusText, headers });
+class HttpResponseError extends Error {
+  constructor(readonly response: Response) {
+    super(`HTTP ${response.status}`);
+  }
+}
+
+function httpError(value: unknown, status: number) {
+  return new HttpResponseError(json(value, status));
+}
+
+function bundle(id: string): WorkflowBundle {
+  const found = workflows.find((workflow) => workflow.id === id);
+  if (!found) throw new Error("Invalid workflow selection");
+  return found as WorkflowBundle;
+}
+
+function accountRoute(pathname: string, suffix: string) {
+  const match = pathname.match(new RegExp(`^/api/accounts/([^/]+)/${suffix}$`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+async function bodyRecord(request: Request) {
+  const value: unknown = await request.json();
+  if (!isRecord(value)) throw new Error("Invalid request body");
+  return value;
+}
+
+async function authenticatedState(env: Env, request: Request) {
+  const current = await session(env, request.headers);
+  if (!current) throw httpError({ error: "Sign in required" }, 401);
+  const client = await github(env, request);
+  const installed = await accounts(client);
+  const personal = installed.find((account) => account.type === "User")?.login ?? "";
+  const activeLogin = await readActiveAccount(request.headers, installed, personal, env.AGENTS_PLAN_SIGNING_KEY);
+  return {
+    client,
+    user: current.user,
+    accounts: installed,
+    activeAccount: installed.find((account) => account.login === activeLogin) ?? null,
+  };
+}
+
+function allowedAccount(values: Account[], login: string) {
+  const account = values.find((candidate) => candidate.login === login);
+  if (!account) throw httpError({ error: "Account is not accessible through the GitHub App" }, 403);
+  return account;
+}
+
+async function workflowCounts(client: Awaited<ReturnType<typeof github>>, account: Account) {
+  if (!account.repository) return { installed: 0, outdated: 0, overridden: 0 };
+  const statuses = workflowStatuses(catalog, await repositorySnapshot(client, account.login));
+  return {
+    installed: statuses.filter((status) => status.state === "installed").length,
+    outdated: statuses.filter((status) => status.state === "outdated").length,
+    overridden: statuses.filter((status) => status.state === "overridden").length,
+  };
+}
+
+async function accountIndex(env: Env, request: Request) {
+  const state = await authenticatedState(env, request);
+  const values = await Promise.all(state.accounts.map(async (account) => ({
+    ...account,
+    active: account.login === state.activeAccount?.login,
+    counts: await workflowCounts(state.client, account),
+  })));
+  return json({
+    user: state.user,
+    activeAccount: state.activeAccount,
+    accounts: values,
+    githubAppSlug: env.GITHUB_APP_SLUG,
+  });
+}
+
+async function accountWorkflows(env: Env, request: Request, login: string) {
+  const state = await authenticatedState(env, request);
+  const account = allowedAccount(state.accounts, login);
+  if (!account.repository) {
+    return json({
+      login,
+      repository: null,
+      repositoryUrl: `https://github.com/${encodeURIComponent(login)}/.agents`,
+      workflows: publicCatalog.map((workflow) => ({ ...workflow, state: "add", action: "add" })),
+    });
+  }
+  const statuses = workflowStatuses(catalog, await repositorySnapshot(state.client, login));
+  return json({
+    login,
+    repository: account.repository,
+    repositoryUrl: `https://github.com/${encodeURIComponent(login)}/.agents`,
+    workflows: publicCatalog.map((workflow) => ({
+      ...workflow,
+      ...statuses.find((status) => status.id === workflow.id),
+    })),
+  });
+}
+
+export function managedResources(manifest: ManagedManifest | null) {
+  const counts = new Map<string, number>();
+  for (const path of Object.keys(manifest?.files ?? {})) {
+    if (!isManagedPath(path)) continue;
+    const [group, name] = path.split("/");
+    const resource = `${group}/${name}`;
+    counts.set(resource, (counts.get(resource) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([path, files]) => ({ path, files }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function repositoryResources(env: Env, request: Request, login: string) {
+  const state = await authenticatedState(env, request);
+  const account = allowedAccount(state.accounts, login);
+  if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
+  const snapshot = await repositorySnapshot(state.client, login);
+  return json({
+    sha: snapshot.sha,
+    resources: managedResources(snapshot.manifest),
+  });
+}
+
+async function createRepository(env: Env, request: Request, login: string) {
+  const state = await authenticatedState(env, request);
+  const account = allowedAccount(state.accounts, login);
+  if (account.repository) throw httpError({ error: ".agents already exists" }, 409);
+  const body = await bodyRecord(request);
+  if (typeof body.workflow !== "string") throw new Error("A workflow selection is required");
+  const selected = bundle(body.workflow);
+  const mode = body.mode === "closure" ? "closure" : "required";
+  return json(await createAgentsRepository(state.client, {
+    account,
+    private: body.private === true,
+    files: await managedBundleFiles(selected, mode),
+    sourceSha: selected.sourceSha,
+  }), 201);
+}
+
+async function createPlan(env: Env, request: Request, login: string) {
+  const state = await authenticatedState(env, request);
+  const account = allowedAccount(state.accounts, login);
+  if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
+  const body = await bodyRecord(request);
+  const workflow = typeof body.workflow === "string" && body.workflow ? body.workflow : undefined;
+  const deletes = Array.isArray(body.deletes) && body.deletes.every((value) => typeof value === "string")
+    ? body.deletes
+    : undefined;
+  const mode = body.mode === "closure" ? "closure" : "required";
+  const plan = await buildPlan(state.client, {
+    repository: `${login}/.agents`,
+    catalog,
+    workflow,
+    deletes,
+    mode,
+  });
+  return json({ plan, token: await signPlan(plan, env.AGENTS_PLAN_SIGNING_KEY) });
+}
+
+async function applyAccountPlan(env: Env, request: Request, login: string) {
+  const state = await authenticatedState(env, request);
+  const account = allowedAccount(state.accounts, login);
+  if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
+  const body = await bodyRecord(request);
+  if (body.mode !== "pull-request" && body.mode !== "direct") throw new Error("Invalid apply mode");
+  if (typeof body.token !== "string") throw new Error("A signed plan token is required");
+  const plan = await verifyPlan(body.token, env.AGENTS_PLAN_SIGNING_KEY);
+  if (plan.repository !== `${login}/.agents`) throw httpError({ error: "Plan account does not match the route" }, 403);
+  return json(await applyPlan(state.client, plan, body.mode));
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
       if (url.pathname.startsWith("/api/auth/")) {
         const auth = createAuth(env);
-        if (request.method === "POST" && url.pathname.endsWith("/sign-out")) { const current = await auth.api.getSession({ headers: request.headers }); const id = current?.user.githubUserId; if (typeof id === "number") await env.GITHUB_USER_GRANTS.getByName(String(id)).revoke(); }
+        if (request.method === "POST" && url.pathname.endsWith("/sign-out")) {
+          const current = await auth.api.getSession({ headers: request.headers });
+          const id = current?.user.githubUserId;
+          if (typeof id === "number") await env.GITHUB_USER_GRANTS.getByName(String(id)).revoke();
+        }
         return auth.handler(request);
       }
-      if (["/agents", "/agents/", "/install", "/install/"].includes(url.pathname)) return withScopeControl(agentsPage());
-      if (url.pathname === "/organizations" || url.pathname === "/organizations/") return withScopeControl(organizationsPage(env.GITHUB_APP_SLUG));
-      const orgPage = url.pathname.match(/^\/orgs\/([^/]+)\/workflows\/?$/);
-      if (orgPage) return withScopeControl(organizationWorkflowsPage(decodeURIComponent(orgPage[1])));
-      const installPage = url.pathname.match(/^\/orgs\/([^/]+)\/install\/?$/);
-      if (installPage) return withScopeControl(agentsPage(decodeURIComponent(installPage[1])));
-      if (url.pathname === "/api/scope" && request.method === "GET") return json(await scoped(env, request));
-      if (url.pathname === "/api/scope" && request.method === "PUT") {
-        const state = await scoped(env, request); if (!state.session) return json({ error: "Sign in required" }, 401);
-        const body = await request.json<{ login: string }>(); const allowed = state.accounts.find((account) => account.login === body.login);
-        if (!allowed) return json({ error: "Account is not accessible through an installation" }, 403);
-        return new Response(JSON.stringify({ activeAccount: allowed }), { headers: { "content-type": "application/json", "cache-control": "no-store", "set-cookie": await activeAccountCookie(allowed.login, env.AGENTS_PLAN_SIGNING_KEY) } });
+
+      if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
+      if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
+        const state = await authenticatedState(env, request);
+        const body = await bodyRecord(request);
+        if (typeof body.login !== "string") throw new Error("An account login is required");
+        const account = allowedAccount(state.accounts, body.login);
+        return json({ activeAccount: account }, 200, {
+          "set-cookie": await activeAccountCookie(account.login, env.AGENTS_PLAN_SIGNING_KEY),
+        });
       }
-      if (url.pathname === "/api/organizations" && request.method === "GET") {
-        const state = await scoped(env, request); if (!state.session) return json({ error: "Sign in required" }, 401);
-        const client = await github(env, request);
-        const values = await Promise.all(state.accounts.map(async (account) => {
-          const repo = state.repositories?.find((candidate) => candidate.owner === account.login);
-          let counts = { installed: 0, outdated: 0, overridden: 0 };
-          if (repo) { const statuses = workflowStatuses(catalog, await repositorySnapshot(client, repo.owner, repo.name, repo.managedRoot)); counts = { installed: statuses.filter((s) => s.state === "installed").length, outdated: statuses.filter((s) => s.state === "outdated").length, overridden: statuses.filter((s) => s.state === "overridden").length }; }
-          return { ...account, active: state.activeAccount?.login === account.login, private: repo?.private, counts };
-        }));
-        return json({ accounts: values, installationAccepted: installationReturnAccepted(url.searchParams.get("installation_id"), state.accounts) });
+
+      const workflowsLogin = accountRoute(url.pathname, "workflows");
+      if (workflowsLogin && request.method === "GET") return await accountWorkflows(env, request, workflowsLogin);
+      const resourcesLogin = accountRoute(url.pathname, "repository/resources");
+      if (resourcesLogin && request.method === "GET") return await repositoryResources(env, request, resourcesLogin);
+      const repositoryLogin = accountRoute(url.pathname, "repository");
+      if (repositoryLogin && request.method === "POST") return await createRepository(env, request, repositoryLogin);
+      const plansLogin = accountRoute(url.pathname, "plans");
+      if (plansLogin && request.method === "POST") return await createPlan(env, request, plansLogin);
+      const applyLogin = accountRoute(url.pathname, "plans/apply");
+      if (applyLogin && request.method === "POST") return await applyAccountPlan(env, request, applyLogin);
+
+      return env.ASSETS.fetch(request);
+    } catch (error) {
+      if (error instanceof HttpResponseError) return error.response;
+      const message = error instanceof Error ? error.message : "Unexpected error";
+      const status = /invalid|required|expired|changed|selection|no workflows/i.test(message) ? 400 : 500;
+      if (status === 500) {
+        console.error(JSON.stringify({ message: "dashboard request failed", method: request.method, path: url.pathname, error: message }));
       }
-      const orgWorkflows = url.pathname.match(/^\/api\/orgs\/([^/]+)\/workflows$/);
-      if (orgWorkflows && request.method === "GET") {
-        const login = decodeURIComponent(orgWorkflows[1]); const state = await scoped(env, request); const manageable = state.accounts.some((account) => account.login === login);
-        const client = manageable ? await github(env, request) : new Octokit();
-        let repo = manageable ? state.repositories?.find((candidate) => candidate.owner === login) : undefined;
-        if (!repo) try { repo = await repository(client, login); } catch (error) { const status = (error as { status?: number }).status; if (status === 404) return json({ login, repository: null, repositoryUrl: `https://github.com/${encodeURIComponent(login)}/.agents`, manageable, workflows: publicCatalog.map((item) => ({ ...item, state: "add", action: manageable ? "add" : "none" })) }); throw error; }
-        if (repo.private && !manageable) return json({ error: "Repository is private or unavailable" }, 404);
-        const statuses = workflowStatuses(catalog, await repositorySnapshot(client, repo.owner, repo.name, repo.managedRoot));
-        return json({ login, manageable, private: repo.private, repositoryUrl: `https://github.com/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`, workflows: publicCatalog.map((item) => ({ ...item, ...statuses.find((status) => status.id === item.id), action: manageable ? statuses.find((status) => status.id === item.id)?.action : "none" })) });
-      }
-      const orgPlans = url.pathname.match(/^\/api\/orgs\/([^/]+)\/plans$/);
-      if (orgPlans && request.method === "POST") { const login = decodeURIComponent(orgPlans[1]); const state = await scoped(env, request); if (!state.accounts.some((account) => account.login === login)) return json({ error: "Account is not manageable" }, 403); const repo = state.repositories?.find((candidate) => candidate.owner === login); if (!repo) return json({ error: "No managed repository exists" }, 400); const body = await request.json<{ workflow?: string; deletes?: string[] }>(); const client = await github(env, request); const plan = await buildPlan(client, { repository: repo.fullName, managedRoot: repo.managedRoot, catalog, workflow: body.workflow, deletes: body.deletes }); return json({ plan, token: await signPlan(plan, env.AGENTS_PLAN_SIGNING_KEY) }); }
-      const orgRepositories = url.pathname.match(/^\/api\/orgs\/([^/]+)\/repositories$/);
-      if (orgRepositories && request.method === "POST") { const login = decodeURIComponent(orgRepositories[1]); const state = await scoped(env, request); const allowed = state.accounts.find((account) => account.login === login); if (!allowed || allowed.hasAgentsRepository) return json({ error: "Invalid account or .agents already exists" }, 400); const body = await request.json<{ workflow: string; private?: boolean }>(); const selected = bundle(body.workflow); const client = await github(env, request); return json(await createAgentsRepository(client, { account: allowed, private: body.private === true, files: await managedBundleFiles(selected), sourceSha: selected.sourceSha })); }
-      if (url.pathname === "/api/agents/bootstrap") {
-        const current = await session(env, request.headers); if (!current) return json({ user: null, repositories: [], catalog: [] });
-        const client = await github(env, request); const repos = await repositories(client); return json({ user: current.user, repositories: repos, accounts: await accounts(client, repos), catalog: publicCatalog });
-      }
-      if (url.pathname === "/api/agents/repositories" && request.method === "POST") {
-        const client = await github(env, request); const body = await request.json<{ account: string; workflow: string; private?: boolean }>();
-        const repos = await repositories(client); const allowed = (await accounts(client, repos)).find((account) => account.login === body.account);
-        if (!allowed || allowed.hasAgentsRepository) return json({ error: "Invalid account or .agents already exists" }, 400);
-        const selected = bundle(body.workflow);
-        return json(await createAgentsRepository(client, { account: allowed, private: body.private === true, files: await managedBundleFiles(selected), sourceSha: selected.sourceSha }));
-      }
-      if (url.pathname.match(/^\/api\/agents\/repositories\/[^/]+\/[^/]+$/) && request.method === "GET") {
-        const [, , , , owner, repo] = url.pathname.split("/"); const client = await github(env, request); const listing = await tree(client, owner, repo, "HEAD");
-        const prefix = repo === ".agents" ? "" : ".agents/"; const counts = new Map<string, number>();
-        for (const entry of listing.entries) { if (entry.type !== "blob" || !entry.path.startsWith(prefix)) continue; const parts = entry.path.slice(prefix.length).split("/"); if (!['agents','skills','prompts','workflows','.outfitter'].includes(parts[0]) || !parts[1]) continue; const resource = `${prefix}${parts[0]}/${parts[1]}`; counts.set(resource, (counts.get(resource) ?? 0) + 1); }
-        return json({ sha: listing.sha, resources: [...counts].map(([path, files]) => ({ path, files })).sort((a, b) => a.path.localeCompare(b.path)) });
-      }
-      if (url.pathname === "/api/agents/plans" && request.method === "POST") { const client = await github(env, request); const body = await request.json<{ repository: string; managedRoot: string; workflow?: string; deletes?: string[] }>(); const plan = await buildPlan(client, { repository: body.repository, managedRoot: body.managedRoot, workflow: body.workflow, deletes: body.deletes, catalog }); return json({ plan, token: await signPlan(plan, env.AGENTS_PLAN_SIGNING_KEY) }); }
-      if (url.pathname === "/api/agents/apply" && request.method === "POST") { const body = await request.json<{ token: string; mode: "pull-request" | "direct" }>(); if (!['pull-request','direct'].includes(body.mode)) return json({ error: "Invalid apply mode" }, 400); const client = await github(env, request); return json(await applyPlan(client, await verifyPlan(body.token, env.AGENTS_PLAN_SIGNING_KEY), body.mode)); }
-      return withScopeControl(await env.ASSETS.fetch(request));
-    } catch (error) { if (error instanceof Response) return error; const message = error instanceof Error ? error.message : "Unexpected error"; return json({ error: message }, /invalid|required|expired|changed|selection/i.test(message) ? 400 : 500); }
-  }
+      return json({ error: message }, status);
+    }
+  },
 } satisfies ExportedHandler<Env>;
