@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
-const worker = (await import("../worker")).default;
+const { default: worker, managedResources } = await import("../worker");
 
 const env = {
   ASSETS: {
@@ -12,6 +12,20 @@ const env = {
 } as unknown as Env;
 
 describe("dashboard routes", () => {
+  it("lists only resources recorded by the managed manifest", () => {
+    expect(managedResources({
+      version: 2,
+      catalogSha: "source",
+      workflows: {},
+      files: {
+        "skills/reviewer/SKILL.md": { sha256: "one", workflows: ["review"] },
+        "skills/reviewer/reference.md": { sha256: "two", workflows: ["review"] },
+        "README.md": { sha256: "three", workflows: ["review"] },
+        ".outfitter/website-managed.json": { sha256: "four", workflows: ["review"] },
+      },
+    })).toEqual([{ path: "skills/reviewer", files: 2 }]);
+  });
+
   it("serves the one static dashboard route", async () => {
     const response = await worker.fetch(new Request("https://example.com/dashboard/"), env);
     expect(response.status).toBe(200);

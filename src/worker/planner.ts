@@ -16,6 +16,10 @@ const safe = /^(?:agents|skills|prompts|workflows|\.outfitter)\/[A-Za-z0-9._/-]+
 const manifestPath = ".outfitter/website-managed.json";
 const omittedComposition = ".outfitter/workflow-composition.json";
 
+export function isManagedPath(path: string) {
+  return path !== manifestPath && safe.test(path) && !path.includes("..");
+}
+
 export async function sha256(content: string) {
   const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content)));
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -50,7 +54,9 @@ export async function repositorySnapshot(client: Octokit, owner: string): Promis
   const entry = listing.entries.find((candidate) => candidate.path === manifestPath && candidate.type === "blob");
   let manifest: ManagedManifest | null = null;
   if (entry) try { manifest = normalizeManifest(JSON.parse(await textBlob(client, owner, entry.sha))); } catch { manifest = null; }
-  for (const path of Object.keys(manifest?.files ?? {})) if (files[path]) files[path].sha256 = await sha256(await textBlob(client, owner, files[path].blobSha));
+  for (const path of Object.keys(manifest?.files ?? {})) {
+    if (isManagedPath(path) && files[path]) files[path].sha256 = await sha256(await textBlob(client, owner, files[path].blobSha));
+  }
   return { sha: listing.sha, files, manifest };
 }
 export function workflowStatuses(catalog: Catalog, snapshot: RepositorySnapshot) { return catalog.workflows.map((workflow) => classifyWorkflow(workflow, catalog, snapshot)); }
@@ -66,8 +72,8 @@ export async function buildPlan(client: Octokit, input: { repository: string; ca
   if (!selected) for (const status of statuses) if (status.state !== "add") installedIds.add(status.id);
   for (const requested of input.deletes ?? []) {
     const relative = requested;
-    if (!safe.test(relative) || relative.includes("..")) throw new Error("Invalid managed resource removal");
-    const records = Object.entries(current.manifest?.files ?? {}).filter(([path]) => path === relative || path.startsWith(`${relative}/`));
+    if (!isManagedPath(relative)) throw new Error("Invalid managed resource removal");
+    const records = Object.entries(current.manifest?.files ?? {}).filter(([path]) => isManagedPath(path) && (path === relative || path.startsWith(`${relative}/`)));
     if (!records.length) throw new Error("Invalid managed resource removal");
     for (const [, record] of records) for (const workflow of record.workflows) installedIds.delete(workflow);
   }
@@ -85,7 +91,7 @@ export async function buildPlan(client: Octokit, input: { repository: string; ca
     if (before !== file.content || existing?.mode !== file.mode) changes.push({ path: file.path, action: existing ? "update" : "add", before, after: file.content, mode: file.mode });
   }
   for (const [path, record] of Object.entries(current.manifest?.files ?? {})) {
-    if (desiredPaths.has(path)) continue;
+    if (!isManagedPath(path) || desiredPaths.has(path)) continue;
     const existing = current.files[path];
     if (existing?.sha256 === record.sha256) changes.push({ path, action: "delete", before: await textBlob(client, owner, existing.blobSha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
   }

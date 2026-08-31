@@ -131,9 +131,10 @@ export class DashboardController {
 
   private async signIn() {
     try {
+      const callback = new URL(this.location.href);
       const data = await api<{ url: string }>(this.fetcher, "/api/auth/sign-in/social", {
         method: "POST",
-        body: JSON.stringify({ provider: "github", callbackURL: "/dashboard/" }),
+        body: JSON.stringify({ provider: "github", callbackURL: `${callback.pathname}${callback.search}` }),
       });
       this.location.assign(data.url);
     } catch (error) {

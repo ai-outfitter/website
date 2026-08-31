@@ -1,10 +1,11 @@
 import workflows from "./generated/workflow-catalog.json";
 import { createAuth, session } from "./worker/auth";
-import { accounts, createAgentsRepository, github, tree, type Account } from "./worker/github";
+import { accounts, createAgentsRepository, github, type Account } from "./worker/github";
 import {
   applyPlan,
   buildPlan,
   catalogFrom,
+  isManagedPath,
   managedBundleFiles,
   repositorySnapshot,
   signPlan,
@@ -13,6 +14,7 @@ import {
   type WorkflowBundle,
 } from "./worker/planner";
 import { activeAccountCookie, readActiveAccount } from "./worker/scope";
+import type { ManagedManifest } from "./worker/planner";
 
 export { GitHubUserGrant } from "./worker/grant";
 
@@ -116,25 +118,27 @@ async function accountWorkflows(env: Env, request: Request, login: string) {
   });
 }
 
+export function managedResources(manifest: ManagedManifest | null) {
+  const counts = new Map<string, number>();
+  for (const path of Object.keys(manifest?.files ?? {})) {
+    if (!isManagedPath(path)) continue;
+    const [group, name] = path.split("/");
+    const resource = `${group}/${name}`;
+    counts.set(resource, (counts.get(resource) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([path, files]) => ({ path, files }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 async function repositoryResources(env: Env, request: Request, login: string) {
   const state = await authenticatedState(env, request);
   const account = allowedAccount(state.accounts, login);
   if (!account.repository) throw json({ error: "No .agents repository exists" }, 404);
-  const listing = await tree(state.client, login, "HEAD");
-  if (listing.truncated) throw new Error("Repository tree is too large to inspect safely");
-  const counts = new Map<string, number>();
-  for (const entry of listing.entries) {
-    if (entry.type !== "blob") continue;
-    const parts = entry.path.split("/");
-    if (!["agents", "skills", "prompts", "workflows", ".outfitter"].includes(parts[0]) || !parts[1]) continue;
-    const resource = `${parts[0]}/${parts[1]}`;
-    counts.set(resource, (counts.get(resource) ?? 0) + 1);
-  }
+  const snapshot = await repositorySnapshot(state.client, login);
   return json({
-    sha: listing.sha,
-    resources: [...counts]
-      .map(([path, files]) => ({ path, files }))
-      .sort((left, right) => left.path.localeCompare(right.path)),
+    sha: snapshot.sha,
+    resources: managedResources(snapshot.manifest),
   });
 }
 

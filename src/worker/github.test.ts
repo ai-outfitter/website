@@ -9,12 +9,9 @@ describe("account .agents repository discovery", () => {
         { id: 7, account: { login: "octo", type: "User" } },
         { id: 8, account: { login: "acme", type: "Organization" } },
       ] } };
-      if (route === "GET /user/installations/{installation_id}/repositories") {
-        const owner = input.installation_id === 7 ? "octo" : "acme";
-        return { data: { repositories: [
-          { id: input.installation_id, name: ".agents", full_name: `${owner}/.agents`, owner: { login: owner }, default_branch: "main", private: true, permissions: { push: true } },
-          { id: 20, name: "project", full_name: `${owner}/project`, owner: { login: owner }, default_branch: "main", private: false, permissions: { push: true } },
-        ] } };
+      if (route === "GET /repos/{owner}/{repo}") {
+        const owner = String(input.owner);
+        return { data: { id: owner === "octo" ? 7 : 8, full_name: `${owner}/.agents`, default_branch: "main", private: true, permissions: { push: true } } };
       }
       throw new Error(`Unexpected request: ${route}`);
     });
@@ -30,5 +27,7 @@ describe("account .agents repository discovery", () => {
       { login: "octo", type: "User", repository: "octo/.agents" },
     ]);
     expect(request.mock.calls.some(([route]) => String(route).includes("contents"))).toBe(false);
+    expect(request.mock.calls.filter(([route]) => route === "GET /repos/{owner}/{repo}")).toHaveLength(2);
+    expect(request.mock.calls.some(([route]) => String(route).includes("installations/{installation_id}/repositories"))).toBe(false);
   });
 });

@@ -32,6 +32,25 @@ describe("dashboard client", () => {
     expect(document.querySelector<HTMLElement>("#signed-in")?.hidden).toBe(true);
   });
 
+  it("preserves the dashboard query when signing in", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL, _options?: RequestInit) => {
+      if (String(input) === "/api/accounts") return Response.json({ error: "Sign in required" }, { status: 401 });
+      if (String(input) === "/api/auth/sign-in/social") return Response.json({ url: "https://github.com/login/oauth/authorize" });
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+    const location = locationAt("https://example.com/dashboard/?workflow=review&installation_id=7");
+
+    await startDashboard(document, fetcher as typeof fetch, location);
+    document.querySelector<HTMLButtonElement>("#sign-in")?.click();
+    await vi.waitFor(() => expect(location.assign).toHaveBeenCalled());
+
+    const signIn = fetcher.mock.calls.find(([path]) => path === "/api/auth/sign-in/social");
+    expect(JSON.parse(String(signIn?.[1]?.body))).toEqual({
+      provider: "github",
+      callbackURL: "/dashboard/?workflow=review&installation_id=7",
+    });
+  });
+
   it("renders the exact account repository and workflow state", async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);

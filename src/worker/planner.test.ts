@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlan, managedBundleFiles, repositorySnapshot, sha256, signPlan, verifyPlan, type Catalog, type Plan, type WorkflowBundle } from "./planner";
+import { buildPlan, isManagedPath, managedBundleFiles, repositorySnapshot, sha256, signPlan, verifyPlan, type Catalog, type Plan, type WorkflowBundle } from "./planner";
 
 const plan = (expiresAt = Date.now() + 60_000): Plan => ({
   version: 1,
@@ -59,6 +59,13 @@ describe("signed repository plans", () => {
       throw new Error(`Unexpected request: ${route}`);
     };
     await expect(buildPlan({ request } as never, { repository: "octo/project", catalog: { sourceSha: workflow.sourceSha, workflows: [workflow] }, workflow: "review" })).rejects.toThrow("Invalid workflow or .agents repository selection");
+  });
+
+  it("keeps manifest records inside the managed path boundary", () => {
+    expect(isManagedPath("skills/reviewer/SKILL.md")).toBe(true);
+    expect(isManagedPath("README.md")).toBe(false);
+    expect(isManagedPath("skills/../README.md")).toBe(false);
+    expect(isManagedPath(".outfitter/website-managed.json")).toBe(false);
   });
 
   it("removes the complete owning workflow when a managed resource is selected", async () => {

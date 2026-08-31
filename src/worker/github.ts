@@ -22,16 +22,6 @@ type Installation = {
   account?: { login?: string; type?: string };
 };
 
-type InstallationRepository = {
-  id: number;
-  name: string;
-  full_name: string;
-  owner?: { login?: string };
-  default_branch: string;
-  private?: boolean;
-  permissions?: { push?: boolean };
-};
-
 export async function github(env: Env, request: Request) {
   return new Octokit({ auth: await userToken(env, request.headers) });
 }
@@ -52,29 +42,13 @@ export async function installations(client: Octokit): Promise<Installation[]> {
   });
 }
 
-function repositoryFrom(value: InstallationRepository): Repository {
-  return {
-    id: value.id,
-    fullName: value.full_name,
-    owner: value.owner?.login ?? "",
-    defaultBranch: value.default_branch,
-    private: Boolean(value.private),
-    canPush: Boolean(value.permissions?.push),
-  };
-}
-
-async function installationAgentsRepository(client: Octokit, installationId: number): Promise<Repository | null> {
-  const repositories = await allPages(async (page) => {
-    const response = await client.request("GET /user/installations/{installation_id}/repositories", {
-      installation_id: installationId,
-      per_page: 100,
-      page,
-    });
-    return response.data.repositories as InstallationRepository[];
-  });
-  const matches = repositories.filter((candidate) => candidate.name === ".agents");
-  if (matches.length > 1) throw new Error("An installation returned more than one .agents repository");
-  return matches[0] ? repositoryFrom(matches[0]) : null;
+async function installationAgentsRepository(client: Octokit, owner: string): Promise<Repository | null> {
+  try {
+    return await repository(client, owner);
+  } catch (error) {
+    if ((error as { status?: number }).status === 404) return null;
+    throw error;
+  }
 }
 
 export async function accounts(client: Octokit): Promise<Account[]> {
@@ -92,7 +66,7 @@ export async function accounts(client: Octokit): Promise<Account[]> {
       login,
       type,
       installationId: installation.id,
-      repository: await installationAgentsRepository(client, installation.id),
+      repository: await installationAgentsRepository(client, login),
     });
   }
 
