@@ -1,3 +1,5 @@
+@import './site.css';
+
 :root {
   --sl-color-accent-low: #3a180f;
   --sl-color-accent: #ff6b35;

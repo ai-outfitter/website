@@ -1,3 +1,3 @@
-## Install
+## Configure
 
-[Install the App](https://github.com/apps/ai-outfitter), choose inference, and provision a hosted resident — see [Start your first software factory](/docs/start/).
+[Open the dashboard](/dashboard/) to install the GitHub App and manage the workflow bundle in your account or organization `.agents` repository. Managed resident execution is planned.

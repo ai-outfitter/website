@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ai-outfitter-website",
   "account_id": "52b3dd3372a05fd2be0eb0f8ec36f9d3",
-  "compatibility_date": "2026-08-26",
+  "compatibility_date": "2026-08-31",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/worker.ts",
   "workers_dev": false,
@@ -16,14 +16,7 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": [
-      "/agents", "/agents/*",
-      "/install", "/install/*",
-      "/organizations", "/organizations/*",
-      "/orgs/*",
-      "/api/agents/*", "/api/auth/*",
-      "/api/scope", "/api/organizations", "/api/orgs/*"
-    ]
+    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*"]
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",

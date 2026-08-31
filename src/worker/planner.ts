@@ -1,12 +1,12 @@
 import type { Octokit } from "@octokit/core";
-import { base64url } from "./crypto";
+import { base64url, secureEqual } from "./crypto";
 import { textBlob, tree } from "./github";
 import { classifyWorkflow, normalizeManifest } from "./status";
 
 export type WorkflowState = "add" | "installed" | "outdated" | "overridden";
 export type WorkflowStatus = { id: string; state: WorkflowState; action: "add" | "update" | "none"; sourceSha: string; reason?: string };
 export type Change = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null; mode: "100644" | "100755" };
-export type Plan = { version: 1; repository: string; baseSha: string; sourceSha: string; managedRoot: string; changes: Change[]; warnings: string[]; expiresAt: number };
+export type Plan = { version: 1; repository: string; baseSha: string; sourceSha: string; changes: Change[]; warnings: string[]; expiresAt: number };
 export type BundleFile = { path: string; content: string; mode: "100644" | "100755"; sha256: string; blobSha?: string };
 export type WorkflowBundle = { id: string; title?: string; description?: string; sourceSha: string; files: BundleFile[] };
 export type Catalog = { sourceSha: string; workflows: WorkflowBundle[] };
@@ -43,33 +43,29 @@ export async function managedBundleFiles(input: WorkflowBundle | WorkflowBundle[
   return [...[...union.values()].sort((a, b) => a.path.localeCompare(b.path)), { path: manifestPath, content, mode: "100644", sha256: await sha256(content) }];
 }
 
-export async function repositorySnapshot(client: Octokit, owner: string, repo: string, managedRoot = ""): Promise<RepositorySnapshot> {
-  const listing = await tree(client, owner, repo, "HEAD");
+export async function repositorySnapshot(client: Octokit, owner: string): Promise<RepositorySnapshot> {
+  const listing = await tree(client, owner, "HEAD");
   if (listing.truncated) throw new Error("Repository tree is too large to manage safely");
-  const prefix = managedRoot ? `${managedRoot}/` : "";
-  const files: RepositorySnapshot["files"] = Object.fromEntries(listing.entries.filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix)).map((entry) => [entry.path.slice(prefix.length), { mode: entry.mode, blobSha: entry.sha }]));
-  const entry = listing.entries.find((candidate) => candidate.path === `${prefix}${manifestPath}` && candidate.type === "blob");
+  const files: RepositorySnapshot["files"] = Object.fromEntries(listing.entries.filter((entry) => entry.type === "blob").map((entry) => [entry.path, { mode: entry.mode, blobSha: entry.sha }]));
+  const entry = listing.entries.find((candidate) => candidate.path === manifestPath && candidate.type === "blob");
   let manifest: ManagedManifest | null = null;
-  if (entry) try { manifest = normalizeManifest(JSON.parse(await textBlob(client, owner, repo, entry.sha))); } catch { manifest = null; }
-  for (const path of Object.keys(manifest?.files ?? {})) if (files[path]) files[path].sha256 = await sha256(await textBlob(client, owner, repo, files[path].blobSha));
+  if (entry) try { manifest = normalizeManifest(JSON.parse(await textBlob(client, owner, entry.sha))); } catch { manifest = null; }
+  for (const path of Object.keys(manifest?.files ?? {})) if (files[path]) files[path].sha256 = await sha256(await textBlob(client, owner, files[path].blobSha));
   return { sha: listing.sha, files, manifest };
 }
 export function workflowStatuses(catalog: Catalog, snapshot: RepositorySnapshot) { return catalog.workflows.map((workflow) => classifyWorkflow(workflow, catalog, snapshot)); }
 
-export async function buildPlan(client: Octokit, input: { repository: string; managedRoot: string; catalog: Catalog; workflow?: string; deletes?: string[] }) {
+export async function buildPlan(client: Octokit, input: { repository: string; catalog: Catalog; workflow?: string; deletes?: string[] }) {
   const parts = input.repository.split("/");
   const [owner, repo] = parts;
   const selected = input.workflow && input.catalog.workflows.find((workflow) => workflow.id === input.workflow);
-  const validRoot = repo === ".agents" ? input.managedRoot === "" : input.managedRoot === ".agents";
-  if (parts.length !== 2 || !owner || !repo || !validRoot || (input.workflow && !selected) || input.catalog.workflows.some((workflow) => workflow.files.some((file) => !safe.test(file.path)))) throw new Error("Invalid workflow or .agents repository selection");
-  const current = await repositorySnapshot(client, owner, repo, input.managedRoot);
+  if (parts.length !== 2 || !owner || repo !== ".agents" || (input.workflow && !selected) || input.catalog.workflows.some((workflow) => workflow.files.some((file) => !safe.test(file.path)))) throw new Error("Invalid workflow or .agents repository selection");
+  const current = await repositorySnapshot(client, owner);
   const statuses = workflowStatuses(input.catalog, current);
   const installedIds = new Set(Object.keys(current.manifest?.workflows ?? {}));
   if (!selected) for (const status of statuses) if (status.state !== "add") installedIds.add(status.id);
   for (const requested of input.deletes ?? []) {
-    const prefix = input.managedRoot ? `${input.managedRoot}/` : "";
-    if (prefix && !requested.startsWith(prefix)) throw new Error("Invalid managed resource removal");
-    const relative = requested.slice(prefix.length);
+    const relative = requested;
     if (!safe.test(relative) || relative.includes("..")) throw new Error("Invalid managed resource removal");
     const records = Object.entries(current.manifest?.files ?? {}).filter(([path]) => path === relative || path.startsWith(`${relative}/`));
     if (!records.length) throw new Error("Invalid managed resource removal");
@@ -85,23 +81,23 @@ export async function buildPlan(client: Octokit, input: { repository: string; ma
   const changes: Change[] = [];
   for (const file of desired) {
     const existing = current.files[file.path];
-    const before = existing ? await textBlob(client, owner, repo, existing.blobSha) : null;
-    if (before !== file.content || existing?.mode !== file.mode) changes.push({ path: `${input.managedRoot ? `${input.managedRoot}/` : ""}${file.path}`, action: existing ? "update" : "add", before, after: file.content, mode: file.mode });
+    const before = existing ? await textBlob(client, owner, existing.blobSha) : null;
+    if (before !== file.content || existing?.mode !== file.mode) changes.push({ path: file.path, action: existing ? "update" : "add", before, after: file.content, mode: file.mode });
   }
   for (const [path, record] of Object.entries(current.manifest?.files ?? {})) {
     if (desiredPaths.has(path)) continue;
     const existing = current.files[path];
-    if (existing?.sha256 === record.sha256) changes.push({ path: `${input.managedRoot ? `${input.managedRoot}/` : ""}${path}`, action: "delete", before: await textBlob(client, owner, repo, existing.blobSha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
+    if (existing?.sha256 === record.sha256) changes.push({ path, action: "delete", before: await textBlob(client, owner, existing.blobSha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
   }
-  if (!bundles.length && current.files[manifestPath]) changes.push({ path: `${input.managedRoot ? `${input.managedRoot}/` : ""}${manifestPath}`, action: "delete", before: await textBlob(client, owner, repo, current.files[manifestPath].blobSha), after: null, mode: "100644" });
+  if (!bundles.length && current.files[manifestPath]) changes.push({ path: manifestPath, action: "delete", before: await textBlob(client, owner, current.files[manifestPath].blobSha), after: null, mode: "100644" });
   if (!changes.length) throw new Error("No repository changes are required");
-  return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: input.catalog.sourceSha, managedRoot: input.managedRoot, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
+  return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: input.catalog.sourceSha, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
 }
 
 async function hmac(secret: string, value: string) { const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]); return base64url(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))); }
 export async function signPlan(plan: Plan, secret: string) { const payload = base64url(new TextEncoder().encode(JSON.stringify(plan))); return `${payload}.${await hmac(secret, payload)}`; }
 export async function verifyPlan(token: string, secret: string): Promise<Plan> {
-  const [payload, signature, extra] = token.split("."); if (!payload || !signature || extra || await hmac(secret, payload) !== signature) throw new Error("Invalid plan token");
+  const [payload, signature, extra] = token.split("."); if (!payload || !signature || extra || !await secureEqual(await hmac(secret, payload), signature)) throw new Error("Invalid plan token");
   const plan = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(payload.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.charCodeAt(0)))) as Plan;
   if (plan.version !== 1 || plan.expiresAt < Date.now()) throw new Error("Plan expired"); return plan;
 }

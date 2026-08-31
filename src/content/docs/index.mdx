@@ -6,8 +6,8 @@ hero:
   title: Outfit your team.
   tagline: Roll out a team of agents for you or your team. Research, market, sell, build, and operate with shared context and skills.
   actions:
-    - text: Start with the GitHub App
-      link: https://app.ai-outfitter.com/
+    - text: Open the dashboard
+      link: /dashboard/
       icon: rocket
       variant: primary
     - text: Roll out manually
@@ -20,29 +20,28 @@ import WorkflowFromDeclaration from '../../components/WorkflowFromDeclaration.as
 
 <p class="eyebrow">Agentic workflows</p>
 
-## Label an issue. Get a reviewed pull request.
+## Put agent configuration under review.
 
-Install the GitHub App, choose inference, press Provision. The App becomes
-your organization's resident agent, hosted by us. Label an issue and it
-implements, requests a distinct adversarial reviewer through CODEOWNERS, and
-auto-merges after required CI and approval. Nothing is added to your repository
-— your first pull request is the feature.
+Install the GitHub App from the dashboard, choose a personal account or
+organization, and manage its exact `.agents` repository. Select a workflow,
+inspect every proposed file, then apply it through a pull request or an initial
+repository commit.
 
 <div class="signal-grid">
   <div>
-    <span class="number">01 / INSTALL</span>
-    <h3>Install, choose inference, provision</h3>
-    <p><a href="https://app.ai-outfitter.com/">Install the App</a>, pick our inference or your own key, press Provision. No workflow file, no repository secret, no settings.</p>
+    <span class="number">01 / CONNECT</span>
+    <h3>Connect an account</h3>
+    <p><a href="/dashboard/">Open the dashboard</a> and install the GitHub App for the personal account or organization whose configuration you manage.</p>
   </div>
   <div>
-    <span class="number">02 / TRIGGER</span>
-    <h3>Trigger from the issue</h3>
-    <p>Label an issue <code>ai-outfitter</code> or mention <code>@ai-outfitter</code>. A hosted run starts within seconds.</p>
+    <span class="number">02 / PREVIEW</span>
+    <h3>Inspect the workflow bundle</h3>
+    <p>Select a catalog workflow and review its exact additions, updates, and deletions before anything is written.</p>
   </div>
   <div>
-    <span class="number">03 / REVIEW</span>
-    <h3>A second agent pushes back</h3>
-    <p>A distinct CODEOWNER reviews after CI. Request-changes starts another revision, CI, and review pass; approval lets GitHub auto-merge.</p>
+    <span class="number">03 / APPLY</span>
+    <h3>Keep changes reviewable</h3>
+    <p>Create the `.agents` repository when it is absent, or open a pull request against its default branch when it already exists.</p>
   </div>
 </div>
 
@@ -80,7 +79,8 @@ tree. Give one person an agent team—or roll it out across your organization.
 An admin publishes the organization’s shared agent context once. A non-admin
 employee syncs it, then Pi and Claude Code receive the same delegation prompt:
 turn bounded work into a durable issue and let issue triage assign it to a
-resident agent. A provisioned hosted App is one resident deployment.
+resident agent. Managed resident deployment and hosted inference are planned
+capabilities; the dashboard labels them as planned rather than available.
 
 <WorkflowFromDeclaration id="organization-delegation" />
 

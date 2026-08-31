@@ -43,7 +43,6 @@ const card = async (workflow) => {
   const tags = workflowTags(workflow).map(({ label, value }) => `<li><span>${label}</span>${value}</li>`).join('\n    ');
   return `<a class="workflow-card" data-workflow-id="${workflow.id}" href="/workflows/${workflow.id}/">
   <span class="workflow-card__meta">${metadata || 'Workflow'}</span>
-  <span class="workflow-state" hidden></span>
   <h3>${workflow.title}</h3>
   <p>${summary}</p>
   <ul class="workflow-card__tags" aria-label="Actors and environments">
@@ -81,11 +80,11 @@ ${supportingCards}
 `);
 
 
-// Every agent profile a workflow's steps run as. The App's store installs
+// Every agent profile a workflow's steps run as. The dashboard installs
 // these into an organization's or user's `.agents` repository — pushed to
 // the default branch or opened as a pull request — so a reader can adopt a
 // workflow's agents from the page that describes it.
-const STORE_URL = '/agents';
+const STORE_URL = '/dashboard/';
 const agentProfiles = (workflow) => [...new Set(workflow.nodes
   .filter((node) => !node.workflow && factory.actors[node.actor]?.kind === 'agent' && factory.actors[node.actor].profile)
   .map((node) => factory.actors[node.actor].profile))];

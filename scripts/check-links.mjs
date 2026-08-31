@@ -4,7 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { extname, relative, resolve, sep } from 'node:path';
 
 const root = resolve('dist');
-const workerRoutes = new Set(['/agents', '/agents/', '/install', '/install/']);
+const workerRoutes = new Set();
 
 async function walk(directory) {
   const files = [];
