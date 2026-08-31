@@ -2,7 +2,7 @@ import { Octokit } from "@octokit/core";
 import { userToken } from "./auth";
 
 export type Repository = { id: number; name: string; fullName: string; owner: string; defaultBranch: string; private: boolean; canPush: boolean; managedRoot: string };
-export type Account = { login: string; type: "User" | "Organization"; hasAgentsRepository: boolean };
+export type Account = { login: string; type: "User" | "Organization"; installationId: number; hasAgentsRepository: boolean };
 
 export async function github(env: Env, request: Request) { return new Octokit({ auth: await userToken(env, request.headers) }); }
 
@@ -11,10 +11,14 @@ async function allPages<T>(load: (page: number) => Promise<{ data: T[] }>) {
   for (let page = 1; ; page += 1) { const response = await load(page); items.push(...response.data); if (response.data.length < 100) return items; }
 }
 
+export async function installations(client: Octokit) {
+  return allPages<Record<string, unknown>>((page) => client.request("GET /user/installations", { per_page: 100, page }).then((r) => ({ data: (r.data as { installations: Record<string, unknown>[] }).installations })));
+}
+
 export async function repositories(client: Octokit): Promise<Repository[]> {
-  const installations = await allPages<Record<string, unknown>>((page) => client.request("GET /user/installations", { per_page: 100, page }).then((r) => ({ data: (r.data as { installations: Record<string, unknown>[] }).installations })));
+  const installed = await installations(client);
   const found: Repository[] = [];
-  for (const installation of installations) {
+  for (const installation of installed) {
     const repos = await allPages<Record<string, unknown>>((page) => client.request("GET /user/installations/{installation_id}/repositories", { installation_id: Number(installation.id), per_page: 100, page }).then((r) => ({ data: (r.data as { repositories: Record<string, unknown>[] }).repositories })));
     for (const repo of repos) {
       const owner = String((repo.owner as { login?: string })?.login ?? "");
@@ -28,15 +32,21 @@ export async function repositories(client: Octokit): Promise<Repository[]> {
 
 export async function accounts(client: Octokit, repos: Repository[]): Promise<Account[]> {
   const viewer = await client.request("GET /user");
-  const installations = await allPages<Record<string, unknown>>((page) => client.request("GET /user/installations", { per_page: 100, page }).then((r) => ({ data: (r.data as { installations: Record<string, unknown>[] }).installations })));
+  const installed = await installations(client);
   const values = new Map<string, Account>();
-  values.set(String(viewer.data.login), { login: String(viewer.data.login), type: "User", hasAgentsRepository: repos.some((repo) => repo.owner === viewer.data.login) });
-  for (const installation of installations) {
+  const personalInstallation = installed.find((installation) => (installation.account as { login?: string } | undefined)?.login === viewer.data.login);
+  if (personalInstallation) values.set(String(viewer.data.login), { login: String(viewer.data.login), type: "User", installationId: Number(personalInstallation.id), hasAgentsRepository: repos.some((repo) => repo.owner === viewer.data.login) });
+  for (const installation of installed) {
     const account = installation.account as { login?: string; type?: string } | undefined;
     if (!account?.login || (account.type !== "User" && account.type !== "Organization")) continue;
-    values.set(account.login, { login: account.login, type: account.type, hasAgentsRepository: repos.some((repo) => repo.owner === account.login) });
+    values.set(account.login, { login: account.login, type: account.type, installationId: Number(installation.id), hasAgentsRepository: repos.some((repo) => repo.owner === account.login) });
   }
   return [...values.values()].sort((left, right) => left.login.localeCompare(right.login));
+}
+
+export async function repository(client: Octokit, owner: string) {
+  const response = await client.request("GET /repos/{owner}/{repo}", { owner, repo: ".agents" });
+  return { id: Number(response.data.id), name: ".agents", fullName: String(response.data.full_name), owner, defaultBranch: String(response.data.default_branch), private: Boolean(response.data.private), canPush: Boolean(response.data.permissions?.push), managedRoot: "" } satisfies Repository;
 }
 
 export async function createAgentsRepository(client: Octokit, input: { account: Account; private: boolean; files: { path: string; content: string; mode: "100644" | "100755" }[]; sourceSha: string }) {
