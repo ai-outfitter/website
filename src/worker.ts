@@ -28,6 +28,16 @@ function json(value: unknown, status = 200, headers?: HeadersInit) {
   });
 }
 
+class HttpResponseError extends Error {
+  constructor(readonly response: Response) {
+    super(`HTTP ${response.status}`);
+  }
+}
+
+function httpError(value: unknown, status: number) {
+  return new HttpResponseError(json(value, status));
+}
+
 function bundle(id: string): WorkflowBundle {
   const found = workflows.find((workflow) => workflow.id === id);
   if (!found) throw new Error("Invalid workflow selection");
@@ -51,7 +61,7 @@ async function bodyRecord(request: Request) {
 
 async function authenticatedState(env: Env, request: Request) {
   const current = await session(env, request.headers);
-  if (!current) throw json({ error: "Sign in required" }, 401);
+  if (!current) throw httpError({ error: "Sign in required" }, 401);
   const client = await github(env, request);
   const installed = await accounts(client);
   const personal = installed.find((account) => account.type === "User")?.login ?? "";
@@ -66,7 +76,7 @@ async function authenticatedState(env: Env, request: Request) {
 
 function allowedAccount(values: Account[], login: string) {
   const account = values.find((candidate) => candidate.login === login);
-  if (!account) throw json({ error: "Account is not accessible through the GitHub App" }, 403);
+  if (!account) throw httpError({ error: "Account is not accessible through the GitHub App" }, 403);
   return account;
 }
 
@@ -134,7 +144,7 @@ export function managedResources(manifest: ManagedManifest | null) {
 async function repositoryResources(env: Env, request: Request, login: string) {
   const state = await authenticatedState(env, request);
   const account = allowedAccount(state.accounts, login);
-  if (!account.repository) throw json({ error: "No .agents repository exists" }, 404);
+  if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
   const snapshot = await repositorySnapshot(state.client, login);
   return json({
     sha: snapshot.sha,
@@ -145,7 +155,7 @@ async function repositoryResources(env: Env, request: Request, login: string) {
 async function createRepository(env: Env, request: Request, login: string) {
   const state = await authenticatedState(env, request);
   const account = allowedAccount(state.accounts, login);
-  if (account.repository) throw json({ error: ".agents already exists" }, 409);
+  if (account.repository) throw httpError({ error: ".agents already exists" }, 409);
   const body = await bodyRecord(request);
   if (typeof body.workflow !== "string") throw new Error("A workflow selection is required");
   const selected = bundle(body.workflow);
@@ -160,7 +170,7 @@ async function createRepository(env: Env, request: Request, login: string) {
 async function createPlan(env: Env, request: Request, login: string) {
   const state = await authenticatedState(env, request);
   const account = allowedAccount(state.accounts, login);
-  if (!account.repository) throw json({ error: "No .agents repository exists" }, 404);
+  if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
   const body = await bodyRecord(request);
   const workflow = typeof body.workflow === "string" && body.workflow ? body.workflow : undefined;
   const deletes = Array.isArray(body.deletes) && body.deletes.every((value) => typeof value === "string")
@@ -178,12 +188,12 @@ async function createPlan(env: Env, request: Request, login: string) {
 async function applyAccountPlan(env: Env, request: Request, login: string) {
   const state = await authenticatedState(env, request);
   const account = allowedAccount(state.accounts, login);
-  if (!account.repository) throw json({ error: "No .agents repository exists" }, 404);
+  if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
   const body = await bodyRecord(request);
   if (body.mode !== "pull-request" && body.mode !== "direct") throw new Error("Invalid apply mode");
   if (typeof body.token !== "string") throw new Error("A signed plan token is required");
   const plan = await verifyPlan(body.token, env.AGENTS_PLAN_SIGNING_KEY);
-  if (plan.repository !== `${login}/.agents`) throw json({ error: "Plan account does not match the route" }, 403);
+  if (plan.repository !== `${login}/.agents`) throw httpError({ error: "Plan account does not match the route" }, 403);
   return json(await applyPlan(state.client, plan, body.mode));
 }
 
@@ -201,7 +211,7 @@ export default {
         return auth.handler(request);
       }
 
-      if (url.pathname === "/api/accounts" && request.method === "GET") return accountIndex(env, request);
+      if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
         const state = await authenticatedState(env, request);
         const body = await bodyRecord(request);
@@ -213,19 +223,19 @@ export default {
       }
 
       const workflowsLogin = accountRoute(url.pathname, "workflows");
-      if (workflowsLogin && request.method === "GET") return accountWorkflows(env, request, workflowsLogin);
+      if (workflowsLogin && request.method === "GET") return await accountWorkflows(env, request, workflowsLogin);
       const resourcesLogin = accountRoute(url.pathname, "repository/resources");
-      if (resourcesLogin && request.method === "GET") return repositoryResources(env, request, resourcesLogin);
+      if (resourcesLogin && request.method === "GET") return await repositoryResources(env, request, resourcesLogin);
       const repositoryLogin = accountRoute(url.pathname, "repository");
-      if (repositoryLogin && request.method === "POST") return createRepository(env, request, repositoryLogin);
+      if (repositoryLogin && request.method === "POST") return await createRepository(env, request, repositoryLogin);
       const plansLogin = accountRoute(url.pathname, "plans");
-      if (plansLogin && request.method === "POST") return createPlan(env, request, plansLogin);
+      if (plansLogin && request.method === "POST") return await createPlan(env, request, plansLogin);
       const applyLogin = accountRoute(url.pathname, "plans/apply");
-      if (applyLogin && request.method === "POST") return applyAccountPlan(env, request, applyLogin);
+      if (applyLogin && request.method === "POST") return await applyAccountPlan(env, request, applyLogin);
 
       return env.ASSETS.fetch(request);
     } catch (error) {
-      if (error instanceof Response) return error;
+      if (error instanceof HttpResponseError) return error.response;
       const message = error instanceof Error ? error.message : "Unexpected error";
       const status = /invalid|required|expired|changed|selection|no workflows/i.test(message) ? 400 : 500;
       if (status === 500) {

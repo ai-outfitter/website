@@ -12,6 +12,18 @@ const env = {
 } as unknown as Env;
 
 describe("dashboard routes", () => {
+  it("returns a normal unauthorized response for signed-out account discovery", async () => {
+    const response = await worker.fetch(new Request("https://example.com/api/accounts"), {
+      ...env,
+      BETTER_AUTH_SECRET: "test-auth-secret-at-least-thirty-two-characters",
+      BETTER_AUTH_URL: "https://example.com",
+      GITHUB_CLIENT_ID: "client",
+      GITHUB_CLIENT_SECRET: "secret",
+    } as unknown as Env);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Sign in required" });
+  });
+
   it("lists only resources recorded by the managed manifest", () => {
     expect(managedResources({
       version: 2,

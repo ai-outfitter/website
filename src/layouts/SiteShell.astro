@@ -31,9 +31,14 @@ const { title, description } = Astro.props;
         <a href="/docs/">Docs</a>
         <a href="/dashboard/">Dashboard</a>
         <a href="https://github.com/ai-outfitter">GitHub</a>
+        <a id="site-auth" class="site-auth" href="/dashboard/">Sign in</a>
       </nav>
     </header>
     <slot />
     <footer class="site-footer">AI Outfitter · Inspectable configuration for agent teams.</footer>
+    <script>
+      import { startSiteAuth } from '../scripts/site-auth';
+      startSiteAuth();
+    </script>
   </body>
 </html>

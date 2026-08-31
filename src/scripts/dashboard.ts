@@ -95,6 +95,7 @@ export class DashboardController {
     this.bindAuth();
     try {
       this.index = await api<AccountIndex>(this.fetcher, "/api/accounts");
+      this.document.dispatchEvent(new CustomEvent("outfitter:account", { detail: this.index }));
     } catch (error) {
       if ((error as { status?: number }).status === 401) return;
       this.showError(error);
