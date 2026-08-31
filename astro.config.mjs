@@ -70,6 +70,7 @@ export default defineConfig({
             { label: 'Repository documentation', link: '/docs/projects/' },
             { label: 'The adoption ramp', link: '/docs/adoption-ramp/' },
             { label: 'Workflow atlas', link: '/workflows/' },
+            { label: 'Manage your agents', link: '/agents' },
           ],
         },
         ...repositorySidebar,

@@ -11,6 +11,11 @@ permissions:
 jobs:
   site:
     runs-on: ubuntu-latest
+    env:
+      # Upstream workflow-catalog branches are intentionally unpublished. CI
+      # verifies the exact embedded artifact; maintainers regenerate it from
+      # the sibling Outfitter and community-profiles worktrees before commit.
+      AGENTS_CATALOG_EMBEDDED_ONLY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

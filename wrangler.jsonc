@@ -3,6 +3,8 @@
   "name": "ai-outfitter-website",
   "account_id": "52b3dd3372a05fd2be0eb0f8ec36f9d3",
   "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/worker.ts",
   "workers_dev": false,
   "routes": [
     {
@@ -11,9 +13,31 @@
     }
   ],
   "assets": {
+    "binding": "ASSETS",
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "run_worker_first": [
+      "/agents", "/agents/*",
+      "/install", "/install/*",
+      "/organizations", "/organizations/*",
+      "/orgs/*",
+      "/api/agents/*", "/api/auth/*",
+      "/api/scope", "/api/organizations", "/api/orgs/*"
+    ]
   },
+  "vars": {
+    "BETTER_AUTH_URL": "https://ai-outfitter.com",
+    "GITHUB_APP_SLUG": "ai-outfitter",
+    "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["GitHubUserGrant"] }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

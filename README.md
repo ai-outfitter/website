@@ -16,7 +16,18 @@ the source project repositories and site-owned content in `src/content/docs/`.
 The `docs:sync` step publishes each configured repository's `README.md` and
 complete `docs/` tree under `/docs/<repo>/`.
 
-Organization-wide workflows are declared once in `docs/workflows/factory.yaml`.
+Canonical installable workflows live in `ai-outfitter/community-profiles` and
+are strictly validated and exported by Outfitter during this site's build.
+`docs/workflows/factory.yaml` remains the richer presentation declaration for
+the workflow atlas; it is not an installation source.
+
+The hosted `/install` GitHub App flow manages only personal or organization
+repositories named `.agents`. The App needs repository Administration write
+permission to create those repositories, plus Contents and Pull requests write
+permission for later updates. New repositories receive one direct initial
+commit (public by default); subsequent updates preview exact files and open a
+pull request by default. Generated bundles are embedded at an exact community
+commit and are never fetched from `HEAD` at request time.
 The same sync step validates that YAML and generates the workflow atlas under
 `/docs/workflows/`, including Mermaid diagrams and accessible step tables.
 

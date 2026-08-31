@@ -10,28 +10,37 @@
     "docs:checkout": "node scripts/checkout-repository-docs.mjs",
     "docs:sync": "node scripts/sync-repository-docs.mjs && node scripts/sync-workflows.mjs",
     "dev": "npm run docs:sync && astro dev",
-    "build": "npm run docs:sync && astro build",
+    "build": "npm run docs:sync && npm run agents:catalog && astro build",
     "preview": "wrangler dev",
-    "check": "npm run docs:sync && astro check",
+    "check": "npm run docs:sync && npm run agents:catalog && astro check",
+    "agents:catalog": "node scripts/generate-agents-catalog.mjs",
     "test:analytics": "node scripts/test-analytics.mjs",
+    "secrets:generate": "node scripts/generate-worker-secrets.mjs",
     "test:links": "node scripts/check-links.mjs",
     "test:publish": "node scripts/test-publish.mjs",
     "test:search": "node scripts/test-search.mjs",
     "test:workflows": "npm run docs:sync && node scripts/test-workflows.mjs",
+    "test:worker": "vitest run",
     "deploy": "node scripts/publish.mjs",
     "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
+    "types": "wrangler types",
     "publish": "node scripts/publish.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.9",
+    "@better-auth/memory-adapter": "^1.6.30",
+    "@octokit/core": "^7.0.8",
     "astro": "^7.2.8",
+    "better-auth": "^1.6.30",
     "mermaid": "^11.17.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.6",
+    "@cloudflare/vitest-plugin": "^1.1.2",
     "jsdom": "^27.0.1",
     "typescript": "^5.9.2",
+    "vitest": "^4.1.11",
     "wrangler": "^4.126.0"
   }
 }

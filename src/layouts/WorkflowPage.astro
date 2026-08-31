@@ -2,7 +2,7 @@
 import logo from '../assets/logo.svg';
 import PostHogAnalytics from '../components/PostHogAnalytics.astro';
 
-const { title, description } = Astro.props.frontmatter;
+const { title, description, workflowId } = Astro.props.frontmatter;
 ---
 
 <!doctype html>
@@ -21,16 +21,37 @@ const { title, description } = Astro.props.frontmatter;
       <nav aria-label="Primary">
         <a href="/workflows/">Workflows</a>
         <a href="/docs/">Docs</a>
+        <a href="/agents">Manage agents</a>
         <a href="https://github.com/ai-outfitter">GitHub</a>
       </nav>
     </header>
     <main data-pagefind-body>
       <div class="eyebrow">Workflow atlas</div>
       <h1 data-pagefind-meta="title">{title}</h1>
+      {workflowId && <div class="workflow-detail-state" data-workflow-id={workflowId} hidden></div>}
       {description && <p class="lede">{description}</p>}
       <article><slot /></article>
     </main>
     <footer>AI Outfitter · Agent workflows you can inspect and adapt.</footer>
+    <script>
+      type Scope = { activeAccount?: { login?: string } };
+      type WorkflowState = { id: string; state: string };
+      type WorkflowResponse = { workflows: WorkflowState[] };
+      const scope = await fetch('/api/scope').then((response) => response.json() as Promise<Scope>).catch(() => null);
+      if (scope?.activeAccount?.login) {
+        const login = scope.activeAccount.login;
+        const data = await fetch(`/api/orgs/${encodeURIComponent(login)}/workflows`).then((response) => response.ok ? response.json() as Promise<WorkflowResponse> : null).catch(() => null);
+        if (data) for (const node of document.querySelectorAll<HTMLElement>('[data-workflow-id]')) {
+          const item = data.workflows.find((candidate) => candidate.id === node.dataset.workflowId);
+          if (!item) continue;
+          const badge = node.matches('.workflow-card') ? node.querySelector<HTMLElement>('.workflow-state') : node;
+          if (!badge) continue;
+          badge.hidden = false;
+          badge.textContent = `${item.state} · ${login}`;
+          badge.classList.add('workflow-state');
+        }
+      }
+    </script>
   </body>
 </html>
 
@@ -79,6 +100,8 @@ const { title, description } = Astro.props.frontmatter;
   .workflow-card:hover { border-color: var(--sl-color-accent); transform: translateY(-2px); }
   .workflow-section--delivery .workflow-card { border-top: 3px solid var(--sl-color-accent); }
   .workflow-card__meta { min-height: 2.4em; color: var(--sl-color-accent-high); font-family: ui-monospace, monospace; font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+  .workflow-state { width: fit-content; margin-top: .6rem; padding: .2rem .45rem; border: 1px solid var(--sl-color-accent); border-radius: 999px; color: var(--sl-color-accent-high); font-family: ui-monospace, monospace; font-size: .68rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+  .workflow-detail-state { margin-top: 1rem; }
   .workflow-card h3 { margin: 1rem 0 .6rem; font-size: 1.55rem; }
   .workflow-card p { margin: 0; color: var(--sl-color-gray-2); font-size: .95rem; line-height: 1.55; }
   .workflow-card__tags { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
