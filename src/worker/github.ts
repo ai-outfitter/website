@@ -17,11 +17,13 @@ export type Account = {
   type: "User" | "Organization";
   installationId: number | null;
   repository: Repository | null;
+  updatedAt?: string;
 };
 
 type Installation = {
   id: number;
   account?: { login?: string; type?: string };
+  updated_at?: string;
 };
 
 export async function github(env: Env, request: Request) {
@@ -74,7 +76,7 @@ async function installationAgentsRepository(client: Octokit, owner: string): Pro
   }
 }
 
-export async function accounts(client: Octokit): Promise<Account[]> {
+export async function accounts(client: Octokit, options: { repositories?: boolean } = {}): Promise<Account[]> {
   const [viewer, installed] = await Promise.all([
     client.request("GET /user"),
     installations(client),
@@ -89,7 +91,8 @@ export async function accounts(client: Octokit): Promise<Account[]> {
       login,
       type,
       installationId: installation.id,
-      repository: await installationAgentsRepository(client, login),
+      repository: options.repositories === false ? null : await installationAgentsRepository(client, login),
+      updatedAt: installation.updated_at,
     });
   }
 
@@ -122,7 +125,7 @@ async function tokenOrganizations(client: Octokit) {
   }
 }
 
-export async function tokenAccounts(client: Octokit, configured = ""): Promise<Account[]> {
+export async function tokenAccounts(client: Octokit, configured = "", options: { repositories?: boolean } = {}): Promise<Account[]> {
   const [viewer, organizations] = await Promise.all([
     tokenIdentity(client),
     tokenOrganizations(client),
@@ -151,12 +154,12 @@ export async function tokenAccounts(client: Octokit, configured = ""): Promise<A
     installationId: null,
     repository: null,
   });
-  return Promise.all([...values.values()]
-    .sort((left, right) => left.login.localeCompare(right.login))
-    .map(async (account) => ({
-      ...account,
-      repository: await installationAgentsRepository(client, account.login),
-    })));
+  const sorted = [...values.values()].sort((left, right) => left.login.localeCompare(right.login));
+  if (options.repositories === false) return sorted;
+  return Promise.all(sorted.map(async (account) => ({
+    ...account,
+    repository: await installationAgentsRepository(client, account.login),
+  })));
 }
 
 export async function repository(client: Octokit, owner: string): Promise<Repository> {

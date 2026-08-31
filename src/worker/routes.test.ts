@@ -44,6 +44,12 @@ describe("dashboard routes", () => {
     expect(await response.text()).toContain("Dashboard");
   });
 
+  it("serves the static dashboard shell at an account-scoped route", async () => {
+    const response = await worker.fetch(new Request("https://example.com/dashboard/Unsupervisedcom/"), env);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Dashboard");
+  });
+
   for (const path of [
     "/agents",
     "/install",

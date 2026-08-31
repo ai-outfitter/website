@@ -30,6 +30,25 @@ describe("account .agents repository discovery", () => {
     expect(request.mock.calls.filter(([route]) => route === "GET /repos/{owner}/{repo}")).toHaveLength(2);
     expect(request.mock.calls.some(([route]) => String(route).includes("installations/{installation_id}/repositories"))).toBe(false);
   });
+
+  it("lists accounts without repository discovery for navigation", async () => {
+    const request = vi.fn(async (route: string) => {
+      if (route === "GET /user") return { data: { login: "octo" } };
+      if (route === "GET /user/installations") return { data: { installations: [
+        { id: 8, updated_at: "2026-08-31T00:00:00Z", account: { login: "acme", type: "Organization" } },
+      ] } };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+
+    expect(await accounts({ request } as never, { repositories: false })).toEqual([{
+      login: "acme",
+      type: "Organization",
+      installationId: 8,
+      repository: null,
+      updatedAt: "2026-08-31T00:00:00Z",
+    }]);
+    expect(request).not.toHaveBeenCalledWith("GET /repos/{owner}/{repo}", expect.anything());
+  });
 });
 
 describe("local PAT development", () => {
@@ -74,5 +93,19 @@ describe("local PAT development", () => {
       } },
     ]);
     expect(request.mock.calls.filter(([route]) => route === "GET /repos/{owner}/{repo}")).toHaveLength(2);
+  });
+
+  it("lists PAT accounts without repository discovery for navigation", async () => {
+    const request = vi.fn(async (route: string) => {
+      if (route === "GET /user") return { data: { id: 7, login: "octo", name: "Octo" } };
+      if (route === "GET /user/orgs") return { data: [{ login: "acme" }] };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+
+    await expect(tokenAccounts({ request } as never, "", { repositories: false })).resolves.toEqual([
+      { login: "acme", type: "Organization", installationId: null, repository: null },
+      { login: "octo", type: "User", installationId: null, repository: null },
+    ]);
+    expect(request).not.toHaveBeenCalledWith("GET /repos/{owner}/{repo}", expect.anything());
   });
 });

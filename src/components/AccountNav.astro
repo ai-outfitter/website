@@ -1,0 +1,102 @@
+<div class="account-nav">
+  <a id="site-auth" href="/dashboard/">Sign in</a>
+  <details id="site-account" class="site-account" hidden>
+    <summary id="site-account-trigger">Account</summary>
+    <div class="site-account-menu">
+      <p>Switch organization</p>
+      <div id="site-account-options"></div>
+      <button id="site-sign-out" type="button">Sign out</button>
+    </div>
+  </details>
+</div>
+
+<script>
+  import { startSiteAuth } from '../scripts/site-auth';
+  startSiteAuth();
+</script>
+
+<style>
+  .account-nav {
+    display: flex;
+    align-items: center;
+  }
+
+  .account-nav > a,
+  .site-account summary,
+  .site-account button {
+    color: var(--site-signal-high, var(--sl-color-text-accent));
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .site-account {
+    position: relative;
+  }
+
+  .site-account summary,
+  .site-account button {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .site-account summary::marker {
+    color: var(--site-signal, var(--sl-color-accent-high));
+  }
+
+  .site-account-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 0.8rem);
+    right: 0;
+    width: min(18rem, calc(100vw - 2rem));
+    padding: 0.8rem;
+    border: 1px solid var(--site-line, var(--sl-color-gray-5));
+    background: var(--site-canvas-raised, var(--sl-color-gray-6));
+    box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 35%);
+  }
+
+  .site-account-menu p {
+    margin: 0 0 0.45rem;
+    color: var(--site-dim, var(--sl-color-gray-3));
+    font-size: 0.66rem;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .site-account-menu a,
+  .site-account-menu button {
+    display: block;
+    width: 100%;
+    padding: 0.65rem 0.55rem;
+    color: var(--site-signal-high, var(--sl-color-text-accent));
+    text-align: left;
+    text-decoration: none;
+    text-transform: none;
+  }
+
+  .site-account-menu a[aria-current="page"] {
+    background: var(--site-signal-low, var(--sl-color-gray-5));
+    color: var(--site-text, var(--sl-color-white));
+  }
+
+  .site-account-menu button {
+    margin-top: 0.45rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--site-line, var(--sl-color-gray-5));
+    color: var(--site-danger, #ff9c8f);
+  }
+
+  @media (max-width: 40rem) {
+    .site-account-menu {
+      position: fixed;
+      top: 4rem;
+      right: 1rem;
+    }
+  }
+</style>

@@ -12,7 +12,9 @@ const linkedCss = await Promise.all(stylesheets.map((href) => readFile(resolve('
 const inlineCss = [...document.querySelectorAll('style')].map((style) => style.textContent ?? '');
 const css = [...linkedCss, ...inlineCss].join('\n');
 assert.ok(css, 'The dashboard must contain styles');
-for (const selector of ['account-card', 'workflow-card', 'resource-card', 'badge']) {
+assert.equal(document.querySelector('#account'), null, 'The dashboard must not duplicate the active account selector');
+assert.equal(document.querySelector('#account-cards'), null, 'The dashboard must not render organization visualizer cards');
+for (const selector of ['workflow-card', 'resource-card', 'badge']) {
   assert.match(css, new RegExp(`\\.dashboard \\.${selector}(?:[,{:.#\\[])`), `Runtime .${selector} elements must be styled beneath .dashboard`);
   assert.doesNotMatch(css, new RegExp(`\\.${selector}[^,{]*:where\\(\\.astro-`), `Runtime .${selector} selectors must not require an Astro scope attribute`);
 }

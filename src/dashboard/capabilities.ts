@@ -16,15 +16,15 @@ export function assessLocalExecution(state: InstalledWorkflowState): CapabilityA
       id: "local-execution",
       title: "Run locally",
       state: "available",
-      summary: "The exact workflow closure is installed and ready for Outfitter to resolve locally.",
+      summary: "The installed workflow matches the catalog and is ready for Outfitter to resolve locally.",
     };
   }
 
   const reason = state === "overridden"
-    ? "The installed closure was changed. Review it before treating local resolution as ready."
+    ? "The installed workflow was changed. Review it before treating local resolution as ready."
     : state === "outdated"
-      ? "Update the installed closure before using the current catalog locally."
-      : "Install a workflow closure in this account's .agents repository first.";
+      ? "Update the installed workflow before using the current catalog locally."
+      : "Install a workflow in this account's .agents repository first.";
 
   return {
     id: "local-execution",

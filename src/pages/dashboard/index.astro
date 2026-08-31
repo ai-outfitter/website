@@ -5,14 +5,14 @@ import SiteShell from '../../layouts/SiteShell.astro';
 
 <SiteShell
   title="Dashboard"
-  description="Manage validated workflow closures in your personal or organization .agents repository."
+  description="Manage validated workflows in your personal or organization .agents repository."
 >
   <main class="site-frame dashboard" data-dashboard>
     <section class="dashboard-hero">
       <p class="eyebrow">GitHub-native configuration</p>
       <h1>Outfit your agent team.</h1>
       <p class="lede">
-        Install validated workflow closures into the <code>.agents</code> repository owned by you or your
+        Install validated workflows into the <code>.agents</code> repository owned by you or your
         organization. Every update is previewed as exact files before it reaches GitHub.
       </p>
     </section>
@@ -25,32 +25,21 @@ import SiteShell from '../../layouts/SiteShell.astro';
     </section>
 
     <section id="signed-in" hidden>
-      <div class="toolbar panel">
-        <div>
-          <p class="panel-label">Active account</p>
-          <label for="account">Manage configuration for</label>
-          <select id="account"></select>
-        </div>
-        <div class="toolbar-actions">
-          <a id="install-app" class="button" href="https://github.com/apps/ai-outfitter/installations/new">Add account</a>
-          <button id="sign-out" class="button" type="button">Sign out</button>
-        </div>
-      </div>
-
-      <div id="account-cards" class="account-grid" aria-label="Accessible accounts"></div>
-
       <section class="panel manager">
         <div class="section-heading">
           <div>
             <p class="panel-label">Repository configuration</p>
             <h2 id="manager-title">Loading account…</h2>
           </div>
-          <a id="repository-link" href="#" hidden>Open on GitHub</a>
+          <div class="actions">
+            <a id="repository-link" href="#" hidden>Open on GitHub</a>
+            <a id="install-app" class="button" href="https://github.com/apps/ai-outfitter/installations/new">Add organization</a>
+          </div>
         </div>
 
         <div class="manager-grid">
           <div>
-            <label for="workflow">Workflow closure</label>
+            <label for="workflow">Workflow</label>
             <select id="workflow"></select>
             <p id="workflow-description" class="muted"></p>
           </div>
@@ -58,7 +47,7 @@ import SiteShell from '../../layouts/SiteShell.astro';
             <label for="install-mode">Installation</label>
             <select id="install-mode">
               <option value="required">Required changes</option>
-              <option value="closure">Entire closure</option>
+              <option value="closure">Entire workflow</option>
             </select>
             <p class="muted">Reference the pinned catalog, or vendor every workflow dependency.</p>
           </div>
@@ -96,7 +85,7 @@ import SiteShell from '../../layouts/SiteShell.astro';
         <div class="section-heading">
           <div>
             <p class="panel-label">Catalog status</p>
-            <h2>Workflow closures</h2>
+            <h2>Workflows</h2>
           </div>
         </div>
         <div id="workflow-cards" class="workflow-grid"></div>
@@ -150,13 +139,10 @@ import SiteShell from '../../layouts/SiteShell.astro';
   .dashboard select { min-width: min(100%, 18rem); padding: .7rem; background: var(--site-ink); text-transform: none; }
   .dashboard label { display: block; margin-bottom: .45rem; font-weight: 700; }
   .dashboard .muted, .dashboard .status { color: var(--site-muted); }
-  .dashboard .toolbar, .dashboard .section-heading, .dashboard .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .dashboard .toolbar-actions, .dashboard .actions { justify-content: flex-start; }
-  .dashboard .account-grid, .dashboard .workflow-grid, .dashboard .roadmap-grid, .dashboard .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; }
-  .dashboard .account-grid { margin-block: 1rem 3rem; }
-  .dashboard .account-card, .dashboard .workflow-card, .dashboard .roadmap-card, .dashboard .resource-card, .dashboard .readiness { padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); }
-  .dashboard .account-card[data-active='true'] { border-color: var(--site-signal); }
-  .dashboard .counts { display: flex; flex-wrap: wrap; gap: .7rem; color: var(--site-muted); font-size: .8rem; }
+  .dashboard .section-heading, .dashboard .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .dashboard .actions { justify-content: flex-start; }
+  .dashboard .workflow-grid, .dashboard .roadmap-grid, .dashboard .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; }
+  .dashboard .workflow-card, .dashboard .roadmap-card, .dashboard .resource-card, .dashboard .readiness { padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); }
   .dashboard .manager-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(16rem, .7fr); gap: 1rem; margin-block: 1.5rem; }
   .dashboard .resource-card label { display: flex; gap: .7rem; align-items: flex-start; }
   .dashboard .preview { margin-top: 1.5rem; }

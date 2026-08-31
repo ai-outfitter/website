@@ -1,5 +1,6 @@
 ---
 import logo from '../assets/logo.svg';
+import AccountNav from '../components/AccountNav.astro';
 import PostHogAnalytics from '../components/PostHogAnalytics.astro';
 import '../styles/site.css';
 
@@ -27,18 +28,11 @@ const { title, description } = Astro.props;
         <img src={logo.src} alt="" />
       </a>
       <nav class="site-nav" aria-label="Primary">
-        <a href="/workflows/">Workflows</a>
-        <a href="/docs/">Docs</a>
-        <a href="/dashboard/">Dashboard</a>
         <a href="https://github.com/ai-outfitter">GitHub</a>
-        <a id="site-auth" href="/dashboard/">Sign in</a>
+        <AccountNav />
       </nav>
     </header>
     <slot />
     <footer class="site-footer">AI Outfitter · Inspectable configuration for agent teams.</footer>
-    <script>
-      import { startSiteAuth } from '../scripts/site-auth';
-      startSiteAuth();
-    </script>
   </body>
 </html>

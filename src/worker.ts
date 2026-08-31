@@ -1,4 +1,5 @@
 import workflows from "./generated/workflow-catalog.json";
+import { dashboardAccount } from "./dashboard/routes";
 import { createAuth, session } from "./worker/auth";
 import { accounts, createAgentsRepository, github, localGitHubToken, tokenAccounts, tokenIdentity, type Account } from "./worker/github";
 import {
@@ -54,21 +55,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function bodyRecord(request: Request) {
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
-    throw httpError({ error: "Content-Type must be application/json" }, 415);
-  }
   const value: unknown = await request.json();
   if (!isRecord(value)) throw new Error("Invalid request body");
   return value;
 }
 
-async function authenticatedState(env: Env, request: Request) {
-  const local = Boolean(localGitHubToken(env, request));
+async function authenticatedState(env: Env, request: Request, options: { repositories?: boolean } = {}) {
+  const local = Boolean(localGitHubToken(env));
   const current = local ? null : await session(env, request.headers);
   if (!local && !current) throw httpError({ error: "Sign in required" }, 401);
   const client = await github(env, request);
   const user = local ? await tokenIdentity(client) : current!.user;
-  const installed = local ? await tokenAccounts(client, env.LOCAL_GITHUB_ACCOUNTS) : await accounts(client);
+  const installed = local
+    ? await tokenAccounts(client, env.LOCAL_GITHUB_ACCOUNTS, options)
+    : await accounts(client, options);
   const personal = installed.find((account) => account.type === "User")?.login ?? "";
   const activeLogin = await readActiveAccount(request.headers, installed, personal, env.AGENTS_PLAN_SIGNING_KEY);
   return {
@@ -76,7 +76,6 @@ async function authenticatedState(env: Env, request: Request) {
     user,
     accounts: installed,
     activeAccount: installed.find((account) => account.login === activeLogin) ?? null,
-    authMode: local ? "local" as const : "oauth" as const,
   };
 }
 
@@ -86,29 +85,13 @@ function allowedAccount(values: Account[], login: string) {
   return account;
 }
 
-async function workflowCounts(client: Awaited<ReturnType<typeof github>>, account: Account) {
-  if (!account.repository) return { installed: 0, outdated: 0, overridden: 0 };
-  const statuses = workflowStatuses(catalog, await repositorySnapshot(client, account.login));
-  return {
-    installed: statuses.filter((status) => status.state === "installed").length,
-    outdated: statuses.filter((status) => status.state === "outdated").length,
-    overridden: statuses.filter((status) => status.state === "overridden").length,
-  };
-}
-
 async function accountIndex(env: Env, request: Request) {
-  const state = await authenticatedState(env, request);
-  const values = await Promise.all(state.accounts.map(async (account) => ({
-    ...account,
-    active: account.login === state.activeAccount?.login,
-    counts: await workflowCounts(state.client, account),
-  })));
+  const state = await authenticatedState(env, request, { repositories: false });
   return json({
     user: state.user,
     activeAccount: state.activeAccount,
-    accounts: values,
+    accounts: state.accounts,
     githubAppSlug: env.GITHUB_APP_SLUG,
-    authMode: state.authMode,
   });
 }
 
@@ -243,6 +226,10 @@ export default {
       const applyLogin = accountRoute(url.pathname, "plans/apply");
       if (applyLogin && request.method === "POST") return await applyAccountPlan(env, request, applyLogin);
 
+      if ((request.method === "GET" || request.method === "HEAD") && dashboardAccount(url.pathname)) {
+        const dashboard = new URL("/dashboard/", url);
+        return env.ASSETS.fetch(new Request(dashboard, request));
+      }
       return env.ASSETS.fetch(request);
     } catch (error) {
       if (error instanceof HttpResponseError) return error.response;

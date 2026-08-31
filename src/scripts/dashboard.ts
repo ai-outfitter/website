@@ -1,4 +1,5 @@
 import { assessLocalExecution, type InstalledWorkflowState } from "../dashboard/capabilities";
+import { dashboardAccount, dashboardPath } from "../dashboard/routes";
 
 type Repository = {
   fullName: string;
@@ -7,15 +8,11 @@ type Repository = {
   canPush: boolean;
 };
 
-type Counts = { installed: number; outdated: number; overridden: number };
-
 type Account = {
   login: string;
   type: "User" | "Organization";
   installationId: number | null;
   repository: Repository | null;
-  active?: boolean;
-  counts?: Counts;
 };
 
 type Workflow = {
@@ -33,7 +30,6 @@ type AccountIndex = {
   activeAccount: Account | null;
   accounts: Account[];
   githubAppSlug: string;
-  authMode: "local" | "oauth";
 };
 
 type WorkflowResponse = {
@@ -47,6 +43,7 @@ type Resource = { path: string; files: number };
 type PlanChange = { path: string; action: string; after: string | null };
 
 type Fetcher = typeof fetch;
+type WorkflowLoad = { ok: true; data: WorkflowResponse } | { ok: false; error: unknown };
 
 function required<T = HTMLElement>(document: Document, id: string): T {
   const element = document.getElementById(id);
@@ -85,18 +82,25 @@ export class DashboardController {
   private index: AccountIndex | null = null;
   private workflowData: WorkflowResponse | null = null;
   private planToken: string | null = null;
+  private currentLogin: string | null = null;
 
   constructor(
     private readonly document: Document,
     private readonly fetcher: Fetcher,
     private readonly location: Location,
+    private readonly history: History,
   ) {}
 
   async start() {
     this.bindAuth();
+    const scopedLogin = dashboardAccount(new URL(this.location.href).pathname);
+    const prefetched = scopedLogin
+      ? api<WorkflowResponse>(this.fetcher, `/api/accounts/${encodeURIComponent(scopedLogin)}/workflows`)
+        .then<WorkflowLoad>((data) => ({ ok: true, data }))
+        .catch((error: unknown): WorkflowLoad => ({ ok: false, error }))
+      : null;
     try {
       this.index = await api<AccountIndex>(this.fetcher, "/api/accounts");
-      this.document.dispatchEvent(new CustomEvent("outfitter:account", { detail: this.index }));
     } catch (error) {
       if ((error as { status?: number }).status === 401) return;
       this.showError(error);
@@ -106,29 +110,27 @@ export class DashboardController {
     required(this.document, "signed-out").hidden = true;
     required(this.document, "signed-in").hidden = false;
     const install = required<HTMLAnchorElement>(this.document, "install-app");
-    const signOut = required<HTMLButtonElement>(this.document, "sign-out");
-    const local = this.index.authMode === "local";
-    install.hidden = local;
-    signOut.hidden = local;
-    if (!local) install.href = `https://github.com/apps/${encodeURIComponent(this.index.githubAppSlug)}/installations/new`;
+    install.href = `https://github.com/apps/${encodeURIComponent(this.index.githubAppSlug)}/installations/new`;
 
-    if (!local) await this.acceptInstallationReturn();
-    this.renderAccounts();
-    const selected = this.requestedAccount() ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
+    const installed = await this.acceptInstallationReturn();
+    const requested = scopedLogin && this.index.accounts.some((account) => account.login === scopedLogin)
+      ? scopedLogin
+      : null;
+    const selected = installed ?? requested ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
     if (!selected) {
       this.status("Install the GitHub App for a personal or organization account to continue.");
+      this.document.dispatchEvent(new CustomEvent("outfitter:account", { detail: this.index }));
       return;
     }
-    const select = required<HTMLSelectElement>(this.document, "account");
-    select.replaceChildren(...this.index.accounts.map((account) => new Option(`${account.login} · ${account.type}`, account.login)));
-    select.value = selected;
-    select.onchange = () => void this.selectAccount(select.value);
-    await this.loadAccount(selected);
+    if (this.index.activeAccount?.login !== selected) await this.setActiveAccount(selected);
+    this.currentLogin = selected;
+    this.replaceAccountPath(selected);
+    this.document.dispatchEvent(new CustomEvent("outfitter:account", { detail: this.index }));
+    await this.loadAccount(selected, selected === scopedLogin ? prefetched : null);
   }
 
   private bindAuth() {
     required<HTMLButtonElement>(this.document, "sign-in").onclick = () => void this.signIn();
-    required<HTMLButtonElement>(this.document, "sign-out").onclick = () => void this.signOut();
     required<HTMLButtonElement>(this.document, "create").onclick = () => void this.createRepository();
     required<HTMLButtonElement>(this.document, "preview").onclick = () => void this.preview();
     required<HTMLButtonElement>(this.document, "open-pr").onclick = () => void this.apply("pull-request");
@@ -148,62 +150,31 @@ export class DashboardController {
     }
   }
 
-  private async signOut() {
-    await this.fetcher("/api/auth/sign-out", { method: "POST", headers: { "content-type": "application/json" } });
-    this.location.reload();
-  }
-
-  private requestedAccount() {
-    const requested = new URL(this.location.href).searchParams.get("account");
-    return requested && this.index?.accounts.some((account) => account.login === requested) ? requested : null;
-  }
-
   private requestedWorkflow() {
     return new URL(this.location.href).searchParams.get("workflow");
   }
 
   private async acceptInstallationReturn() {
-    if (!this.index) return;
+    if (!this.index) return null;
     const url = new URL(this.location.href);
     const installationId = url.searchParams.get("installation_id");
-    if (!installationId) return;
+    if (!installationId) return null;
     const account = this.index.accounts.find((candidate) => candidate.installationId !== null && String(candidate.installationId) === installationId);
     if (!account) {
       this.status("The returned GitHub App installation is not accessible to this session.");
-      return;
+      return null;
     }
     await this.setActiveAccount(account.login);
-    url.searchParams.delete("installation_id");
-    url.searchParams.delete("setup_action");
-    url.searchParams.set("account", account.login);
-    history.replaceState(null, "", url);
+    return account.login;
   }
 
-  private renderAccounts() {
-    if (!this.index) return;
-    const root = required(this.document, "account-cards");
-    root.replaceChildren(...this.index.accounts.map((account) => {
-      const card = element(this.document, "article", "account-card");
-      card.dataset.active = String(account.login === this.index?.activeAccount?.login);
-      card.appendChild(badge(this.document, account.login === this.index?.activeAccount?.login ? "available" : account.type.toLowerCase()));
-      const title = element(this.document, "h3");
-      title.textContent = account.login;
-      const repository = element(this.document, "p", "muted");
-      repository.textContent = account.repository
-        ? `${account.repository.private ? "Private" : "Public"} .agents repository`
-        : "No accessible .agents repository";
-      const counts = element(this.document, "div", "counts");
-      const values = account.counts ?? { installed: 0, outdated: 0, overridden: 0 };
-      for (const [label, value] of Object.entries(values)) {
-        const item = element(this.document, "span");
-        item.textContent = `${value} ${label}`;
-        counts.appendChild(item);
-      }
-      card.appendChild(title);
-      card.appendChild(repository);
-      card.appendChild(counts);
-      return card;
-    }));
+  private replaceAccountPath(login: string) {
+    const url = new URL(this.location.href);
+    const workflow = url.searchParams.get("workflow");
+    url.pathname = dashboardPath(login);
+    url.search = "";
+    if (workflow) url.searchParams.set("workflow", workflow);
+    this.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
   private async setActiveAccount(login: string) {
@@ -214,39 +185,33 @@ export class DashboardController {
     if (this.index) this.index.activeAccount = response.activeAccount;
   }
 
-  private async selectAccount(login: string) {
-    try {
-      await this.setActiveAccount(login);
-      const url = new URL(this.location.href);
-      url.searchParams.set("account", login);
-      url.searchParams.delete("workflow");
-      history.replaceState(null, "", url);
-      this.renderAccounts();
-      await this.loadAccount(login);
-    } catch (error) {
-      this.showError(error);
-    }
-  }
-
-  private async loadAccount(login: string) {
+  private async loadAccount(login: string, prefetched: Promise<WorkflowLoad> | null = null) {
     try {
       this.planToken = null;
       required(this.document, "apply-actions").hidden = true;
       required(this.document, "preview-output").replaceChildren();
-      this.workflowData = await api<WorkflowResponse>(this.fetcher, `/api/accounts/${encodeURIComponent(login)}/workflows`);
+      let workflowData: WorkflowResponse;
+      if (prefetched) {
+        const result = await prefetched;
+        if (!result.ok) throw result.error;
+        workflowData = result.data;
+      } else {
+        workflowData = await api<WorkflowResponse>(this.fetcher, `/api/accounts/${encodeURIComponent(login)}/workflows`);
+      }
+      this.workflowData = workflowData;
       required(this.document, "manager-title").textContent = `${login}/.agents`;
       const repositoryLink = required<HTMLAnchorElement>(this.document, "repository-link");
-      repositoryLink.href = this.workflowData.repositoryUrl;
-      repositoryLink.hidden = !this.workflowData.repository;
+      repositoryLink.href = workflowData.repositoryUrl;
+      repositoryLink.hidden = !workflowData.repository;
       this.populateWorkflows();
       this.renderWorkflowCards();
 
       const create = required(this.document, "create-repository");
       const manage = required(this.document, "manage-repository");
-      create.hidden = Boolean(this.workflowData.repository);
-      manage.hidden = !this.workflowData.repository;
-      if (this.workflowData.repository) {
-        required<HTMLButtonElement>(this.document, "direct-commit").disabled = !this.workflowData.repository.canPush;
+      create.hidden = Boolean(workflowData.repository);
+      manage.hidden = !workflowData.repository;
+      if (workflowData.repository) {
+        required<HTMLButtonElement>(this.document, "direct-commit").disabled = !workflowData.repository.canPush;
         await this.renderResources(login);
       } else {
         required(this.document, "resources").replaceChildren();
@@ -325,7 +290,7 @@ export class DashboardController {
   }
 
   private async createRepository() {
-    const login = required<HTMLSelectElement>(this.document, "account").value;
+    const login = this.selectedLogin();
     const workflow = required<HTMLSelectElement>(this.document, "workflow").value;
     if (!workflow) return this.status("Choose a workflow before creating the repository.");
     if (!confirm(`Create ${login}/.agents and its initial commit?`)) return;
@@ -351,7 +316,7 @@ export class DashboardController {
   }
 
   private async preview() {
-    const login = required<HTMLSelectElement>(this.document, "account").value;
+    const login = this.selectedLogin();
     const workflow = required<HTMLSelectElement>(this.document, "workflow").value;
     try {
       const result = await api<{ token: string; plan: { changes: PlanChange[] } }>(this.fetcher, `/api/accounts/${encodeURIComponent(login)}/plans`, {
@@ -384,7 +349,7 @@ export class DashboardController {
   private async apply(mode: "pull-request" | "direct") {
     if (!this.planToken) return this.status("Preview the repository change first.");
     if (!confirm(mode === "direct" ? "Commit this exact preview to the default branch?" : "Open a pull request with this exact preview?")) return;
-    const login = required<HTMLSelectElement>(this.document, "account").value;
+    const login = this.selectedLogin();
     try {
       const result = await api<{ pullRequestUrl?: string; commitUrl?: string }>(this.fetcher, `/api/accounts/${encodeURIComponent(login)}/plans/apply`, {
         method: "POST",
@@ -401,6 +366,11 @@ export class DashboardController {
     required(this.document, "dashboard-status").textContent = message;
   }
 
+  private selectedLogin() {
+    if (!this.currentLogin) throw new Error("No dashboard account is selected");
+    return this.currentLogin;
+  }
+
   private showError(error: unknown) {
     this.status(error instanceof Error ? error.message : "Unexpected dashboard error");
   }
@@ -410,7 +380,8 @@ export function startDashboard(
   documentRef: Document = document,
   fetcher: Fetcher = fetch,
   locationRef: Location = location,
+  historyRef: History = history,
 ) {
-  const controller = new DashboardController(documentRef, fetcher, locationRef);
+  const controller = new DashboardController(documentRef, fetcher, locationRef, historyRef);
   return controller.start();
 }

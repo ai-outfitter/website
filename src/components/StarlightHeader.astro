@@ -1,0 +1,95 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import SiteTitle from '@astrojs/starlight/components/SiteTitle.astro';
+import SocialIcons from '@astrojs/starlight/components/SocialIcons.astro';
+import AccountNav from './AccountNav.astro';
+---
+
+<div class="header">
+  <div class="title-wrapper">
+    <SiteTitle />
+  </div>
+  <div class="search-wrapper print:hidden">
+    <Search />
+  </div>
+  <div class="header-actions print:hidden">
+    <div class="social-icons">
+      <SocialIcons />
+    </div>
+    <AccountNav />
+  </div>
+</div>
+
+<style>
+  @layer starlight.core {
+    .header,
+    .header-actions,
+    .social-icons {
+      display: flex;
+      align-items: center;
+    }
+
+    .header {
+      height: 100%;
+      gap: var(--sl-nav-gap);
+      justify-content: space-between;
+    }
+
+    .title-wrapper {
+      min-width: 0;
+      overflow: clip;
+      padding: 0.25rem;
+      margin: -0.25rem;
+    }
+
+    .search-wrapper {
+      display: flex;
+      min-width: 0;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .header-actions,
+    .social-icons {
+      gap: 1rem;
+    }
+
+    .social-icons::after {
+      content: '';
+      height: 2rem;
+      border-inline-end: 1px solid var(--sl-color-gray-5);
+    }
+
+    @media (min-width: 50rem) {
+      :global(:root[data-has-sidebar]) {
+        --__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
+      }
+
+      :global(:root:not([data-has-toc])) {
+        --__toc-width: 0rem;
+      }
+
+      .header {
+        --__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
+        --__main-column-fr: calc(
+          (
+              100% + var(--__sidebar-pad, 0rem) - var(--__toc-width, var(--sl-sidebar-width)) -
+                (2 * var(--__toc-width, var(--sl-nav-pad-x))) - var(--sl-content-inline-start, 0rem) -
+                var(--sl-content-width)
+            ) / 2
+        );
+        display: grid;
+        grid-template-columns:
+          minmax(calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))), auto)
+          1fr
+          auto;
+      }
+    }
+
+    @media (max-width: 30rem) {
+      .social-icons {
+        display: none;
+      }
+    }
+  }
+</style>

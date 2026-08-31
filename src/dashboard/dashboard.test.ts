@@ -6,8 +6,8 @@ import { startDashboard } from "../scripts/dashboard";
 const fixture = `
   <section id="signed-out"><button id="sign-in"></button></section>
   <section id="signed-in" hidden>
-    <select id="account"></select><select id="install-mode"><option value="required">Required</option></select><a id="install-app"></a><button id="sign-out"></button>
-    <div id="account-cards"></div><h2 id="manager-title"></h2><a id="repository-link"></a>
+    <select id="install-mode"><option value="required">Required</option></select><a id="install-app"></a>
+    <h2 id="manager-title"></h2><a id="repository-link"></a>
     <select id="workflow"></select><p id="workflow-description"></p><div id="local-readiness"></div>
     <div id="create-repository"><select id="visibility"><option value="public">Public</option></select><button id="create"></button></div>
     <div id="manage-repository"><div id="resources"></div><button id="preview"></button><div id="preview-output"></div><div id="apply-actions"><button id="open-pr"></button><button id="direct-commit"></button></div></div>
@@ -18,6 +18,10 @@ const fixture = `
 
 function locationAt(url = "https://example.com/dashboard/") {
   return { href: url, assign: vi.fn(), reload: vi.fn() } as unknown as Location;
+}
+
+function historyAt() {
+  return { replaceState: vi.fn() } as unknown as History;
 }
 
 describe("dashboard client", () => {
@@ -51,7 +55,7 @@ describe("dashboard client", () => {
     });
   });
 
-  it("renders the exact account repository and workflow state", async () => {
+  it("loads the account-scoped route in parallel and renders its repository state", async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path === "/api/accounts") return Response.json({
@@ -71,7 +75,8 @@ describe("dashboard client", () => {
       throw new Error(`Unexpected request: ${path}`);
     });
 
-    await startDashboard(document, fetcher as typeof fetch, locationAt());
+    const scopedHistory = historyAt();
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/?ignored=value&workflow=review"), scopedHistory);
 
     expect(document.querySelector<HTMLElement>("#signed-in")?.hidden).toBe(false);
     expect(document.querySelector("#manager-title")?.textContent).toBe("acme/.agents");
@@ -79,10 +84,11 @@ describe("dashboard client", () => {
     expect(document.querySelector("#resources")?.textContent).toContain("workflows/review");
     expect(document.querySelector("#workflow-cards")?.textContent).toContain("Adversarial review");
     expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
-      "/api/accounts",
       "/api/accounts/acme/workflows",
+      "/api/accounts",
       "/api/accounts/acme/repository/resources",
     ]);
+    expect(scopedHistory.replaceState).toHaveBeenCalledWith(null, "", "/dashboard/acme/?workflow=review");
   });
 
   it("hides OAuth-only account controls when a local PAT authenticates the dashboard", async () => {
