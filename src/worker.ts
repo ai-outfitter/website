@@ -73,7 +73,7 @@ function planRequest(body: Record<string, unknown>, account: Account): PlanReque
 }
 
 async function authenticatedState(env: Env, request: Request, options: { repositories?: boolean } = {}) {
-  const local = Boolean(localGitHubToken(env));
+  const local = Boolean(localGitHubToken(env, request));
   const current = local ? null : await session(env, request.headers);
   if (!local && !current) throw httpError({ error: "Sign in required" }, 401);
   const client = await github(env, request);
