@@ -1,26 +1,61 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
-const declaration = parse(await readFile("docs/workflows/factory.yaml", "utf8"));
-const actors = declaration.actors ?? {};
-const workflows = new Map((declaration.workflows ?? []).map((workflow) => [workflow.id, workflow]));
-
-function resourcesFor(id, seen = new Set()) {
-  if (seen.has(id)) return [];
-  seen.add(id);
-  const workflow = workflows.get(id);
-  if (!workflow) return [];
-  const resources = new Set();
-  for (const node of workflow.nodes ?? []) {
-    const actor = actors[node.actor] ?? {};
-    if (actor.profile) resources.add(`agents/${actor.profile}`);
-    for (const skill of [...(actor.skills ?? []), ...(node.skills ?? []), ...(node.skill ? [node.skill] : [])]) resources.add(`skills/${skill}`);
-    for (const prompt of [node.prompt_fragment, ...(node.prompt_fragments ?? [])].filter(Boolean)) resources.add(`prompts/${prompt}`);
-    if (node.workflow) for (const resource of resourcesFor(node.workflow, seen)) resources.add(resource);
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function repositoriesRoot() {
+  let candidate = projectRoot;
+  while (dirname(candidate) !== candidate) {
+    if (process.env.COMMUNITY_PROFILES_DIR || (process.env.OUTFITTER_CLI || (candidate.endsWith("ai-outfitter") && candidate !== projectRoot))) return candidate;
+    candidate = dirname(candidate);
   }
-  return [...resources].sort();
+  throw new Error("Set COMMUNITY_PROFILES_DIR and OUTFITTER_CLI when repository siblings are unavailable.");
+}
+const repositoryRoot = repositoriesRoot();
+const community = resolve(process.env.COMMUNITY_PROFILES_DIR || join(repositoryRoot, "community-profiles"));
+const outfitter = process.env.OUTFITTER_CLI || "outfitter";
+const scratch = await mkdtemp(join(tmpdir(), "website-workflows-"));
+
+async function files(root, current = root) {
+  const found = [];
+  for (const entry of await readdir(current, { withFileTypes: true })) {
+    const path = join(current, entry.name);
+    if (entry.isDirectory()) found.push(...await files(root, path));
+    else if (entry.isFile()) found.push(path);
+  }
+  return found;
 }
 
-const catalog = [...workflows.values()].map((workflow) => ({ id: workflow.id, title: workflow.title, description: workflow.description, resources: resourcesFor(workflow.id) }));
-await mkdir("src/generated", { recursive: true });
-await writeFile("src/generated/workflow-catalog.json", `${JSON.stringify(catalog, null, 2)}\n`);
+try {
+  await mkdir(join(scratch, "home"));
+  await mkdir(join(scratch, "project"));
+  await symlink(community, join(scratch, "project", ".agents"));
+  const run = (...args) => execFileSync(outfitter, args, {
+    cwd: join(scratch, "project"), env: { ...process.env, HOME: join(scratch, "home") }, stdio: "inherit",
+  });
+  run("validate", "--strict");
+  const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: community, encoding: "utf8" }).trim();
+  const ids = (await readdir(join(community, "workflows"), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const catalog = [];
+  for (const id of ids) {
+    const output = join(scratch, "exports", id);
+    run("dump", "--workflow", id, "--out", output);
+    const root = join(output, ".agents");
+    const declaration = parse(await readFile(join(community, "workflows", id, "workflow.yaml"), "utf8"));
+    const bundledFiles = [];
+    for (const path of (await files(root)).sort()) {
+      const content = await readFile(path, "utf8");
+      bundledFiles.push({ path: relative(root, path).replaceAll("\\", "/"), content, mode: "100644", sha256: createHash("sha256").update(content).digest("hex") });
+    }
+    catalog.push({ id, title: declaration.title, description: declaration.description, sourceSha, files: bundledFiles });
+  }
+  await mkdir(join(projectRoot, "src/generated"), { recursive: true });
+  await writeFile(join(projectRoot, "src/generated/workflow-catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`);
+} finally {
+  await rm(scratch, { recursive: true, force: true });
+}
