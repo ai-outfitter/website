@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,9 +16,22 @@ function repositoriesRoot() {
   throw new Error("Set COMMUNITY_PROFILES_DIR and OUTFITTER_CLI when repository siblings are unavailable.");
 }
 const repositoryRoot = repositoriesRoot();
-const community = resolve(process.env.COMMUNITY_PROFILES_DIR || join(repositoryRoot, "community-profiles"));
-const outfitter = process.env.OUTFITTER_CLI || "outfitter";
+let community = resolve(process.env.COMMUNITY_PROFILES_DIR || join(repositoryRoot, "community-profiles"));
+const workflowCatalogWorktree = `${community}.worktrees/feat/workflow-catalog`;
+if (!process.env.COMMUNITY_PROFILES_DIR) {
+  try { await access(join(workflowCatalogWorktree, "workflows")); community = workflowCatalogWorktree; } catch { /* use the explicitly configured or default checkout */ }
+}
+let outfitter = process.env.OUTFITTER_CLI || "outfitter";
+const workflowOutfitter = join(repositoryRoot, "outfitter.worktrees/feat/workflow-resources/code/cli/dist/cli.js");
+if (!process.env.OUTFITTER_CLI) {
+  try { await access(workflowOutfitter); outfitter = workflowOutfitter; } catch { /* use the Outfitter available on PATH */ }
+}
 const scratch = await mkdtemp(join(tmpdir(), "website-workflows-"));
+const sharedFiles = new Map();
+function gitBlobSha(content) {
+  const body = Buffer.from(content);
+  return createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
+}
 
 async function files(root, current = root) {
   const found = [];
@@ -50,7 +63,14 @@ try {
     const bundledFiles = [];
     for (const path of (await files(root)).sort()) {
       const content = await readFile(path, "utf8");
-      bundledFiles.push({ path: relative(root, path).replaceAll("\\", "/"), content, mode: "100644", sha256: createHash("sha256").update(content).digest("hex") });
+      const relativePath = relative(root, path).replaceAll("\\", "/");
+      const mode = "100644";
+      if (relativePath !== ".outfitter/workflow-composition.json") {
+        const previous = sharedFiles.get(relativePath);
+        if (previous && (previous.content !== content || previous.mode !== mode)) throw new Error(`Workflow catalog collision at ${relativePath} between ${previous.workflow} and ${id}`);
+        sharedFiles.set(relativePath, { workflow: id, content, mode });
+      }
+      bundledFiles.push({ path: relativePath, content, mode, sha256: createHash("sha256").update(content).digest("hex"), blobSha: gitBlobSha(content) });
     }
     catalog.push({ id, title: declaration.title, description: declaration.description, sourceSha, files: bundledFiles });
   }

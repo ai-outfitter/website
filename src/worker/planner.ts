@@ -1,57 +1,88 @@
 import type { Octokit } from "@octokit/core";
 import { base64url } from "./crypto";
 import { textBlob, tree } from "./github";
+import { classifyWorkflow, normalizeManifest } from "./status";
 
+export type WorkflowState = "add" | "installed" | "outdated" | "overridden";
+export type WorkflowStatus = { id: string; state: WorkflowState; action: "add" | "update" | "none"; sourceSha: string; reason?: string };
 export type Change = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null; mode: "100644" | "100755" };
 export type Plan = { version: 1; repository: string; baseSha: string; sourceSha: string; managedRoot: string; changes: Change[]; warnings: string[]; expiresAt: number };
-export type BundleFile = { path: string; content: string; mode: "100644" | "100755"; sha256: string };
-export type WorkflowBundle = { id: string; sourceSha: string; files: BundleFile[] };
+export type BundleFile = { path: string; content: string; mode: "100644" | "100755"; sha256: string; blobSha?: string };
+export type WorkflowBundle = { id: string; title?: string; description?: string; sourceSha: string; files: BundleFile[] };
+export type Catalog = { sourceSha: string; workflows: WorkflowBundle[] };
+export type ManagedManifest = { version: 2; catalogSha: string; workflows: Record<string, { sourceSha: string; files: Record<string, string> }>; files: Record<string, { sha256: string; workflows: string[] }> };
+export type RepositorySnapshot = { sha: string; files: Record<string, { mode: string; blobSha: string; sha256?: string }>; manifest: ManagedManifest | null };
 const safe = /^(?:agents|skills|prompts|workflows|\.outfitter)\/[A-Za-z0-9._/-]+$/;
+const manifestPath = ".outfitter/website-managed.json";
+const omittedComposition = ".outfitter/workflow-composition.json";
 
-async function sha256(content: string) { return base64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content))); }
-export async function managedBundleFiles(bundle: WorkflowBundle): Promise<BundleFile[]> {
-  const hashes = Object.fromEntries(await Promise.all(bundle.files.map(async (file) => [file.path, await sha256(file.content)])));
-  const content = `${JSON.stringify({ version: 1, workflow: bundle.id, sourceSha: bundle.sourceSha, files: hashes }, null, 2)}\n`;
-  return [...bundle.files, { path: ".outfitter/website-managed.json", content, mode: "100644", sha256: await sha256(content) }];
+export async function sha256(content: string) {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content)));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+export function catalogFrom(workflows: WorkflowBundle[]): Catalog {
+  const sourceSha = workflows[0]?.sourceSha ?? "";
+  if (workflows.some((workflow) => workflow.sourceSha !== sourceSha)) throw new Error("Catalog workflows must share one source revision");
+  return { sourceSha, workflows };
+}
+export async function managedBundleFiles(input: WorkflowBundle | WorkflowBundle[]): Promise<BundleFile[]> {
+  const workflows = Array.isArray(input) ? input : [input];
+  if (!workflows.length) throw new Error("At least one workflow is required");
+  const union = new Map<string, BundleFile>();
+  const owners = new Map<string, string[]>();
+  for (const workflow of workflows) for (const file of workflow.files) {
+    if (file.path === omittedComposition) continue;
+    const previous = union.get(file.path);
+    if (previous && (previous.content !== file.content || previous.mode !== file.mode)) throw new Error(`Catalog collision at ${file.path}`);
+    union.set(file.path, file);
+    owners.set(file.path, [...new Set([...(owners.get(file.path) ?? []), workflow.id])].sort());
+  }
+  const workflowRecords = Object.fromEntries([...workflows].sort((a, b) => a.id.localeCompare(b.id)).map((workflow) => [workflow.id, { sourceSha: workflow.sourceSha, files: Object.fromEntries(workflow.files.filter((file) => file.path !== omittedComposition).map((file) => [file.path, file.sha256]).sort(([a], [b]) => a.localeCompare(b))) }]));
+  const fileRecords = Object.fromEntries([...union].sort(([a], [b]) => a.localeCompare(b)).map(([path, file]) => [path, { sha256: file.sha256, workflows: owners.get(path)! }]));
+  const content = `${JSON.stringify({ version: 2, catalogSha: workflows[0].sourceSha, workflows: workflowRecords, files: fileRecords } satisfies ManagedManifest, null, 2)}\n`;
+  return [...[...union.values()].sort((a, b) => a.path.localeCompare(b.path)), { path: manifestPath, content, mode: "100644", sha256: await sha256(content) }];
 }
 
-export async function buildPlan(client: Octokit, input: { repository: string; managedRoot: string; bundle: WorkflowBundle; deletes?: string[] }) {
+export async function repositorySnapshot(client: Octokit, owner: string, repo: string): Promise<RepositorySnapshot> {
+  const listing = await tree(client, owner, repo, "HEAD");
+  if (listing.truncated) throw new Error("Repository tree is too large to manage safely");
+  const files: RepositorySnapshot["files"] = Object.fromEntries(listing.entries.filter((entry) => entry.type === "blob").map((entry) => [entry.path, { mode: entry.mode, blobSha: entry.sha }]));
+  const entry = listing.entries.find((candidate) => candidate.path === manifestPath && candidate.type === "blob");
+  let manifest: ManagedManifest | null = null;
+  if (entry) try { manifest = normalizeManifest(JSON.parse(await textBlob(client, owner, repo, entry.sha))); } catch { manifest = null; }
+  for (const path of Object.keys(manifest?.files ?? {})) if (files[path]) files[path].sha256 = await sha256(await textBlob(client, owner, repo, files[path].blobSha));
+  return { sha: listing.sha, files, manifest };
+}
+export function workflowStatuses(catalog: Catalog, snapshot: RepositorySnapshot) { return catalog.workflows.map((workflow) => classifyWorkflow(workflow, catalog, snapshot)); }
+
+export async function buildPlan(client: Octokit, input: { repository: string; managedRoot: string; catalog: Catalog; workflow?: string }) {
   const [owner, repo] = input.repository.split("/");
-  if (!owner || repo !== ".agents" || input.managedRoot !== "" || !input.bundle.files.length || input.bundle.files.some((file) => !safe.test(file.path))) throw new Error("Invalid workflow or .agents repository selection");
-  const current = await tree(client, owner, repo, "HEAD");
-  if (current.truncated) throw new Error("Repository tree is too large to manage safely");
-  const currentByPath = new Map(current.entries.map((entry) => [entry.path, entry]));
+  const selected = input.workflow && input.catalog.workflows.find((workflow) => workflow.id === input.workflow);
+  if (!owner || repo !== ".agents" || input.managedRoot !== "" || (input.workflow && !selected) || input.catalog.workflows.some((workflow) => workflow.files.some((file) => !safe.test(file.path)))) throw new Error("Invalid workflow or .agents repository selection");
+  const current = await repositorySnapshot(client, owner, repo);
+  const statuses = workflowStatuses(input.catalog, current);
+  const installedIds = new Set(Object.keys(current.manifest?.workflows ?? {}));
+  if (selected) installedIds.add(selected.id);
+  if (!selected) for (const status of statuses) if (status.state !== "add") installedIds.add(status.id);
+  const overridden = statuses.filter((status) => installedIds.has(status.id) && status.state === "overridden");
+  if (overridden.length) throw new Error(`Updates overlap overridden workflows: ${overridden.map((status) => status.id).join(", ")}`);
+  const bundles = input.catalog.workflows.filter((workflow) => installedIds.has(workflow.id));
+  if (!bundles.length) throw new Error("No workflows are selected");
+  const desired = await managedBundleFiles(bundles);
+  const desiredPaths = new Set(desired.map((file) => file.path));
   const changes: Change[] = [];
-  const manifestEntry = currentByPath.get(".outfitter/website-managed.json");
-  if (manifestEntry?.type === "blob") {
-    const previous = JSON.parse(await textBlob(client, owner, repo, manifestEntry.sha)) as { files?: Record<string, string> };
-    for (const [path, expected] of Object.entries(previous.files ?? {})) {
-      const entry = currentByPath.get(path);
-      if (!entry || entry.type !== "blob") throw new Error(`Managed file was removed locally: ${path}`);
-      if (await sha256(await textBlob(client, owner, repo, entry.sha)) !== expected) throw new Error(`Managed file has local edits: ${path}`);
-    }
+  for (const file of desired) {
+    const existing = current.files[file.path];
+    const before = existing ? await textBlob(client, owner, repo, existing.blobSha) : null;
+    if (before !== file.content || existing?.mode !== file.mode) changes.push({ path: file.path, action: existing ? "update" : "add", before, after: file.content, mode: file.mode });
   }
-  for (const entry of await managedBundleFiles(input.bundle)) {
-    const destination = entry.path;
-    const existing = currentByPath.get(destination);
-    const after = entry.content;
-    const before = existing?.type === "blob" ? await textBlob(client, owner, repo, existing.sha) : null;
-    if (before !== after) changes.push({ path: destination, action: existing ? "update" : "add", before, after, mode: entry.mode });
-  }
-  for (const deletion of input.deletes ?? []) {
-    const relative = deletion;
-    if (!safe.test(relative)) throw new Error("Deletion is outside the managed resource roots");
-    const matches = current.entries.filter((entry) => entry.type === "blob" && (entry.path === deletion || entry.path.startsWith(`${deletion}/`)));
-    if (!matches.length) throw new Error(`Managed resource does not exist: ${deletion}`);
-    const slug = relative.split("/")[1];
-    for (const candidate of current.entries.filter((entry) => entry.type === "blob" && !matches.includes(entry) && /\.(md|ya?ml|json)$/.test(entry.path))) {
-      const content = await textBlob(client, owner, repo, candidate.sha);
-      if (new RegExp(`(^|[\\s/:,[{\"'])${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[\\s/,:\\]}\"'])`, "m").test(content)) throw new Error(`${deletion} is referenced by ${candidate.path}`);
-    }
-    for (const existing of matches) changes.push({ path: existing.path, action: "delete", before: await textBlob(client, owner, repo, existing.sha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
+  for (const [path, record] of Object.entries(current.manifest?.files ?? {})) {
+    if (desiredPaths.has(path)) continue;
+    const existing = current.files[path];
+    if (existing?.sha256 === record.sha256) changes.push({ path, action: "delete", before: await textBlob(client, owner, repo, existing.blobSha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
   }
   if (!changes.length) throw new Error("No repository changes are required");
-  return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: input.bundle.sourceSha, managedRoot: input.managedRoot, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
+  return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: input.catalog.sourceSha, managedRoot: input.managedRoot, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
 }
 
 async function hmac(secret: string, value: string) { const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]); return base64url(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))); }
