@@ -43,11 +43,12 @@ export async function managedBundleFiles(input: WorkflowBundle | WorkflowBundle[
   return [...[...union.values()].sort((a, b) => a.path.localeCompare(b.path)), { path: manifestPath, content, mode: "100644", sha256: await sha256(content) }];
 }
 
-export async function repositorySnapshot(client: Octokit, owner: string, repo: string): Promise<RepositorySnapshot> {
+export async function repositorySnapshot(client: Octokit, owner: string, repo: string, managedRoot = ""): Promise<RepositorySnapshot> {
   const listing = await tree(client, owner, repo, "HEAD");
   if (listing.truncated) throw new Error("Repository tree is too large to manage safely");
-  const files: RepositorySnapshot["files"] = Object.fromEntries(listing.entries.filter((entry) => entry.type === "blob").map((entry) => [entry.path, { mode: entry.mode, blobSha: entry.sha }]));
-  const entry = listing.entries.find((candidate) => candidate.path === manifestPath && candidate.type === "blob");
+  const prefix = managedRoot ? `${managedRoot}/` : "";
+  const files: RepositorySnapshot["files"] = Object.fromEntries(listing.entries.filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix)).map((entry) => [entry.path.slice(prefix.length), { mode: entry.mode, blobSha: entry.sha }]));
+  const entry = listing.entries.find((candidate) => candidate.path === `${prefix}${manifestPath}` && candidate.type === "blob");
   let manifest: ManagedManifest | null = null;
   if (entry) try { manifest = normalizeManifest(JSON.parse(await textBlob(client, owner, repo, entry.sha))); } catch { manifest = null; }
   for (const path of Object.keys(manifest?.files ?? {})) if (files[path]) files[path].sha256 = await sha256(await textBlob(client, owner, repo, files[path].blobSha));
@@ -55,32 +56,44 @@ export async function repositorySnapshot(client: Octokit, owner: string, repo: s
 }
 export function workflowStatuses(catalog: Catalog, snapshot: RepositorySnapshot) { return catalog.workflows.map((workflow) => classifyWorkflow(workflow, catalog, snapshot)); }
 
-export async function buildPlan(client: Octokit, input: { repository: string; managedRoot: string; catalog: Catalog; workflow?: string }) {
-  const [owner, repo] = input.repository.split("/");
+export async function buildPlan(client: Octokit, input: { repository: string; managedRoot: string; catalog: Catalog; workflow?: string; deletes?: string[] }) {
+  const parts = input.repository.split("/");
+  const [owner, repo] = parts;
   const selected = input.workflow && input.catalog.workflows.find((workflow) => workflow.id === input.workflow);
-  if (!owner || repo !== ".agents" || input.managedRoot !== "" || (input.workflow && !selected) || input.catalog.workflows.some((workflow) => workflow.files.some((file) => !safe.test(file.path)))) throw new Error("Invalid workflow or .agents repository selection");
-  const current = await repositorySnapshot(client, owner, repo);
+  const validRoot = repo === ".agents" ? input.managedRoot === "" : input.managedRoot === ".agents";
+  if (parts.length !== 2 || !owner || !repo || !validRoot || (input.workflow && !selected) || input.catalog.workflows.some((workflow) => workflow.files.some((file) => !safe.test(file.path)))) throw new Error("Invalid workflow or .agents repository selection");
+  const current = await repositorySnapshot(client, owner, repo, input.managedRoot);
   const statuses = workflowStatuses(input.catalog, current);
   const installedIds = new Set(Object.keys(current.manifest?.workflows ?? {}));
-  if (selected) installedIds.add(selected.id);
   if (!selected) for (const status of statuses) if (status.state !== "add") installedIds.add(status.id);
+  for (const requested of input.deletes ?? []) {
+    const prefix = input.managedRoot ? `${input.managedRoot}/` : "";
+    if (prefix && !requested.startsWith(prefix)) throw new Error("Invalid managed resource removal");
+    const relative = requested.slice(prefix.length);
+    if (!safe.test(relative) || relative.includes("..")) throw new Error("Invalid managed resource removal");
+    const records = Object.entries(current.manifest?.files ?? {}).filter(([path]) => path === relative || path.startsWith(`${relative}/`));
+    if (!records.length) throw new Error("Invalid managed resource removal");
+    for (const [, record] of records) for (const workflow of record.workflows) installedIds.delete(workflow);
+  }
+  if (selected) installedIds.add(selected.id);
   const overridden = statuses.filter((status) => installedIds.has(status.id) && status.state === "overridden");
   if (overridden.length) throw new Error(`Updates overlap overridden workflows: ${overridden.map((status) => status.id).join(", ")}`);
   const bundles = input.catalog.workflows.filter((workflow) => installedIds.has(workflow.id));
-  if (!bundles.length) throw new Error("No workflows are selected");
-  const desired = await managedBundleFiles(bundles);
+  if (!bundles.length && !(input.deletes?.length && current.manifest)) throw new Error("No workflows are selected");
+  const desired = bundles.length ? await managedBundleFiles(bundles) : [];
   const desiredPaths = new Set(desired.map((file) => file.path));
   const changes: Change[] = [];
   for (const file of desired) {
     const existing = current.files[file.path];
     const before = existing ? await textBlob(client, owner, repo, existing.blobSha) : null;
-    if (before !== file.content || existing?.mode !== file.mode) changes.push({ path: file.path, action: existing ? "update" : "add", before, after: file.content, mode: file.mode });
+    if (before !== file.content || existing?.mode !== file.mode) changes.push({ path: `${input.managedRoot ? `${input.managedRoot}/` : ""}${file.path}`, action: existing ? "update" : "add", before, after: file.content, mode: file.mode });
   }
   for (const [path, record] of Object.entries(current.manifest?.files ?? {})) {
     if (desiredPaths.has(path)) continue;
     const existing = current.files[path];
-    if (existing?.sha256 === record.sha256) changes.push({ path, action: "delete", before: await textBlob(client, owner, repo, existing.blobSha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
+    if (existing?.sha256 === record.sha256) changes.push({ path: `${input.managedRoot ? `${input.managedRoot}/` : ""}${path}`, action: "delete", before: await textBlob(client, owner, repo, existing.blobSha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
   }
+  if (!bundles.length && current.files[manifestPath]) changes.push({ path: `${input.managedRoot ? `${input.managedRoot}/` : ""}${manifestPath}`, action: "delete", before: await textBlob(client, owner, repo, current.files[manifestPath].blobSha), after: null, mode: "100644" });
   if (!changes.length) throw new Error("No repository changes are required");
   return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: input.catalog.sourceSha, managedRoot: input.managedRoot, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
 }

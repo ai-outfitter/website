@@ -45,11 +45,11 @@ export async function accounts(client: Octokit, repos: Repository[]): Promise<Ac
   const installed = await installations(client);
   const values = new Map<string, Account>();
   const personalInstallation = installed.find((installation) => (installation.account as { login?: string } | undefined)?.login === viewer.data.login);
-  if (personalInstallation) values.set(String(viewer.data.login), { login: String(viewer.data.login), type: "User", installationId: Number(personalInstallation.id), hasAgentsRepository: repos.some((repo) => repo.owner === viewer.data.login) });
+  if (personalInstallation) values.set(String(viewer.data.login), { login: String(viewer.data.login), type: "User", installationId: Number(personalInstallation.id), hasAgentsRepository: repos.some((repo) => repo.owner === viewer.data.login && repo.name === ".agents") });
   for (const installation of installed) {
     const account = installation.account as { login?: string; type?: string } | undefined;
     if (!account?.login || (account.type !== "User" && account.type !== "Organization")) continue;
-    values.set(account.login, { login: account.login, type: account.type, installationId: Number(installation.id), hasAgentsRepository: repos.some((repo) => repo.owner === account.login) });
+    values.set(account.login, { login: account.login, type: account.type, installationId: Number(installation.id), hasAgentsRepository: repos.some((repo) => repo.owner === account.login && repo.name === ".agents") });
   }
   return [...values.values()].sort((left, right) => left.login.localeCompare(right.login));
 }
@@ -72,8 +72,10 @@ export async function createAgentsRepository(client: Octokit, input: { account: 
 }
 
 export async function tree(client: Octokit, owner: string, repo: string, ref: string) {
-  const response = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { owner, repo, tree_sha: ref, recursive: "1" });
-  return { sha: String(response.data.sha), truncated: Boolean(response.data.truncated), entries: response.data.tree.map((entry) => ({ path: String(entry.path), mode: String(entry.mode), type: String(entry.type), sha: String(entry.sha) })) };
+  const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { owner, repo, ref });
+  const sha = String(commit.data.sha);
+  const response = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { owner, repo, tree_sha: sha, recursive: "1" });
+  return { sha, truncated: Boolean(response.data.truncated), entries: response.data.tree.map((entry) => ({ path: String(entry.path), mode: String(entry.mode), type: String(entry.type), sha: String(entry.sha) })) };
 }
 
 export async function textBlob(client: Octokit, owner: string, repo: string, sha: string) {

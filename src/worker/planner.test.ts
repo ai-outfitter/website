@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { managedBundleFiles, signPlan, verifyPlan, type Plan, type WorkflowBundle } from "./planner";
+import { buildPlan, managedBundleFiles, repositorySnapshot, sha256, signPlan, verifyPlan, type Catalog, type Plan, type WorkflowBundle } from "./planner";
 
 const plan = (expiresAt = Date.now() + 60_000): Plan => ({
   version: 1,
@@ -50,5 +50,46 @@ describe("signed repository plans", () => {
   it("rejects expired previews", async () => {
     const token = await signPlan(plan(Date.now() - 1), "test-plan-secret");
     await expect(verifyPlan(token, "test-plan-secret")).rejects.toThrow("Plan expired");
+  });
+
+  it("prefixes changes for an ordinary repository with a root .agents directory", async () => {
+    const workflow: WorkflowBundle = { id: "review", sourceSha: "a".repeat(40), files: [{ path: "workflows/review/workflow.yaml", content: "id: review\n", mode: "100644", sha256: "unused" }] };
+    const request = async (route: string) => {
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { data: { sha: "head" } };
+      if (route === "GET /repos/{owner}/{repo}/git/trees/{tree_sha}") return { data: { sha: "tree-object", truncated: false, tree: [] } };
+      throw new Error(`Unexpected request: ${route}`);
+    };
+    const result = await buildPlan({ request } as never, { repository: "octo/project", managedRoot: ".agents", catalog: { sourceSha: workflow.sourceSha, workflows: [workflow] }, workflow: "review" });
+    expect(result.baseSha).toBe("head");
+    expect(result.changes.map((change) => change.path)).toEqual([".agents/workflows/review/workflow.yaml", ".agents/.outfitter/website-managed.json"]);
+  });
+
+  it("removes the complete owning workflow when a managed resource is selected", async () => {
+    const declaration = "id: review\n";
+    const skill = "review instructions\n";
+    const sourceSha = "b".repeat(40);
+    const workflow: WorkflowBundle = { id: "review", sourceSha, files: [
+      { path: "workflows/review/workflow.yaml", content: declaration, mode: "100644", sha256: await sha256(declaration) },
+      { path: "skills/reviewer/SKILL.md", content: skill, mode: "100644", sha256: await sha256(skill) },
+    ] };
+    const managed = await managedBundleFiles(workflow);
+    const blobs = Object.fromEntries(managed.map((file, index) => [`blob-${index}`, file.content]));
+    const tree = managed.map((file, index) => ({ path: `.agents/${file.path}`, mode: file.mode, type: "blob", sha: `blob-${index}` }));
+    const request = async (route: string, input: Record<string, unknown>) => {
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { data: { sha: "head" } };
+      if (route === "GET /repos/{owner}/{repo}/git/trees/{tree_sha}") return { data: { sha: "head", truncated: false, tree } };
+      if (route === "GET /repos/{owner}/{repo}/git/blobs/{file_sha}") return { data: { encoding: "base64", content: btoa(blobs[String(input.file_sha)]) } };
+      throw new Error(`Unexpected request: ${route}`);
+    };
+    const catalog: Catalog = { sourceSha, workflows: [workflow] };
+    const snapshot = await repositorySnapshot({ request } as never, "octo", "project", ".agents");
+    expect(snapshot.manifest?.workflows).toHaveProperty("review");
+    expect(snapshot.files["skills/reviewer/SKILL.md"].sha256).toBe(await sha256(skill));
+    const result = await buildPlan({ request } as never, { repository: "octo/project", managedRoot: ".agents", catalog, deletes: [".agents/skills/reviewer"] });
+    expect(result.changes.map((change) => [change.action, change.path])).toEqual([
+      ["delete", ".agents/skills/reviewer/SKILL.md"],
+      ["delete", ".agents/workflows/review/workflow.yaml"],
+      ["delete", ".agents/.outfitter/website-managed.json"],
+    ]);
   });
 });
