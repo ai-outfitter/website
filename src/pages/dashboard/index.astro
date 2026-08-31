@@ -54,6 +54,14 @@ import SiteShell from '../../layouts/SiteShell.astro';
             <select id="workflow"></select>
             <p id="workflow-description" class="muted"></p>
           </div>
+          <div>
+            <label for="install-mode">Installation</label>
+            <select id="install-mode">
+              <option value="required">Required changes</option>
+              <option value="closure">Entire closure</option>
+            </select>
+            <p class="muted">Reference the pinned catalog, or vendor every workflow dependency.</p>
+          </div>
           <div id="local-readiness" class="readiness"></div>
         </div>
 

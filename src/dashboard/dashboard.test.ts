@@ -6,7 +6,7 @@ import { startDashboard } from "../scripts/dashboard";
 const fixture = `
   <section id="signed-out"><button id="sign-in"></button></section>
   <section id="signed-in" hidden>
-    <select id="account"></select><a id="install-app"></a><button id="sign-out"></button>
+    <select id="account"></select><select id="install-mode"><option value="required">Required</option></select><a id="install-app"></a><button id="sign-out"></button>
     <div id="account-cards"></div><h2 id="manager-title"></h2><a id="repository-link"></a>
     <select id="workflow"></select><p id="workflow-description"></p><div id="local-readiness"></div>
     <div id="create-repository"><select id="visibility"><option value="public">Public</option></select><button id="create"></button></div>

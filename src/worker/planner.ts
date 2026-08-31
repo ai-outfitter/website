@@ -1,18 +1,20 @@
 import type { Octokit } from "@octokit/core";
+import { parse, stringify } from "yaml";
 import { base64url, secureEqual } from "./crypto";
 import { textBlob, tree } from "./github";
 import { classifyWorkflow, normalizeManifest } from "./status";
 
 export type WorkflowState = "add" | "installed" | "outdated" | "overridden";
+export type InstallMode = "required" | "closure";
 export type WorkflowStatus = { id: string; state: WorkflowState; action: "add" | "update" | "none"; sourceSha: string; reason?: string };
 export type Change = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null; mode: "100644" | "100755" };
 export type Plan = { version: 1; repository: string; baseSha: string; sourceSha: string; changes: Change[]; warnings: string[]; expiresAt: number };
 export type BundleFile = { path: string; content: string; mode: "100644" | "100755"; sha256: string; blobSha?: string };
 export type WorkflowBundle = { id: string; title?: string; description?: string; sourceSha: string; files: BundleFile[] };
 export type Catalog = { sourceSha: string; workflows: WorkflowBundle[] };
-export type ManagedManifest = { version: 2; catalogSha: string; workflows: Record<string, { sourceSha: string; files: Record<string, string> }>; files: Record<string, { sha256: string; workflows: string[] }> };
+export type ManagedManifest = { version: 2; catalogSha: string; workflows: Record<string, { sourceSha: string; mode?: InstallMode; files: Record<string, string> }>; files: Record<string, { sha256: string; workflows: string[] }> };
 export type RepositorySnapshot = { sha: string; files: Record<string, { mode: string; blobSha: string; sha256?: string }>; manifest: ManagedManifest | null };
-const safe = /^(?:agents|skills|prompts|workflows|\.outfitter)\/[A-Za-z0-9._/-]+$/;
+const safe = /^(?:settings\.yml|(?:agents|skills|prompts|workflows|\.outfitter)\/[A-Za-z0-9._/-]+)$/;
 const manifestPath = ".outfitter/website-managed.json";
 const omittedComposition = ".outfitter/workflow-composition.json";
 
@@ -29,19 +31,31 @@ export function catalogFrom(workflows: WorkflowBundle[]): Catalog {
   if (workflows.some((workflow) => workflow.sourceSha !== sourceSha)) throw new Error("Catalog workflows must share one source revision");
   return { sourceSha, workflows };
 }
-export async function managedBundleFiles(input: WorkflowBundle | WorkflowBundle[]): Promise<BundleFile[]> {
+export async function managedBundleFiles(input: WorkflowBundle | WorkflowBundle[], mode: InstallMode = "closure", currentSettings?: string): Promise<BundleFile[]> {
   const workflows = Array.isArray(input) ? input : [input];
   if (!workflows.length) throw new Error("At least one workflow is required");
+  let sourceSettings = "";
+  if (mode === "required") {
+    const settings = (parse(currentSettings ?? "{}") ?? {}) as Record<string, unknown>;
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("Invalid Outfitter settings");
+    const existingSources = Array.isArray(settings.sources) ? settings.sources : [];
+    settings.sources = [
+      ...existingSources.filter((source) => !source || typeof source !== "object" || (source as { github?: unknown }).github !== "ai-outfitter/community-profiles"),
+      { github: "ai-outfitter/community-profiles", ref: workflows[0].sourceSha },
+    ];
+    sourceSettings = stringify(settings, { lineWidth: 0 });
+  }
+  const requiredFile = { path: "settings.yml", content: sourceSettings, mode: "100644" as const, sha256: await sha256(sourceSettings) };
   const union = new Map<string, BundleFile>();
   const owners = new Map<string, string[]>();
-  for (const workflow of workflows) for (const file of workflow.files) {
+  for (const workflow of workflows) for (const file of mode === "required" ? [requiredFile] : workflow.files) {
     if (file.path === omittedComposition) continue;
     const previous = union.get(file.path);
     if (previous && (previous.content !== file.content || previous.mode !== file.mode)) throw new Error(`Catalog collision at ${file.path}`);
     union.set(file.path, file);
     owners.set(file.path, [...new Set([...(owners.get(file.path) ?? []), workflow.id])].sort());
   }
-  const workflowRecords = Object.fromEntries([...workflows].sort((a, b) => a.id.localeCompare(b.id)).map((workflow) => [workflow.id, { sourceSha: workflow.sourceSha, files: Object.fromEntries(workflow.files.filter((file) => file.path !== omittedComposition).map((file) => [file.path, file.sha256]).sort(([a], [b]) => a.localeCompare(b))) }]));
+  const workflowRecords = Object.fromEntries([...workflows].sort((a, b) => a.id.localeCompare(b.id)).map((workflow) => [workflow.id, { sourceSha: workflow.sourceSha, mode, files: Object.fromEntries([...union].map(([path, file]) => [path, file.sha256]).sort(([a], [b]) => a.localeCompare(b))) }]));
   const fileRecords = Object.fromEntries([...union].sort(([a], [b]) => a.localeCompare(b)).map(([path, file]) => [path, { sha256: file.sha256, workflows: owners.get(path)! }]));
   const content = `${JSON.stringify({ version: 2, catalogSha: workflows[0].sourceSha, workflows: workflowRecords, files: fileRecords } satisfies ManagedManifest, null, 2)}\n`;
   return [...[...union.values()].sort((a, b) => a.path.localeCompare(b.path)), { path: manifestPath, content, mode: "100644", sha256: await sha256(content) }];
@@ -61,7 +75,7 @@ export async function repositorySnapshot(client: Octokit, owner: string): Promis
 }
 export function workflowStatuses(catalog: Catalog, snapshot: RepositorySnapshot) { return catalog.workflows.map((workflow) => classifyWorkflow(workflow, catalog, snapshot)); }
 
-export async function buildPlan(client: Octokit, input: { repository: string; catalog: Catalog; workflow?: string; deletes?: string[] }) {
+export async function buildPlan(client: Octokit, input: { repository: string; catalog: Catalog; workflow?: string; deletes?: string[]; mode?: InstallMode }) {
   const parts = input.repository.split("/");
   const [owner, repo] = parts;
   const selected = input.workflow && input.catalog.workflows.find((workflow) => workflow.id === input.workflow);
@@ -82,7 +96,9 @@ export async function buildPlan(client: Octokit, input: { repository: string; ca
   if (overridden.length) throw new Error(`Updates overlap overridden workflows: ${overridden.map((status) => status.id).join(", ")}`);
   const bundles = input.catalog.workflows.filter((workflow) => installedIds.has(workflow.id));
   if (!bundles.length && !(input.deletes?.length && current.manifest)) throw new Error("No workflows are selected");
-  const desired = bundles.length ? await managedBundleFiles(bundles) : [];
+  const settingsEntry = current.files["settings.yml"];
+  const currentSettings = settingsEntry ? await textBlob(client, owner, settingsEntry.blobSha) : undefined;
+  const desired = bundles.length ? await managedBundleFiles(bundles, input.mode ?? "required", currentSettings) : [];
   const desiredPaths = new Set(desired.map((file) => file.path));
   const changes: Change[] = [];
   for (const file of desired) {

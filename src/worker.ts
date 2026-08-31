@@ -159,10 +159,11 @@ async function createRepository(env: Env, request: Request, login: string) {
   const body = await bodyRecord(request);
   if (typeof body.workflow !== "string") throw new Error("A workflow selection is required");
   const selected = bundle(body.workflow);
+  const mode = body.mode === "closure" ? "closure" : "required";
   return json(await createAgentsRepository(state.client, {
     account,
     private: body.private === true,
-    files: await managedBundleFiles(selected),
+    files: await managedBundleFiles(selected, mode),
     sourceSha: selected.sourceSha,
   }), 201);
 }
@@ -176,11 +177,13 @@ async function createPlan(env: Env, request: Request, login: string) {
   const deletes = Array.isArray(body.deletes) && body.deletes.every((value) => typeof value === "string")
     ? body.deletes
     : undefined;
+  const mode = body.mode === "closure" ? "closure" : "required";
   const plan = await buildPlan(state.client, {
     repository: `${login}/.agents`,
     catalog,
     workflow,
     deletes,
+    mode,
   });
   return json({ plan, token: await signPlan(plan, env.AGENTS_PLAN_SIGNING_KEY) });
 }

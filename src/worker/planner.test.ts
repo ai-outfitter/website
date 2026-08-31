@@ -20,6 +20,22 @@ describe("signed repository plans", () => {
     expect(files[1].content).toContain('"sourceSha": "aaaaaaaa');
   });
 
+  it("installs a pinned catalog reference without vendoring the closure", async () => {
+    const files = await managedBundleFiles({ id: "review", sourceSha: "a".repeat(40), files: [{ path: "workflows/review/workflow.yaml", content: "id: review\n", mode: "100644", sha256: "unused" }] }, "required");
+    expect(files.map((file) => file.path)).toEqual(["settings.yml", ".outfitter/website-managed.json"]);
+    expect(files[0].content).toContain("github: ai-outfitter/community-profiles");
+    expect(files[0].content).toContain(`ref: ${"a".repeat(40)}`);
+    expect(files[1].content).toContain('"mode": "required"');
+  });
+
+  it("preserves existing settings while pinning the community catalog", async () => {
+    const workflow = { id: "review", sourceSha: "b".repeat(40), files: [] };
+    const files = await managedBundleFiles(workflow, "required", "default_agent: engineer\nsources:\n  - github: example/private\n    ref: main\n");
+    expect(files[0].content).toContain("default_agent: engineer");
+    expect(files[0].content).toContain("github: example/private");
+    expect(files[0].content).toContain("github: ai-outfitter/community-profiles");
+  });
+
   it("creates a deterministic union with shared ownership and no composition singleton", async () => {
     const shared = { path: "skills/shared/SKILL.md", content: "shared", mode: "100644" as const, sha256: "hash" };
     const bundles: WorkflowBundle[] = [

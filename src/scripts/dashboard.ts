@@ -329,6 +329,7 @@ export class DashboardController {
         method: "POST",
         body: JSON.stringify({
           workflow,
+          mode: required<HTMLSelectElement>(this.document, "install-mode").value,
           private: required<HTMLSelectElement>(this.document, "visibility").value === "private",
         }),
       });
@@ -350,7 +351,7 @@ export class DashboardController {
     try {
       const result = await api<{ token: string; plan: { changes: PlanChange[] } }>(this.fetcher, `/api/accounts/${encodeURIComponent(login)}/plans`, {
         method: "POST",
-        body: JSON.stringify({ workflow: workflow || undefined, deletes: this.selectedDeletes() }),
+        body: JSON.stringify({ workflow: workflow || undefined, deletes: this.selectedDeletes(), mode: required<HTMLSelectElement>(this.document, "install-mode").value }),
       });
       this.planToken = result.token;
       const root = required(this.document, "preview-output");

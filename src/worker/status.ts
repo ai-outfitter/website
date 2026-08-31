@@ -8,6 +8,13 @@ function sameFile(file: BundleFile, snapshot: RepositorySnapshot) {
 export function classifyWorkflow(bundle: WorkflowBundle, catalog: Catalog, snapshot: RepositorySnapshot): WorkflowStatus {
   const declaration = bundle.files.find((file) => file.path === `workflows/${bundle.id}/workflow.yaml`);
   const managed = snapshot.manifest?.workflows[bundle.id];
+  if (managed?.mode === "required") {
+    const recordedChanged = Object.entries(managed.files).some(([path, hash]) => snapshot.files[path]?.sha256 !== hash);
+    if (recordedChanged) return { id: bundle.id, state: "overridden", action: "none", sourceSha: bundle.sourceSha, reason: "The managed catalog reference was changed or removed." };
+    return managed.sourceSha !== bundle.sourceSha || snapshot.manifest?.catalogSha !== catalog.sourceSha
+      ? { id: bundle.id, state: "outdated", action: "update", sourceSha: bundle.sourceSha }
+      : { id: bundle.id, state: "installed", action: "none", sourceSha: bundle.sourceSha };
+  }
   if (managed && (!declaration || !snapshot.files[declaration.path])) return { id: bundle.id, state: "overridden", action: "none", sourceSha: bundle.sourceSha, reason: "A managed workflow declaration was removed from the repository." };
   if (!declaration || !snapshot.files[declaration.path]) return { id: bundle.id, state: "add", action: "add", sourceSha: bundle.sourceSha };
   if (!managed) {
