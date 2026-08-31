@@ -16,13 +16,11 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/agents", "/agents/*", "/api/agents/*", "/api/auth/*"]
+    "run_worker_first": ["/agents", "/agents/*", "/install", "/install/*", "/api/agents/*", "/api/auth/*"]
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
-    "GITHUB_APP_SLUG": "ai-outfitter",
-    "COMMUNITY_REPOSITORY": "ai-outfitter/community-profiles",
-    "COMMUNITY_REF": "HEAD"
+    "GITHUB_APP_SLUG": "ai-outfitter"
   },
   "durable_objects": {
     "bindings": [

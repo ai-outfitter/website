@@ -4,31 +4,42 @@ import { textBlob, tree } from "./github";
 
 export type Change = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null; mode: "100644" | "100755" };
 export type Plan = { version: 1; repository: string; baseSha: string; sourceSha: string; managedRoot: string; changes: Change[]; warnings: string[]; expiresAt: number };
-const safe = /^(agents|skills|prompts)\/[A-Za-z0-9._/-]+$/;
+export type BundleFile = { path: string; content: string; mode: "100644" | "100755"; sha256: string };
+export type WorkflowBundle = { id: string; sourceSha: string; files: BundleFile[] };
+const safe = /^(?:agents|skills|prompts|workflows|\.outfitter)\/[A-Za-z0-9._/-]+$/;
 
-function rootPath(root: string, path: string) { return root ? `${root}/${path}` : path; }
-function selected(path: string, resources: string[]) { return resources.some((resource) => path === resource || path.startsWith(`${resource}/`)); }
+async function sha256(content: string) { return base64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content))); }
+export async function managedBundleFiles(bundle: WorkflowBundle): Promise<BundleFile[]> {
+  const hashes = Object.fromEntries(await Promise.all(bundle.files.map(async (file) => [file.path, await sha256(file.content)])));
+  const content = `${JSON.stringify({ version: 1, workflow: bundle.id, sourceSha: bundle.sourceSha, files: hashes }, null, 2)}\n`;
+  return [...bundle.files, { path: ".outfitter/website-managed.json", content, mode: "100644", sha256: await sha256(content) }];
+}
 
-export async function buildPlan(client: Octokit, env: Env, input: { repository: string; managedRoot: string; resources: string[]; deletes?: string[] }) {
+export async function buildPlan(client: Octokit, input: { repository: string; managedRoot: string; bundle: WorkflowBundle; deletes?: string[] }) {
   const [owner, repo] = input.repository.split("/");
-  if (!owner || !repo || (!input.resources.length && !(input.deletes?.length)) || input.resources.some((path) => !safe.test(path))) throw new Error("Invalid resource selection");
-  const [sourceOwner, sourceRepo] = env.COMMUNITY_REPOSITORY.split("/");
+  if (!owner || repo !== ".agents" || input.managedRoot !== "" || !input.bundle.files.length || input.bundle.files.some((file) => !safe.test(file.path))) throw new Error("Invalid workflow or .agents repository selection");
   const current = await tree(client, owner, repo, "HEAD");
-  const source = await tree(client, sourceOwner, sourceRepo, env.COMMUNITY_REF);
-  if (current.truncated || source.truncated) throw new Error("Repository tree is too large to manage safely");
+  if (current.truncated) throw new Error("Repository tree is too large to manage safely");
   const currentByPath = new Map(current.entries.map((entry) => [entry.path, entry]));
   const changes: Change[] = [];
-  for (const entry of source.entries) {
-    if (entry.type !== "blob" || !selected(entry.path, input.resources)) continue;
-    if (entry.mode !== "100644" && entry.mode !== "100755") throw new Error(`Unsafe source mode at ${entry.path}`);
-    const destination = rootPath(input.managedRoot, entry.path);
+  const manifestEntry = currentByPath.get(".outfitter/website-managed.json");
+  if (manifestEntry?.type === "blob") {
+    const previous = JSON.parse(await textBlob(client, owner, repo, manifestEntry.sha)) as { files?: Record<string, string> };
+    for (const [path, expected] of Object.entries(previous.files ?? {})) {
+      const entry = currentByPath.get(path);
+      if (!entry || entry.type !== "blob") throw new Error(`Managed file was removed locally: ${path}`);
+      if (await sha256(await textBlob(client, owner, repo, entry.sha)) !== expected) throw new Error(`Managed file has local edits: ${path}`);
+    }
+  }
+  for (const entry of await managedBundleFiles(input.bundle)) {
+    const destination = entry.path;
     const existing = currentByPath.get(destination);
-    const after = await textBlob(client, sourceOwner, sourceRepo, entry.sha);
+    const after = entry.content;
     const before = existing?.type === "blob" ? await textBlob(client, owner, repo, existing.sha) : null;
     if (before !== after) changes.push({ path: destination, action: existing ? "update" : "add", before, after, mode: entry.mode });
   }
   for (const deletion of input.deletes ?? []) {
-    const relative = input.managedRoot && deletion.startsWith(`${input.managedRoot}/`) ? deletion.slice(input.managedRoot.length + 1) : deletion;
+    const relative = deletion;
     if (!safe.test(relative)) throw new Error("Deletion is outside the managed resource roots");
     const matches = current.entries.filter((entry) => entry.type === "blob" && (entry.path === deletion || entry.path.startsWith(`${deletion}/`)));
     if (!matches.length) throw new Error(`Managed resource does not exist: ${deletion}`);
@@ -40,7 +51,7 @@ export async function buildPlan(client: Octokit, env: Env, input: { repository: 
     for (const existing of matches) changes.push({ path: existing.path, action: "delete", before: await textBlob(client, owner, repo, existing.sha), after: null, mode: existing.mode === "100755" ? "100755" : "100644" });
   }
   if (!changes.length) throw new Error("No repository changes are required");
-  return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: source.sha, managedRoot: input.managedRoot, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
+  return { version: 1, repository: input.repository, baseSha: current.sha, sourceSha: input.bundle.sourceSha, managedRoot: input.managedRoot, changes, warnings: [], expiresAt: Date.now() + 10 * 60_000 } satisfies Plan;
 }
 
 async function hmac(secret: string, value: string) { const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]); return base64url(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))); }

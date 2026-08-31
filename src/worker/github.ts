@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/core";
 import { userToken } from "./auth";
 
 export type Repository = { id: number; name: string; fullName: string; owner: string; defaultBranch: string; private: boolean; canPush: boolean; managedRoot: string };
+export type Account = { login: string; type: "User" | "Organization"; hasAgentsRepository: boolean };
 
 export async function github(env: Env, request: Request) { return new Octokit({ auth: await userToken(env, request.headers) }); }
 
@@ -18,15 +19,36 @@ export async function repositories(client: Octokit): Promise<Repository[]> {
     for (const repo of repos) {
       const owner = String((repo.owner as { login?: string })?.login ?? "");
       const name = String(repo.name);
-      let managedRoot = name === ".agents" ? "" : ".agents";
-      if (name !== ".agents") {
-        try { await client.request("GET /repos/{owner}/{repo}/contents/{path}", { owner, repo: name, path: ".agents" }); }
-        catch (error) { if ((error as { status?: number }).status === 404) continue; throw error; }
-      }
-      found.push({ id: Number(repo.id), name, fullName: String(repo.full_name), owner, defaultBranch: String(repo.default_branch), private: Boolean(repo.private), canPush: Boolean((repo.permissions as { push?: boolean })?.push), managedRoot });
+      if (name !== ".agents") continue;
+      found.push({ id: Number(repo.id), name, fullName: String(repo.full_name), owner, defaultBranch: String(repo.default_branch), private: Boolean(repo.private), canPush: Boolean((repo.permissions as { push?: boolean })?.push), managedRoot: "" });
     }
   }
   return found.sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
+
+export async function accounts(client: Octokit, repos: Repository[]): Promise<Account[]> {
+  const viewer = await client.request("GET /user");
+  const installations = await allPages<Record<string, unknown>>((page) => client.request("GET /user/installations", { per_page: 100, page }).then((r) => ({ data: (r.data as { installations: Record<string, unknown>[] }).installations })));
+  const values = new Map<string, Account>();
+  values.set(String(viewer.data.login), { login: String(viewer.data.login), type: "User", hasAgentsRepository: repos.some((repo) => repo.owner === viewer.data.login) });
+  for (const installation of installations) {
+    const account = installation.account as { login?: string; type?: string } | undefined;
+    if (!account?.login || (account.type !== "User" && account.type !== "Organization")) continue;
+    values.set(account.login, { login: account.login, type: account.type, hasAgentsRepository: repos.some((repo) => repo.owner === account.login) });
+  }
+  return [...values.values()].sort((left, right) => left.login.localeCompare(right.login));
+}
+
+export async function createAgentsRepository(client: Octokit, input: { account: Account; private: boolean; files: { path: string; content: string; mode: "100644" | "100755" }[]; sourceSha: string }) {
+  const create = input.account.type === "Organization"
+    ? await client.request("POST /orgs/{org}/repos", { org: input.account.login, name: ".agents", private: input.private, auto_init: false })
+    : await client.request("POST /user/repos", { name: ".agents", private: input.private, auto_init: false });
+  const owner = input.account.login; const repo = String(create.data.name);
+  const blobs = await Promise.all(input.files.map(async (file) => ({ ...file, sha: String((await client.request("POST /repos/{owner}/{repo}/git/blobs", { owner, repo, content: file.content, encoding: "utf-8" })).data.sha) })));
+  const createdTree = await client.request("POST /repos/{owner}/{repo}/git/trees", { owner, repo, tree: blobs.map((file) => ({ path: file.path, mode: file.mode, type: "blob" as const, sha: file.sha })) });
+  const commit = await client.request("POST /repos/{owner}/{repo}/git/commits", { owner, repo, message: `chore: install ${input.files.length} workflow files\n\nCommunity source: ${input.sourceSha}`, tree: createdTree.data.sha, parents: [] });
+  await client.request("POST /repos/{owner}/{repo}/git/refs", { owner, repo, ref: "refs/heads/main", sha: commit.data.sha });
+  return { repository: `${owner}/${repo}`, commitUrl: commit.data.html_url };
 }
 
 export async function tree(client: Octokit, owner: string, repo: string, ref: string) {
