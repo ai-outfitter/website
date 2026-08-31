@@ -14,9 +14,12 @@ const css = [...linkedCss, ...inlineCss].join('\n');
 assert.ok(css, 'The dashboard must contain styles');
 assert.equal(document.querySelector('#account'), null, 'The dashboard must not duplicate the active account selector');
 assert.equal(document.querySelector('#account-cards'), null, 'The dashboard must not render organization visualizer cards');
-for (const selector of ['workflow-card', 'resource-card', 'badge']) {
+for (const selector of ['workflow-card', 'source-card', 'badge']) {
   assert.match(css, new RegExp(`\\.dashboard \\.${selector}(?:[,{:.#\\[])`), `Runtime .${selector} elements must be styled beneath .dashboard`);
   assert.doesNotMatch(css, new RegExp(`\\.${selector}[^,{]*:where\\(\\.astro-`), `Runtime .${selector} selectors must not require an Astro scope attribute`);
 }
+assert.ok(document.querySelector('#installed-workflows'), 'The dashboard must separate installed workflows');
+assert.ok(document.querySelector('#community-workflows'), 'The dashboard must separate community workflows');
+assert.ok(document.querySelector('#settings-yaml'), 'The dashboard must expose the exact settings.yml content');
 
 console.log('Dashboard runtime styles are globally available and rooted beneath .dashboard.');

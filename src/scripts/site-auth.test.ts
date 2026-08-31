@@ -3,8 +3,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { startSiteAuth } from "./site-auth";
 
-function locationAt() {
-  return { assign: vi.fn(), reload: vi.fn() } as unknown as Location;
+function locationAt(pathname = "/") {
+  return { pathname, assign: vi.fn(), reload: vi.fn() } as unknown as Location;
 }
 
 describe("site authentication navigation", () => {
@@ -88,5 +88,16 @@ describe("site authentication navigation", () => {
     document.querySelector<HTMLButtonElement>("#site-sign-out")?.click();
     await vi.waitFor(() => expect(location.reload).toHaveBeenCalled());
     expect(fetcher).toHaveBeenCalledWith("/api/auth/sign-out", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("preserves the selected workflow when switching organizations", async () => {
+    const index = {
+      user: {}, activeAccount: { login: "ai-outfitter", type: "Organization" },
+      accounts: [{ login: "ai-outfitter", type: "Organization" }, { login: "Unsupervisedcom", type: "Organization" }],
+    };
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts" ? Response.json(index) : Response.json({ activeAccount: index.accounts[1] }));
+    const location = locationAt("/dashboard/ai-outfitter/workflows/adversarial-review/");
+    await startSiteAuth(document, fetcher as typeof fetch, location);
+    expect(document.querySelector<HTMLAnchorElement>('#site-account-options a[href="/dashboard/Unsupervisedcom/workflows/adversarial-review/"]')).not.toBeNull();
   });
 });

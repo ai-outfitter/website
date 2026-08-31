@@ -8,6 +8,7 @@ import { parse } from "yaml";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const generatedCatalog = join(projectRoot, "src/generated/workflow-catalog.json");
+const sourceRepository = "ai-outfitter/community-profiles";
 const sha256 = (content) => createHash("sha256").update(content).digest("hex");
 function gitBlobSha(content) {
   const body = Buffer.from(content);
@@ -97,7 +98,7 @@ try {
       }
       bundledFiles.push({ path: relativePath, content, mode, sha256: sha256(content), blobSha: gitBlobSha(content) });
     }
-    catalog.push({ id, title: declaration.title, description: declaration.description, sourceSha, files: bundledFiles });
+    catalog.push({ id, title: declaration.title, description: declaration.description, sourceRepository, sourceSha, files: bundledFiles });
   }
   await mkdir(join(projectRoot, "src/generated"), { recursive: true });
   await writeFile(generatedCatalog, `${JSON.stringify(catalog, null, 2)}\n`);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { accounts, localGitHubToken, tokenAccounts } from "./github";
+import { accounts, localGitHubToken, sourceFreshness, tokenAccounts } from "./github";
 
 describe("account .agents repository discovery", () => {
   it("discovers only the exact account repository and never inspects nested directories", async () => {
@@ -107,5 +107,29 @@ describe("local PAT development", () => {
       { login: "octo", type: "User", installationId: null, repository: null },
     ]);
     expect(request).not.toHaveBeenCalledWith("GET /repos/{owner}/{repo}", expect.anything());
+  });
+});
+
+describe("catalog source freshness", () => {
+  it("uses the latest non-draft release and classifies an older ref", async () => {
+    const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
+      if (route === "GET /repos/{owner}/{repo}") return { data: { default_branch: "main" } };
+      if (route === "GET /repos/{owner}/{repo}/releases/latest") return { data: { tag_name: "v2" } };
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { data: { sha: input.ref === "v2" ? "latest" : "current" } };
+      if (route === "GET /repos/{owner}/{repo}/compare/{basehead}") return { data: { status: "ahead" } };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    await expect(sourceFreshness({ request } as never, "ai-outfitter/community-profiles", "v1")).resolves.toMatchObject({ status: "outdated", latestRef: "v2", latestSha: "latest", latestKind: "release" });
+  });
+
+  it("falls back to an exact default-branch SHA when no release exists", async () => {
+    const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
+      if (route === "GET /repos/{owner}/{repo}") return { data: { default_branch: "main" } };
+      if (route === "GET /repos/{owner}/{repo}/releases/latest") throw Object.assign(new Error("missing"), { status: 404 });
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { data: { sha: input.ref === "main" ? "f".repeat(40) : "old" } };
+      if (route === "GET /repos/{owner}/{repo}/compare/{basehead}") return { data: { status: "ahead" } };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    await expect(sourceFreshness({ request } as never, "example/catalog", "old")).resolves.toMatchObject({ status: "outdated", latestRef: "f".repeat(40), latestKind: "default-branch" });
   });
 });

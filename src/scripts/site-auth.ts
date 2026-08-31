@@ -1,4 +1,4 @@
-import { dashboardPath } from "../dashboard/routes";
+import { dashboardPathForRoute, dashboardRoute } from "../dashboard/routes";
 
 type Account = {
   login: string;
@@ -38,9 +38,10 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   menu.hidden = false;
   trigger.textContent = account.login;
   trigger.setAttribute("aria-label", `Active ${account.type === "Organization" ? "organization" : "account"}: ${account.login}`);
+  const route = dashboardRoute(location.pathname || "/");
   options.replaceChildren(...latestOrganizations(index).map((organization) => {
     const option = document.createElement("a");
-    option.href = dashboardPath(organization.login);
+    option.href = dashboardPathForRoute(organization.login, route);
     option.textContent = organization.login;
     if (organization.login === account.login) option.setAttribute("aria-current", "page");
     option.onclick = async (event) => {

@@ -20,6 +20,18 @@ export type Account = {
   updatedAt?: string;
 };
 
+export type SourceFreshness = {
+  status: "current" | "outdated" | "ahead" | "diverged" | "unpinned" | "unavailable" | "invalid" | "local-only";
+  currentRef?: string;
+  currentSha?: string;
+  latestRef?: string;
+  latestSha?: string;
+  latestKind?: "release" | "default-branch";
+  defaultBranch?: string;
+  repositoryUrl?: string;
+  reason?: string;
+};
+
 type Installation = {
   id: number;
   account?: { login?: string; type?: string };
@@ -174,57 +186,6 @@ export async function repository(client: Octokit, owner: string): Promise<Reposi
   };
 }
 
-export async function createAgentsRepository(client: Octokit, input: {
-  account: Account;
-  private: boolean;
-  files: { path: string; content: string; mode: "100644" | "100755" }[];
-  sourceSha: string;
-}) {
-  const create = input.account.type === "Organization"
-    ? await client.request("POST /orgs/{org}/repos", {
-        org: input.account.login,
-        name: ".agents",
-        private: input.private,
-        auto_init: false,
-      })
-    : await client.request("POST /user/repos", {
-        name: ".agents",
-        private: input.private,
-        auto_init: false,
-      });
-
-  const owner = input.account.login;
-  const repo = String(create.data.name);
-  const blobs = await Promise.all(input.files.map(async (file) => ({
-    ...file,
-    sha: String((await client.request("POST /repos/{owner}/{repo}/git/blobs", {
-      owner,
-      repo,
-      content: file.content,
-      encoding: "utf-8",
-    })).data.sha),
-  })));
-  const createdTree = await client.request("POST /repos/{owner}/{repo}/git/trees", {
-    owner,
-    repo,
-    tree: blobs.map((file) => ({ path: file.path, mode: file.mode, type: "blob" as const, sha: file.sha })),
-  });
-  const commit = await client.request("POST /repos/{owner}/{repo}/git/commits", {
-    owner,
-    repo,
-    message: `chore: install ${input.files.length} workflow files\n\nCommunity source: ${input.sourceSha}`,
-    tree: createdTree.data.sha,
-    parents: [],
-  });
-  await client.request("POST /repos/{owner}/{repo}/git/refs", {
-    owner,
-    repo,
-    ref: "refs/heads/main",
-    sha: commit.data.sha,
-  });
-  return { repository: `${owner}/${repo}`, commitUrl: commit.data.html_url };
-}
-
 export async function tree(client: Octokit, owner: string, ref: string) {
   const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", {
     owner,
@@ -258,4 +219,45 @@ export async function textBlob(client: Octokit, owner: string, sha: string) {
   });
   if (response.data.encoding !== "base64") throw new Error("Unsupported GitHub blob encoding");
   return new TextDecoder().decode(Uint8Array.from(atob(response.data.content.replaceAll("\n", "")), (character) => character.charCodeAt(0)));
+}
+
+function githubRepository(value: string) {
+  const match = value.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
+  return match ? { owner: match[1], repo: match[2] } : null;
+}
+
+export async function sourceFreshness(client: Octokit, github: string, ref?: string): Promise<SourceFreshness> {
+  const repository = githubRepository(github);
+  if (!repository) return { status: "invalid", reason: "GitHub sources must use owner/repository syntax." };
+  const repositoryUrl = `https://github.com/${repository.owner}/${repository.repo}`;
+  try {
+    const metadata = await client.request("GET /repos/{owner}/{repo}", repository);
+    const defaultBranch = String(metadata.data.default_branch);
+    let latestRef: string;
+    let latestSha: string;
+    let latestKind: SourceFreshness["latestKind"];
+    try {
+      const release = await client.request("GET /repos/{owner}/{repo}/releases/latest", repository);
+      latestRef = String(release.data.tag_name);
+      const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repository, ref: latestRef });
+      latestSha = String(commit.data.sha);
+      latestKind = "release";
+    } catch (error) {
+      if ((error as { status?: number }).status !== 404) throw error;
+      const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repository, ref: defaultBranch });
+      latestSha = String(commit.data.sha);
+      latestRef = latestSha;
+      latestKind = "default-branch";
+    }
+    const common = { latestRef, latestSha, latestKind, defaultBranch, repositoryUrl };
+    if (!ref) return { status: "unpinned", ...common };
+    const configured = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repository, ref });
+    const currentSha = String(configured.data.sha);
+    if (currentSha === latestSha) return { status: "current", currentRef: ref, currentSha, ...common };
+    const comparison = await client.request("GET /repos/{owner}/{repo}/compare/{basehead}", { ...repository, basehead: `${currentSha}...${latestSha}` });
+    const status = comparison.data.status === "ahead" ? "outdated" : comparison.data.status === "behind" ? "ahead" : "diverged";
+    return { status, currentRef: ref, currentSha, ...common };
+  } catch (error) {
+    return { status: "unavailable", currentRef: ref, repositoryUrl, reason: error instanceof Error ? error.message : "GitHub could not resolve this source." };
+  }
 }

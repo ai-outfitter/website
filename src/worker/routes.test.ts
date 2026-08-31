@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
-const { default: worker, managedResources } = await import("../worker");
+const { default: worker } = await import("../worker");
 
 const env = {
   ASSETS: {
@@ -24,20 +24,6 @@ describe("dashboard routes", () => {
     expect(await response.json()).toEqual({ error: "Sign in required" });
   });
 
-  it("lists only resources recorded by the managed manifest", () => {
-    expect(managedResources({
-      version: 2,
-      catalogSha: "source",
-      workflows: {},
-      files: {
-        "skills/reviewer/SKILL.md": { sha256: "one", workflows: ["review"] },
-        "skills/reviewer/reference.md": { sha256: "two", workflows: ["review"] },
-        "README.md": { sha256: "three", workflows: ["review"] },
-        ".outfitter/website-managed.json": { sha256: "four", workflows: ["review"] },
-      },
-    })).toEqual([{ path: "skills/reviewer", files: 2 }]);
-  });
-
   it("serves the one static dashboard route", async () => {
     const response = await worker.fetch(new Request("https://example.com/dashboard/"), env);
     expect(response.status).toBe(200);
@@ -49,6 +35,14 @@ describe("dashboard routes", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Dashboard");
   });
+
+  for (const path of ["/dashboard/install/adversarial-review/", "/dashboard/Unsupervisedcom/workflows/adversarial-review/"]) {
+    it(`serves the dashboard shell at ${path}`, async () => {
+      const response = await worker.fetch(new Request(`https://example.com${path}`), env);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("Dashboard");
+    });
+  }
 
   for (const path of [
     "/agents",
@@ -62,6 +56,9 @@ describe("dashboard routes", () => {
     "/api/agents/bootstrap",
     "/api/agents/plans",
     "/api/agents/apply",
+    "/api/accounts/acme/workflows",
+    "/api/accounts/acme/repository/resources",
+    "/api/accounts/acme/repository",
   ]) {
     it(`does not keep ${path}`, async () => {
       const response = await worker.fetch(new Request(`https://example.com${path}`), env);

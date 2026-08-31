@@ -10,7 +10,7 @@ import {
 } from "./capabilities";
 
 describe("dashboard capabilities", () => {
-  it("reports local readiness only for an exact installed closure", () => {
+  it("reports local readiness only for an exact installed workflow", () => {
     expect(assessLocalExecution("installed").state).toBe("available");
     expect(assessLocalExecution("outdated").state).toBe("needs-configuration");
     expect(assessLocalExecution("overridden")).toMatchObject({

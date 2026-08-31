@@ -84,14 +84,14 @@ ${supportingCards}
 // these into an organization's or user's `.agents` repository — pushed to
 // the default branch or opened as a pull request — so a reader can adopt a
 // workflow's agents from the page that describes it.
-const STORE_URL = '/dashboard/';
+const STORE_URL = '/dashboard/install/';
 const agentProfiles = (workflow) => [...new Set(workflow.nodes
   .filter((node) => !node.workflow && factory.actors[node.actor]?.kind === 'agent' && factory.actors[node.actor].profile)
   .map((node) => factory.actors[node.actor].profile))];
 const installSection = (workflow) => {
   const profiles = agentProfiles(workflow);
   if (!profiles.length) return '';
-  return `\n## Install the agents\n\nThis workflow runs as ${profiles.map((profile) => `\`${profile}\``).join(', ')}. [Manage this workflow's agent bundle](${STORE_URL}?workflow=${workflow.id}): choose an existing managed repository, preview the exact structured changes, then open a pull request or commit to its default branch.\n`;
+  return `\n## Install the agents\n\nThis workflow uses ${profiles.map((profile) => `\`${profile}\``).join(', ')}. [Install its agent bundle](${STORE_URL}${workflow.id}/), preview the repository changes, then open a pull request or commit them to the default branch.\n`;
 };
 
 for (const workflow of items) {
