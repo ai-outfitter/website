@@ -1,6 +1,7 @@
 import type { Account } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter, type MemoryDB } from "@better-auth/memory-adapter";
+import { GitHubGrantRetryableError } from "./grant-errors";
 
 export function createAuth(env: Env, memory: MemoryDB = { user: [], session: [], account: [], verification: [] }) {
   const store = async (account: Partial<Account> & Record<string, unknown>) => {
@@ -27,5 +28,8 @@ export async function userToken(env: Env, headers: Headers) {
   const id = current?.user.githubUserId;
   if (typeof id !== "number" || id <= 0) throw new Response("Sign in required", { status: 401 });
   try { return await env.GITHUB_USER_GRANTS.getByName(String(id)).getAccessToken(); }
-  catch { throw new Response("GitHub authorization expired", { status: 401 }); }
+  catch (error) {
+    if (error instanceof GitHubGrantRetryableError || (error as { name?: string })?.name === "GitHubGrantRetryableError") throw new Response("GitHub authorization is temporarily unavailable", { status: 503, headers: { "retry-after": "30" } });
+    throw new Response("GitHub authorization expired", { status: 401 });
+  }
 }

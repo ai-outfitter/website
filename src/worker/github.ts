@@ -23,8 +23,18 @@ export async function repositories(client: Octokit): Promise<Repository[]> {
     for (const repo of repos) {
       const owner = String((repo.owner as { login?: string })?.login ?? "");
       const name = String(repo.name);
-      if (name !== ".agents") continue;
-      found.push({ id: Number(repo.id), name, fullName: String(repo.full_name), owner, defaultBranch: String(repo.default_branch), private: Boolean(repo.private), canPush: Boolean((repo.permissions as { push?: boolean })?.push), managedRoot: "" });
+      let managedRoot = "";
+      if (name !== ".agents") {
+        try {
+          const agents = await client.request("GET /repos/{owner}/{repo}/contents/{path}", { owner, repo: name, path: ".agents", ref: String(repo.default_branch) });
+          if (!Array.isArray(agents.data)) continue;
+          managedRoot = ".agents";
+        } catch (error) {
+          if ((error as { status?: number }).status === 404) continue;
+          throw error;
+        }
+      }
+      found.push({ id: Number(repo.id), name, fullName: String(repo.full_name), owner, defaultBranch: String(repo.default_branch), private: Boolean(repo.private), canPush: Boolean((repo.permissions as { push?: boolean })?.push), managedRoot });
     }
   }
   return found.sort((a, b) => a.fullName.localeCompare(b.fullName));

@@ -34,14 +34,18 @@ const { title, description, workflowId } = Astro.props.frontmatter;
     </main>
     <footer>AI Outfitter · Agent workflows you can inspect and adapt.</footer>
     <script>
-      const scope = await fetch('/api/scope').then((response) => response.json()).catch(() => null);
+      type Scope = { activeAccount?: { login?: string } };
+      type WorkflowState = { id: string; state: string };
+      type WorkflowResponse = { workflows: WorkflowState[] };
+      const scope = await fetch('/api/scope').then((response) => response.json() as Promise<Scope>).catch(() => null);
       if (scope?.activeAccount?.login) {
         const login = scope.activeAccount.login;
-        const data = await fetch(`/api/orgs/${encodeURIComponent(login)}/workflows`).then((response) => response.ok ? response.json() : null).catch(() => null);
-        if (data) for (const node of document.querySelectorAll('[data-workflow-id]')) {
+        const data = await fetch(`/api/orgs/${encodeURIComponent(login)}/workflows`).then((response) => response.ok ? response.json() as Promise<WorkflowResponse> : null).catch(() => null);
+        if (data) for (const node of document.querySelectorAll<HTMLElement>('[data-workflow-id]')) {
           const item = data.workflows.find((candidate) => candidate.id === node.dataset.workflowId);
           if (!item) continue;
-          const badge = node.matches('.workflow-card') ? node.querySelector('.workflow-state') : node;
+          const badge = node.matches('.workflow-card') ? node.querySelector<HTMLElement>('.workflow-state') : node;
+          if (!badge) continue;
           badge.hidden = false;
           badge.textContent = `${item.state} · ${login}`;
           badge.classList.add('workflow-state');
