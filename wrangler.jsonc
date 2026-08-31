@@ -20,7 +20,8 @@
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
-    "GITHUB_APP_SLUG": "ai-outfitter"
+    "GITHUB_APP_SLUG": "ai-outfitter",
+    "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
   },
   "durable_objects": {
     "bindings": [

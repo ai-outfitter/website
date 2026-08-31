@@ -1,6 +1,6 @@
 import type { Account } from "better-auth";
 import { betterAuth } from "better-auth";
-import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
+import { memoryAdapter, type MemoryDB } from "@better-auth/memory-adapter";
 
 export function createAuth(env: Env, memory: MemoryDB = { user: [], session: [], account: [], verification: [] }) {
   const store = async (account: Partial<Account> & Record<string, unknown>) => {
