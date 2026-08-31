@@ -59,10 +59,15 @@ devenv shell -- npm run deploy:dry-run
 
 ## Deploy
 
-The deploy command updates its clean source-repository cache, syncs the docs,
-checks and builds the site, validates generated links and search, and deploys
-the Worker. It uses `CLOUDFLARE_API_TOKEN` from the environment, or from the AI
-Outfitter owner `.env` during local use. `publish` is an equivalent alias:
+Cloudflare Workers Builds automatically builds and deploys every push to
+`main`. Production MUST be built from the current `origin/main`; do not deploy
+from a stale local checkout.
+
+For recovery or an intentional manual deployment, the deploy command updates
+its clean source-repository cache, syncs the docs, checks and builds the site,
+validates generated links and search, and deploys the Worker. It uses
+`CLOUDFLARE_API_TOKEN` from the environment, or from the AI Outfitter owner
+`.env` during local use. `publish` is an equivalent alias:
 
 ```sh
 devenv shell -- npm run deploy
