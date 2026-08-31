@@ -11,7 +11,43 @@ devenv shell -- npm ci
 devenv shell -- npm run dev
 ```
 
-The development server prints its local URL. Edit documentation in
+The development server prints its local URL. To use the authenticated dashboard
+without a GitHub OAuth round trip, local setup copies `GH_TOKEN_RO` from the AI
+Outfitter owner `.env` into the ignored Worker secrets file. This follows the
+same owner-environment convention that deploy uses for `CLOUDFLARE_API_TOKEN`:
+
+```sh
+devenv shell -- npm run dev:configure
+devenv shell -- npm run dev:check
+devenv shell -- npm run dev
+```
+
+`npm run dev` runs configure and check automatically. Configure creates
+`.dev.vars` with mode `0600`, generates the local plan-signing key, and never
+prints the PAT. It preserves an existing `.dev.vars`; remove that ignored file
+when you intentionally want to recopy the owner token. `.dev.vars.example`
+documents the generated bindings and remains available for manual setup.
+
+`LOCAL_GITHUB_TOKEN` is honored only when the ignored local secrets file also
+sets `LOCAL_GITHUB_AUTH=true`. Production defines neither binding and continues
+to require GitHub App OAuth. A classic PAT needs `repo` for private repositories
+and `read:org` to discover non-public organization memberships. GitHub returns
+no organizations from `GET /user/orgs` for a fine-grained PAT, so set
+`LOCAL_GITHUB_ACCOUNTS` to the comma-separated organization logins you want to
+exercise and grant that token the required repository and organization access.
+
+Startup validates the local values and calls GitHub's authenticated-user API
+before building the site, so a missing, expired, or rejected PAT fails quickly
+without printing the credential. Run only that preflight with
+`devenv shell -- npm run dev:check`.
+
+`npm run dev` builds the static site and starts the complete Worker so the
+dashboard API and assets share one recorded loopback URL. It rebuilds assets
+when site sources change, and Wrangler reloads Worker code as it changes. For
+documentation-only editing with Astro hot reload, use
+`devenv shell -- npm run dev:site`; that mode does not serve the dashboard API.
+
+Edit documentation in
 the source project repositories and site-owned content in `src/content/docs/`.
 The `docs:sync` step publishes each configured repository's `README.md` and
 complete `docs/` tree under `/docs/<repo>/`.

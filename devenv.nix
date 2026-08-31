@@ -2,9 +2,13 @@
 
 {
   packages = [
+    pkgs.cacert
     pkgs.iproute2
     pkgs.nodejs_22
   ];
+
+  env.SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+  env.NODE_EXTRA_CA_CERTS = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 
   scripts.dev-port.exec = ''
     set -eu
@@ -48,8 +52,7 @@
   '';
 
   processes.web.exec = ''
-    port=$(dev-port 4321 "$PWD")
-    exec node node_modules/.bin/astro dev --host 127.0.0.1 --port "$port"
+    exec npm run dev
   '';
 
   enterShell = ''
