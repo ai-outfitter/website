@@ -45,7 +45,7 @@ export default {
       const orgPage = url.pathname.match(/^\/orgs\/([^/]+)\/workflows\/?$/);
       if (orgPage) return withScopeControl(organizationWorkflowsPage(decodeURIComponent(orgPage[1])));
       const installPage = url.pathname.match(/^\/orgs\/([^/]+)\/install\/?$/);
-      if (installPage) return withScopeControl(agentsPage());
+      if (installPage) return withScopeControl(agentsPage(decodeURIComponent(installPage[1])));
       if (url.pathname === "/api/scope" && request.method === "GET") return json(await scoped(env, request));
       if (url.pathname === "/api/scope" && request.method === "PUT") {
         const state = await scoped(env, request); if (!state.session) return json({ error: "Sign in required" }, 401);
