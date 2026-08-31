@@ -74,13 +74,6 @@ a {
   text-transform: uppercase;
 }
 
-.site-nav .site-auth {
-  margin-left: 0.25rem;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid var(--site-signal);
-  color: var(--site-signal-high);
-}
-
 .site-footer {
   padding-block: 2rem;
   border-top: 1px solid var(--site-line);
