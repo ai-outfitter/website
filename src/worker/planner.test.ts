@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signPlan, verifyPlan, type Plan } from "./planner";
+import { managedBundleFiles, signPlan, verifyPlan, type Plan } from "./planner";
 
 const plan = (expiresAt = Date.now() + 60_000): Plan => ({
   version: 1,
@@ -13,6 +13,12 @@ const plan = (expiresAt = Date.now() + 60_000): Plan => ({
 });
 
 describe("signed repository plans", () => {
+  it("adds a source-pinned ownership manifest to exact workflow files", async () => {
+    const files = await managedBundleFiles({ id: "review", sourceSha: "a".repeat(40), files: [{ path: "workflows/review/workflow.yaml", content: "id: review\n", mode: "100644", sha256: "unused" }] });
+    expect(files.map((file) => file.path)).toEqual(["workflows/review/workflow.yaml", ".outfitter/website-managed.json"]);
+    expect(files[1].content).toContain('"workflow": "review"');
+    expect(files[1].content).toContain('"sourceSha": "aaaaaaaa');
+  });
   it("round trips the exact preview", async () => {
     const token = await signPlan(plan(), "test-plan-secret");
     expect(await verifyPlan(token, "test-plan-secret")).toMatchObject({ repository: "octo/repo", baseSha: "base" });
