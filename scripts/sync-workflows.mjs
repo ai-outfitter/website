@@ -41,8 +41,9 @@ const card = async (workflow) => {
   ].filter(Boolean).join(' · ');
   const summary = workflow.description;
   const tags = workflowTags(workflow).map(({ label, value }) => `<li><span>${label}</span>${value}</li>`).join('\n    ');
-  return `<a class="workflow-card" href="/workflows/${workflow.id}/">
+  return `<a class="workflow-card" data-workflow-id="${workflow.id}" href="/workflows/${workflow.id}/">
   <span class="workflow-card__meta">${metadata || 'Workflow'}</span>
+  <span class="workflow-state" hidden></span>
   <h3>${workflow.title}</h3>
   <p>${summary}</p>
   <ul class="workflow-card__tags" aria-label="Actors and environments">
@@ -102,6 +103,7 @@ for (const workflow of items) {
 layout: ${layout}
 title: ${yamlQuote(workflow.title)}
 description: ${yamlQuote(workflow.description)}
+workflowId: ${yamlQuote(workflow.id)}
 ---
 
 import WorkflowDiagram from '${component}';
