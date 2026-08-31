@@ -15,6 +15,7 @@
     "check": "npm run docs:sync && npm run agents:catalog && astro check",
     "agents:catalog": "node scripts/generate-agents-catalog.mjs",
     "test:analytics": "node scripts/test-analytics.mjs",
+    "secrets:generate": "node scripts/generate-worker-secrets.mjs",
     "test:links": "node scripts/check-links.mjs",
     "test:publish": "node scripts/test-publish.mjs",
     "test:search": "node scripts/test-search.mjs",
