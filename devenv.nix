@@ -40,7 +40,7 @@
     tmp=$(mktemp "$envfile.XXXXXX")
     {
       grep -v '^DEV_\(PORT\|URL\)=' "$envfile" 2>/dev/null || :
-      printf 'DEV_PORT=%s\nDEV_URL=http://localhost:%s\n' "$port" "$port"
+      printf 'DEV_PORT=%s\nDEV_URL=http://%s:%s\n' "$port" "$(hostname)" "$port"
     } >"$tmp"
     mv "$tmp" "$envfile"
     echo "$port"
@@ -54,6 +54,15 @@
   processes.web.exec = ''
     exec npm run dev
   '';
+
+  git-hooks.hooks.website-check = {
+    enable = true;
+    name = "website checks";
+    # Git hooks export the website index path. Do not let documentation sync
+    # reuse that index while reading sibling repositories.
+    entry = "env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE npm run check:precommit";
+    pass_filenames = false;
+  };
 
   enterShell = ''
     node --version

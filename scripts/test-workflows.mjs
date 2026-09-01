@@ -81,8 +81,11 @@ for (const workflow of items) {
 }
 
 const diagramComponent = await readFile('src/components/WorkflowDiagram.astro', 'utf8');
-assert.match(diagramComponent, /data-workflow-node-dialog/);
-assert.match(diagramComponent, /data-workflow-nodes/);
+assert.match(diagramComponent, /WorkflowDiagramFrame/);
+assert.match(diagramComponent, /installWorkflowDiagrams/);
+const diagramFrame = await readFile('src/components/WorkflowDiagramFrame.astro', 'utf8');
+assert.match(diagramFrame, /data-workflow-node-dialog/);
+assert.match(diagramFrame, /data-workflow-nodes/);
 
 const index = await readFile('src/pages/workflows/index.md', 'utf8');
 assert.match(index, /Workflow atlas/);

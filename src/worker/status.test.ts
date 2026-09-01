@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { classifyWorkflow, normalizeManifest } from "./status";
-import type { Catalog, RepositorySnapshot, WorkflowBundle } from "./planner";
+import { classifyWorkflow, readManifest } from "./status";
+import type { Catalog, RepositorySnapshot, WorkflowBundle } from "./management";
 
-const workflow: WorkflowBundle = { id: "review", sourceSha: "new", files: [
+const workflow: WorkflowBundle = { id: "review", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "new", files: [
   { path: "workflows/review/workflow.yaml", content: "id: review", mode: "100644", sha256: "declaration", blobSha: "blob-declaration" },
   { path: "skills/reviewer/SKILL.md", content: "review", mode: "100644", sha256: "skill", blobSha: "blob-skill" },
 ] };
-const catalog: Catalog = { sourceSha: "new", workflows: [workflow] };
+const catalog: Catalog = { sourceRepository: workflow.sourceRepository, sourceSha: "new", workflows: [workflow] };
 const snapshot = (files: RepositorySnapshot["files"], manifest: RepositorySnapshot["manifest"] = null): RepositorySnapshot => ({ sha: "head", files, manifest });
 
 describe("workflow repository status", () => {
@@ -20,14 +20,16 @@ describe("workflow repository status", () => {
   });
 
   it("distinguishes unchanged old installs from modified managed files", () => {
-    const manifest = normalizeManifest({ version: 1, workflow: "review", sourceSha: "old", files: { "workflows/review/workflow.yaml": "declaration", "skills/reviewer/SKILL.md": "skill" } });
+    const manifest = readManifest({ version: 1, workflows: { review: { source: { github: workflow.sourceRepository, ref: "old" }, sourceSha: "old", strategy: "vendored", managesSource: false, files: { "workflows/review/workflow.yaml": "declaration", "skills/reviewer/SKILL.md": "skill" } } }, files: { "workflows/review/workflow.yaml": { sha256: "declaration", workflows: ["review"] }, "skills/reviewer/SKILL.md": { sha256: "skill", workflows: ["review"] } } });
     const exact = { "workflows/review/workflow.yaml": { mode: "100644", blobSha: "x", sha256: "declaration" }, "skills/reviewer/SKILL.md": { mode: "100644", blobSha: "y", sha256: "skill" } };
     expect(classifyWorkflow(workflow, catalog, snapshot(exact, manifest)).state).toBe("outdated");
     expect(classifyWorkflow(workflow, catalog, snapshot({ ...exact, "skills/reviewer/SKILL.md": { mode: "100644", blobSha: "changed", sha256: "changed" } }, manifest)).state).toBe("overridden");
     expect(classifyWorkflow(workflow, catalog, snapshot({}, manifest)).state).toBe("overridden");
   });
 
-  it("reads v1 manifests as v2 provenance", () => {
-    expect(normalizeManifest({ version: 1, workflow: "review", sourceSha: "old", files: { "a": "hash" } })).toEqual({ version: 2, catalogSha: "old", workflows: { review: { sourceSha: "old", files: { a: "hash" } } }, files: { a: { sha256: "hash", workflows: ["review"] } } });
+  it("accepts only the canonical managed manifest shape", () => {
+    expect(readManifest({ version: 1, workflows: {}, files: {} })).toEqual({ version: 1, workflows: {}, files: {} });
+    expect(readManifest({ version: 2, workflows: {}, files: {} })).toBeNull();
+    expect(readManifest({ version: 1, workflow: "review", sourceSha: "old", files: {} })).toBeNull();
   });
 });

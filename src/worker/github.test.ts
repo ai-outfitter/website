@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { accounts, localGitHubToken, tokenAccounts } from "./github";
+import { accounts, localGitHubToken, sourceFreshness, tokenAccounts } from "./github";
 
 describe("account .agents repository discovery", () => {
   it("discovers only the exact account repository and never inspects nested directories", async () => {
@@ -30,6 +30,25 @@ describe("account .agents repository discovery", () => {
     expect(request.mock.calls.filter(([route]) => route === "GET /repos/{owner}/{repo}")).toHaveLength(2);
     expect(request.mock.calls.some(([route]) => String(route).includes("installations/{installation_id}/repositories"))).toBe(false);
   });
+
+  it("lists accounts without repository discovery for navigation", async () => {
+    const request = vi.fn(async (route: string) => {
+      if (route === "GET /user") return { data: { login: "octo" } };
+      if (route === "GET /user/installations") return { data: { installations: [
+        { id: 8, updated_at: "2026-08-31T00:00:00Z", account: { login: "acme", type: "Organization" } },
+      ] } };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+
+    expect(await accounts({ request } as never, { repositories: false })).toEqual([{
+      login: "acme",
+      type: "Organization",
+      installationId: 8,
+      repository: null,
+      updatedAt: "2026-08-31T00:00:00Z",
+    }]);
+    expect(request).not.toHaveBeenCalledWith("GET /repos/{owner}/{repo}", expect.anything());
+  });
 });
 
 describe("local PAT development", () => {
@@ -55,6 +74,20 @@ describe("local PAT development", () => {
     }), true)).toBeNull();
   });
 
+  it("accepts a same-origin private workstation request", () => {
+    const env = {
+      LOCAL_GITHUB_AUTH: "true",
+      LOCAL_GITHUB_TOKEN: "secret",
+      LOCAL_DEV_PORT: "4323",
+    } as Env;
+    expect(localGitHubToken(env, new Request("http://localhost:4323/api/accounts", {
+      headers: { host: "ncrmro-workstation:4323", origin: "http://ncrmro-workstation:4323" },
+    }), true)).toBe("secret");
+    expect(localGitHubToken(env, new Request("http://localhost:4323/api/accounts", {
+      headers: { host: "ncrmro-workstation:4323", origin: "http://other-host:4323" },
+    }), true)).toBeNull();
+  });
+
   it("discovers the PAT owner and organizations with exact .agents lookups", async () => {
     const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
       if (route === "GET /user") return { data: { id: 7, login: "octo", name: "Octo" } };
@@ -74,5 +107,43 @@ describe("local PAT development", () => {
       } },
     ]);
     expect(request.mock.calls.filter(([route]) => route === "GET /repos/{owner}/{repo}")).toHaveLength(2);
+  });
+
+  it("lists PAT accounts without repository discovery for navigation", async () => {
+    const request = vi.fn(async (route: string) => {
+      if (route === "GET /user") return { data: { id: 7, login: "octo", name: "Octo" } };
+      if (route === "GET /user/orgs") return { data: [{ login: "acme" }] };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+
+    await expect(tokenAccounts({ request } as never, "", { repositories: false })).resolves.toEqual([
+      { login: "acme", type: "Organization", installationId: null, repository: null },
+      { login: "octo", type: "User", installationId: null, repository: null },
+    ]);
+    expect(request).not.toHaveBeenCalledWith("GET /repos/{owner}/{repo}", expect.anything());
+  });
+});
+
+describe("catalog source freshness", () => {
+  it("uses the latest non-draft release and classifies an older ref", async () => {
+    const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
+      if (route === "GET /repos/{owner}/{repo}") return { data: { default_branch: "main" } };
+      if (route === "GET /repos/{owner}/{repo}/releases/latest") return { data: { tag_name: "v2" } };
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { data: { sha: input.ref === "v2" ? "latest" : "current" } };
+      if (route === "GET /repos/{owner}/{repo}/compare/{basehead}") return { data: { status: "ahead" } };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    await expect(sourceFreshness({ request } as never, "ai-outfitter/community-profiles", "v1")).resolves.toMatchObject({ status: "outdated", latestRef: "v2", latestSha: "latest", latestKind: "release" });
+  });
+
+  it("falls back to an exact default-branch SHA when no release exists", async () => {
+    const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
+      if (route === "GET /repos/{owner}/{repo}") return { data: { default_branch: "main" } };
+      if (route === "GET /repos/{owner}/{repo}/releases/latest") throw Object.assign(new Error("missing"), { status: 404 });
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { data: { sha: input.ref === "main" ? "f".repeat(40) : "old" } };
+      if (route === "GET /repos/{owner}/{repo}/compare/{basehead}") return { data: { status: "ahead" } };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    await expect(sourceFreshness({ request } as never, "example/catalog", "old")).resolves.toMatchObject({ status: "outdated", latestRef: "f".repeat(40), latestKind: "default-branch" });
   });
 });

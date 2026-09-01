@@ -16,7 +16,7 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*"]
+    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/dashboard/*"]
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",

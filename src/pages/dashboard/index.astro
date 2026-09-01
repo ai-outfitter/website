@@ -1,139 +1,129 @@
 ---
-import { plannedCapabilities } from '../../dashboard/capabilities';
+import { workflowGraphsFromCatalog } from '../../../scripts/catalog-workflow-graphs.mjs';
+import WorkflowDiagramFrame from '../../components/WorkflowDiagramFrame.astro';
+import workflowCatalog from '../../generated/workflow-catalog.json';
 import SiteShell from '../../layouts/SiteShell.astro';
+
+const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
 ---
 
 <SiteShell
   title="Dashboard"
-  description="Manage validated workflow closures in your personal or organization .agents repository."
+  description="Manage workflow bundles in a personal or organization-owned .agents repository."
 >
   <main class="site-frame dashboard" data-dashboard>
-    <section class="dashboard-hero">
-      <p class="eyebrow">GitHub-native configuration</p>
-      <h1>Outfit your agent team.</h1>
-      <p class="lede">
-        Install validated workflow closures into the <code>.agents</code> repository owned by you or your
-        organization. Every update is previewed as exact files before it reaches GitHub.
-      </p>
-    </section>
-
-    <section id="signed-out" class="panel">
-      <p class="panel-label">Available now</p>
+    <section id="signed-out" class="panel" hidden>
       <h2>Connect the AI Outfitter GitHub App</h2>
-      <p>Sign in to manage only repositories named <code>.agents</code> that the App installation can access.</p>
+      <p>Sign in to manage the <code>.agents</code> repositories available to the App.</p>
       <button id="sign-in" class="button primary" type="button">Sign in with GitHub</button>
     </section>
 
     <section id="signed-in" hidden>
-      <div class="toolbar panel">
-        <div>
-          <p class="panel-label">Active account</p>
-          <label for="account">Manage configuration for</label>
-          <select id="account"></select>
-        </div>
-        <div class="toolbar-actions">
-          <a id="install-app" class="button" href="https://github.com/apps/ai-outfitter/installations/new">Add account</a>
-          <button id="sign-out" class="button" type="button">Sign out</button>
-        </div>
-      </div>
+      <section id="dashboard-overview" hidden>
+        <section class="panel configuration">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Repository configuration</p>
+              <h2 id="configuration-title">Loading account…</h2>
+            </div>
+            <div class="actions">
+              <a id="repository-link" href="#" hidden>Open on GitHub</a>
+            </div>
+          </div>
+          <div id="configuration-summary" class="configuration-summary"></div>
+          <div class="source-section">
+            <h3>Catalog sources</h3>
+            <div id="catalog-sources" class="source-grid"></div>
+          </div>
+          <div id="remote-source-section" class="source-section" hidden>
+            <h3>Remote settings</h3>
+            <div id="remote-sources" class="source-grid"></div>
+          </div>
+        </section>
 
-      <div id="account-cards" class="account-grid" aria-label="Accessible accounts"></div>
+        <section class="workflow-status-section">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Repository workflows</p>
+              <h2>Installed</h2>
+            </div>
+          </div>
+          <div id="installed-workflows" class="workflow-grid"></div>
+        </section>
 
-      <section class="panel manager">
+        <section class="workflow-status-section">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Available from AI Outfitter</p>
+              <h2>Community profiles</h2>
+            </div>
+          </div>
+          <div id="community-workflows" class="workflow-grid"></div>
+        </section>
+
+        <div id="source-plan" class="panel plan-panel" hidden>
+          <h2>Preview source change</h2>
+          <div id="source-preview" class="preview"></div>
+          <div id="source-apply-actions" class="actions" hidden>
+            <button class="button primary" type="button" data-apply="pull-request">Open pull request</button>
+            <button class="button" type="button" data-apply="direct">Commit to default branch</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow-manager" class="panel manager" hidden>
+        <a id="manager-back" href="#">← Repository overview</a>
         <div class="section-heading">
           <div>
-            <p class="panel-label">Repository configuration</p>
-            <h2 id="manager-title">Loading account…</h2>
+            <p class="panel-label">Workflow manager</p>
+            <h2 id="manager-title">Loading workflow…</h2>
           </div>
-          <a id="repository-link" href="#" hidden>Open on GitHub</a>
+          <span id="manager-state" class="badge"></span>
         </div>
-
+        <p id="manager-description" class="lede small"></p>
+        <section id="manager-graph" class="manager-graph">
+          <h3>Workflow graph</h3>
+          <WorkflowDiagramFrame id="manager-workflow-graph" title="Workflow" />
+        </section>
+        <script is:inline id="dashboard-workflow-graphs" type="application/json" set:html={JSON.stringify(workflowGraphs).replaceAll('<', '\\u003c')}></script>
+        <dl id="manager-metadata" class="metadata"></dl>
         <div class="manager-grid">
           <div>
-            <label for="workflow">Workflow closure</label>
-            <select id="workflow"></select>
-            <p id="workflow-description" class="muted"></p>
-          </div>
-          <div>
-            <label for="install-mode">Installation</label>
-            <select id="install-mode">
-              <option value="required">Required changes</option>
-              <option value="closure">Entire closure</option>
+            <label for="install-strategy">Installation strategy</label>
+            <select id="install-strategy">
+              <option value="catalog-reference">Pinned catalog reference</option>
+              <option value="vendored">Vendored files</option>
             </select>
-            <p class="muted">Reference the pinned catalog, or vendor every workflow dependency.</p>
+            <p class="muted">Use a pinned source in settings.yml, or copy the workflow files into the repository.</p>
           </div>
-          <div id="local-readiness" class="readiness"></div>
-        </div>
-
-        <div id="create-repository" hidden>
-          <p>This account does not have an accessible <code>.agents</code> repository.</p>
-          <div class="actions">
-            <label for="visibility">Visibility</label>
+          <div id="repository-options" hidden>
+            <label for="visibility">New repository visibility</label>
             <select id="visibility">
               <option value="public">Public</option>
               <option value="private">Private</option>
             </select>
-            <button id="create" class="button primary" type="button">Create .agents repository</button>
           </div>
         </div>
-
-        <div id="manage-repository" hidden>
-          <h3>Installed resources</h3>
-          <p class="muted">Selecting a resource removes every managed workflow that owns it.</p>
-          <div id="resources" class="resource-grid"></div>
-          <div class="actions">
-            <button id="preview" class="button primary" type="button">Preview exact changes</button>
-          </div>
-          <div id="preview-output" class="preview"></div>
-          <div id="apply-actions" class="actions" hidden>
-            <button id="open-pr" class="button primary" type="button">Open pull request</button>
-            <button id="direct-commit" class="button" type="button">Commit to default branch</button>
-          </div>
+        <div id="workflow-actions" class="actions"></div>
+        <div id="workflow-preview" class="preview"></div>
+        <div id="workflow-apply-actions" class="actions" hidden>
+          <button class="button primary" type="button" data-apply="pull-request">Open pull request</button>
+          <button class="button" type="button" data-apply="direct">Commit to default branch</button>
         </div>
       </section>
-
-      <section class="workflow-status-section">
-        <div class="section-heading">
-          <div>
-            <p class="panel-label">Catalog status</p>
-            <h2>Workflow closures</h2>
-          </div>
-        </div>
-        <div id="workflow-cards" class="workflow-grid"></div>
-      </section>
-    </section>
-
-    <section class="roadmap-section" aria-labelledby="roadmap-title">
-      <p class="eyebrow">Design-stage direction</p>
-      <h2 id="roadmap-title">Planned control-plane capabilities</h2>
-      <p class="lede small">
-        These are explicit extension points, not active services. They cannot run agents, receive credentials,
-        or change infrastructure today.
-      </p>
-      <div class="roadmap-grid">
-        {plannedCapabilities.map((capability) => (
-          <article class="roadmap-card" data-capability={capability.id}>
-            <span class="badge planned">Planned</span>
-            <h3>{capability.title}</h3>
-            <p>{capability.summary}</p>
-            <ul>
-              {capability.prerequisites?.map((prerequisite) => <li>{prerequisite}</li>)}
-            </ul>
-          </article>
-        ))}
-      </div>
     </section>
 
     <p id="dashboard-status" class="status" role="status" aria-live="polite"></p>
   </main>
 
   <script>
-    import { startDashboard } from '../../scripts/dashboard';
-    startDashboard();
+    import { installDashboardLifecycle } from '../../scripts/dashboard-app';
+    installDashboardLifecycle();
   </script>
 </SiteShell>
 
 <style is:global>
+  .dashboard [hidden] { display: none !important; }
   .dashboard { padding-block: clamp(3rem, 7vw, 7rem); }
   .dashboard .dashboard-hero { max-width: 60rem; margin-bottom: 3rem; }
   .dashboard h1 { max-width: 13ch; margin: .55rem 0 1.5rem; font-size: clamp(3.2rem, 9vw, 7.8rem); letter-spacing: -.07em; line-height: .86; }
@@ -150,27 +140,33 @@ import SiteShell from '../../layouts/SiteShell.astro';
   .dashboard select { min-width: min(100%, 18rem); padding: .7rem; background: var(--site-ink); text-transform: none; }
   .dashboard label { display: block; margin-bottom: .45rem; font-weight: 700; }
   .dashboard .muted, .dashboard .status { color: var(--site-muted); }
-  .dashboard .toolbar, .dashboard .section-heading, .dashboard .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .dashboard .toolbar-actions, .dashboard .actions { justify-content: flex-start; }
-  .dashboard .account-grid, .dashboard .workflow-grid, .dashboard .roadmap-grid, .dashboard .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; }
-  .dashboard .account-grid { margin-block: 1rem 3rem; }
-  .dashboard .account-card, .dashboard .workflow-card, .dashboard .roadmap-card, .dashboard .resource-card, .dashboard .readiness { padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); }
-  .dashboard .account-card[data-active='true'] { border-color: var(--site-signal); }
-  .dashboard .counts { display: flex; flex-wrap: wrap; gap: .7rem; color: var(--site-muted); font-size: .8rem; }
+  .dashboard .section-heading, .dashboard .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .dashboard .actions { justify-content: flex-start; }
+  .dashboard .workflow-grid, .dashboard .source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
+  .dashboard .workflow-card, .dashboard .source-card { display: block; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
+  .dashboard .workflow-card:hover { border-color: var(--site-signal); }
   .dashboard .manager-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(16rem, .7fr); gap: 1rem; margin-block: 1.5rem; }
-  .dashboard .resource-card label { display: flex; gap: .7rem; align-items: flex-start; }
+  .dashboard .manager-graph { margin-block: 2rem; }
+  .dashboard .workflow-diagram { --sl-color-black: #090a08; --sl-color-gray-2: var(--site-muted); --sl-color-gray-3: var(--site-dim); --sl-color-gray-5: var(--site-line); --sl-color-gray-6: var(--site-canvas-raised); --sl-color-white: var(--site-text); --sl-color-accent: var(--site-signal); --sl-color-accent-low: var(--site-signal-low); --sl-color-accent-high: var(--site-signal-high); }
   .dashboard .preview { margin-top: 1.5rem; }
   .dashboard .preview details { border-top: 1px solid var(--site-line); padding-block: .8rem; }
   .dashboard .preview pre { overflow: auto; padding: 1rem; background: #090a08; color: var(--site-text); white-space: pre-wrap; }
-  .dashboard .workflow-status-section, .dashboard .roadmap-section { margin-top: 5rem; }
-  .dashboard .workflow-card, .dashboard .roadmap-card { min-height: 14rem; }
-  .dashboard .workflow-card p, .dashboard .roadmap-card p, .dashboard .roadmap-card li { color: var(--site-muted); line-height: 1.55; }
-  .dashboard .roadmap-card ul { margin: 1rem 0 0; padding-left: 1.2rem; font-size: .82rem; }
+  .dashboard .workflow-status-section { margin-top: 4rem; }
+  .dashboard .workflow-card { min-height: 12rem; }
+  .dashboard .workflow-card p, .dashboard .source-card p { color: var(--site-muted); line-height: 1.55; }
+  .dashboard .source-section { margin-top: 2rem; }
+  .dashboard .source-card dl, .dashboard .metadata { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .4rem 1rem; }
+  .dashboard dt { color: var(--site-dim); font: 700 .72rem var(--site-font-mono); text-transform: uppercase; }
+  .dashboard dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+  .dashboard .configuration-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-block: 1.2rem; }
+  .dashboard .plan-panel { margin-top: 3rem; }
   .dashboard .badge { display: inline-block; padding: .25rem .5rem; border: 1px solid currentColor; border-radius: 999px; font: 750 .68rem var(--site-font-mono); letter-spacing: .08em; text-transform: uppercase; }
   .dashboard .badge.planned { color: var(--site-dim); }
   .dashboard .badge.available, .dashboard .badge.installed { color: var(--site-signal-high); }
   .dashboard .badge.outdated, .dashboard .badge.needs-configuration { color: #ffd46b; }
-  .dashboard .badge.overridden { color: var(--site-danger); }
+  .dashboard .badge.overridden, .dashboard .badge.diverged, .dashboard .badge.invalid { color: var(--site-danger); }
+  .dashboard .badge.current, .dashboard .badge.local-only { color: var(--site-signal-high); }
+  .dashboard .badge.ahead, .dashboard .badge.unpinned, .dashboard .badge.unavailable { color: #ffd46b; }
   .dashboard .status { min-height: 1.5rem; margin-top: 2rem; }
   @media (max-width: 48rem) { .dashboard .manager-grid { grid-template-columns: 1fr; } }
 </style>

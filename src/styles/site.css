@@ -63,10 +63,12 @@ a {
 .site-nav {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 1.25rem;
 }
 
-.site-nav a {
+.site-nav > a {
+  color: var(--site-signal-high);
   font-size: 0.78rem;
   font-weight: 750;
   letter-spacing: 0.09em;

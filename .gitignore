@@ -5,6 +5,7 @@ dist/
 .devenv/
 .direnv/
 .cache/
+.pre-commit-config.yaml
 .dev.vars
 public/repository-assets/
 src/content/docs/docs/actions/

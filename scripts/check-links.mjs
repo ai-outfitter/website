@@ -4,7 +4,11 @@ import { readFile, readdir } from 'node:fs/promises';
 import { extname, relative, resolve, sep } from 'node:path';
 
 const root = resolve('dist');
-const workerRoutes = new Set();
+const workerRoutes = [
+  /^\/dashboard\/[^/]+\/?$/,
+  /^\/dashboard\/install\/[^/]+\/?$/,
+  /^\/dashboard\/[^/]+\/workflows\/[^/]+\/?$/,
+];
 
 async function walk(directory) {
   const files = [];
@@ -20,7 +24,7 @@ function targetPath(url, sourceFile) {
   const parsed = new URL(url, `https://ai-outfitter.com/${relative(root, sourceFile)}`);
   if (parsed.origin !== 'https://ai-outfitter.com') return;
   const pathname = decodeURIComponent(parsed.pathname);
-  if (workerRoutes.has(pathname)) return root;
+  if (workerRoutes.some((pattern) => pattern.test(pathname))) return root;
   const path = resolve(root, `.${pathname}`);
   if (pathname.endsWith('/')) {
     const index = resolve(path, 'index.html');
