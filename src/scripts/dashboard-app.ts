@@ -346,10 +346,12 @@ export class DashboardController {
     root.replaceChildren(...workflows.map((workflow) => {
       const card = element(this.document, "a", "workflow-card") as HTMLAnchorElement;
       card.href = workflowManagerPath(this.login!, workflow.id);
-      card.appendChild(badge(this.document, workflow.state));
+      const state = badge(this.document, workflow.state);
+      if (workflow.state !== "add") card.appendChild(state);
       const title = element(this.document, headingTag); title.textContent = workflow.title ?? workflow.id;
       const summary = element(this.document, "p"); summary.textContent = workflow.reason ?? workflow.description ?? "";
       card.appendChild(title); card.appendChild(summary);
+      if (workflow.state === "add") card.appendChild(state);
       return card;
     }));
   }

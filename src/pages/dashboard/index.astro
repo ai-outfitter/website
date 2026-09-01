@@ -159,7 +159,7 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .section-heading, .dashboard .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   .dashboard .actions { justify-content: flex-start; }
   .dashboard .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
-  .dashboard .workflow-card { display: block; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
+  .dashboard .workflow-card { display: flex; flex-direction: column; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
   .dashboard .workflow-card:hover { border-color: var(--site-signal); }
   .dashboard .manager-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(16rem, .7fr); gap: 1rem; margin-block: 1.5rem; }
   .dashboard .manager-heading-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
@@ -182,6 +182,7 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .workflow-card { min-height: 12rem; }
   .dashboard .workflow-card h4 { margin: .8rem 0 .5rem; font-size: 1rem; }
   .dashboard .workflow-card p { color: var(--site-muted); line-height: 1.55; }
+  .dashboard .workflow-card .badge.add { align-self: flex-end; margin-top: auto; }
   .dashboard .source-section { margin-top: 2rem; }
   .dashboard .source-table-wrap { overflow-x: auto; }
   .dashboard .source-table { width: 100%; border-collapse: collapse; font-size: .88rem; }

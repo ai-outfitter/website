@@ -73,6 +73,7 @@ describe("dashboard client", () => {
     expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Engineer");
     expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Software factory");
     expect([...document.querySelectorAll("#implementation-workflows h4")].map((heading) => heading.textContent)).toEqual(["Founder", "Engineer", "Software factory"]);
+    expect(document.querySelector("#implementation-workflows .workflow-card")?.lastElementChild).toMatchObject({ textContent: "add" });
     expect(document.querySelector("#community-workflows")?.textContent).not.toContain("Founder");
     expect(document.querySelector("#community-workflows")?.textContent).toContain("Issue triage");
     expect(document.querySelector("#catalog-sources table")?.textContent).toContain("community-profiles");
