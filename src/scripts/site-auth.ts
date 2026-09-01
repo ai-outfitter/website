@@ -4,6 +4,7 @@ import {
   clearCachedAuthState,
   resolveAuthState,
   updateCachedAccountIndex,
+  AUTH_MAX_AGE_MS,
   AUTH_REVALIDATE_MS,
   type AccountIndex,
   type AuthState,
@@ -102,17 +103,22 @@ export async function startSiteAuth(
   const schedule = (state: AuthState, failedAttempts = 0) => {
     if (!scheduleRevalidation || typeof window === "undefined") return;
     if (timer !== undefined) window.clearTimeout(timer);
+    const age = Date.now() - state.fetchedAt;
+    const retryDelay = Math.min(30_000 * (2 ** Math.max(0, failedAttempts - 1)), 300_000);
+    const untilExpiry = AUTH_MAX_AGE_MS - age;
     const delay = failedAttempts
-      ? Math.min(30_000 * (2 ** (failedAttempts - 1)), 300_000)
-      : Math.max(0, AUTH_REVALIDATE_MS - (Date.now() - state.fetchedAt));
+      ? state.status === "signed-in" && untilExpiry >= 0 ? Math.min(retryDelay, untilExpiry + 1) : retryDelay
+      : Math.max(0, AUTH_REVALIDATE_MS - age);
     timer = window.setTimeout(async () => {
       try {
         const refreshed = await resolveAuthState(fetcher, undefined, Date.now(), true);
         render(refreshed);
         schedule(refreshed, refreshed.fetchedAt === state.fetchedAt ? failedAttempts + 1 : 0);
       } catch {
-        const current = cachedAuthState();
-        if (current) schedule(current, failedAttempts + 1);
+        const now = Date.now();
+        const current = cachedAuthState(undefined, now);
+        if (!current && state.status === "signed-in" && now - state.fetchedAt > AUTH_MAX_AGE_MS) renderSignIn(document);
+        schedule(current ?? state, failedAttempts + 1);
       }
     }, delay);
   };

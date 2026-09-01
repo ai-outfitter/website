@@ -110,7 +110,7 @@ describe("site authentication navigation", () => {
     expect(document.querySelector<HTMLAnchorElement>('#site-account-options a[href="/dashboard/Unsupervisedcom/workflows/adversarial-review/"]')).not.toBeNull();
   });
 
-  it("backs off when a forced revalidation cannot refresh cached state", async () => {
+  it("backs off, expires stale navigation, and recovers after a sustained outage", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const index = {
@@ -119,7 +119,12 @@ describe("site authentication navigation", () => {
     };
     const fetcher = vi.fn()
       .mockResolvedValueOnce(Response.json(index))
-      .mockResolvedValue(Response.json({ error: "Unavailable" }, { status: 503 }));
+      .mockResolvedValueOnce(Response.json({ error: "Unavailable" }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ error: "Unavailable" }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ error: "Unavailable" }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ error: "Unavailable" }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ error: "Unavailable" }, { status: 503 }))
+      .mockResolvedValue(Response.json(index));
     await startSiteAuth(document, fetcher as typeof fetch, locationAt(), true);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(fetcher).toHaveBeenCalledTimes(2);
@@ -127,5 +132,13 @@ describe("site authentication navigation", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(1);
     expect(fetcher).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(210_001);
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(document.querySelector<HTMLElement>("#site-auth")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>("#site-account")?.hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(fetcher).toHaveBeenCalledTimes(7);
+    expect(document.querySelector<HTMLElement>("#site-auth")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>("#site-account")?.hidden).toBe(false);
   });
 });

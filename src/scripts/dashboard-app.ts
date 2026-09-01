@@ -101,35 +101,33 @@ export class DashboardController {
       if (!this.active()) return;
       if (auth.status === "signed-out") return this.signedOut();
       this.index = auth.index;
-    }
-    catch (error) {
-      if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
-      return;
-    }
-    const installed = await this.acceptInstallationReturn();
-    if (!this.active()) return;
-    const requested = routeAccount && this.index.accounts.some((account) => account.login === routeAccount) ? routeAccount : null;
-    const login = installed ?? requested ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
-    if (!login) {
-      required(this.document, "signed-in").hidden = false;
-      this.status("Install the GitHub App for your personal account or organization to continue.");
-      publishAuthState(this.document, updateCachedAccountIndex(this.index));
-      return;
-    }
-    if (this.index.activeAccount?.login !== login) {
-      await this.setActiveAccount(login);
+      const installed = await this.acceptInstallationReturn();
       if (!this.active()) return;
+      const requested = routeAccount && this.index.accounts.some((account) => account.login === routeAccount) ? routeAccount : null;
+      const login = installed ?? requested ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
+      if (!login) {
+        required(this.document, "signed-in").hidden = false;
+        this.status("Install the GitHub App for your personal account or organization to continue.");
+        publishAuthState(this.document, updateCachedAccountIndex(this.index));
+        return;
+      }
+      if (this.index.activeAccount?.login !== login) {
+        await this.setActiveAccount(login);
+        if (!this.active()) return;
+      }
+      this.login = login;
+      this.canonicalize(login);
+      publishAuthState(this.document, updateCachedAccountIndex(this.index));
+      const result = requested === login ? await prefetched : null;
+      if (!this.active()) return;
+      if (result instanceof Error) {
+        if ((result as { status?: number }).status === 401) return this.signedOut();
+        throw result;
+      }
+      await this.load(login, result ?? undefined);
+    } catch (error) {
+      if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
     }
-    this.login = login;
-    this.canonicalize(login);
-    publishAuthState(this.document, updateCachedAccountIndex(this.index));
-    const result = requested === login ? await prefetched : null;
-    if (!this.active()) return;
-    if (result instanceof Error) {
-      if ((result as { status?: number }).status === 401) return this.signedOut();
-      throw result;
-    }
-    await this.load(login, result ?? undefined);
   }
 
   dispose() { this.abort.abort(); }

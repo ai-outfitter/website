@@ -260,6 +260,24 @@ function workflowNodeDetails(factory, workflow) {
   return [...triggers, ...nodes];
 }
 
+function workflowDiagramData(declaration, bundledDeclarations = [declaration]) {
+  if (!declaration?.id || !declaration.title || !Array.isArray(declaration.nodes)) {
+    throw new Error('Workflow declaration MUST include an id, title, and nodes.');
+  }
+  const workflows = new Map(bundledDeclarations.map((workflow) => [workflow.id, workflow]));
+  workflows.set(declaration.id, declaration);
+  for (const node of declaration.nodes) {
+    if (node.workflow && !workflows.has(node.workflow)) {
+      throw new Error(`Workflow "${declaration.id}" references missing bundled workflow "${node.workflow}".`);
+    }
+  }
+  return {
+    title: declaration.title,
+    source: renderWorkflow(declaration, workflows, declaration),
+    nodes: workflowNodeDetails(declaration, declaration),
+  };
+}
+
 export async function loadWorkflows(source) {
   const yaml = await readFile(source, 'utf8');
   const factory = parse(yaml);
@@ -279,4 +297,4 @@ export async function loadWorkflows(source) {
   return { factory, items, yaml };
 }
 
-export { actorName, conditionLabel, environmentName, eventName, title, workflowNodeDetails };
+export { actorName, conditionLabel, environmentName, eventName, title, workflowDiagramData, workflowNodeDetails };

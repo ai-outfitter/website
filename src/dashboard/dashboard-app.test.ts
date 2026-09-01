@@ -167,6 +167,31 @@ describe("dashboard client", () => {
     expect(document.querySelector<HTMLElement>("#signed-in")?.hidden).toBe(true);
   });
 
+  it("absorbs cancellation while accepting an installation return", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({ user: {}, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" });
+      if (path === "/api/accounts/active") return new Promise<Response>((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")), { once: true });
+      });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const controller = new DashboardController(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/?installation_id=7"), historyAt());
+    const started = controller.start();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledWith("/api/accounts/active", expect.anything()));
+    controller.dispose();
+    await expect(started).resolves.toBeUndefined();
+    expect(document.querySelector("#dashboard-status")?.textContent).toBe("");
+  });
+
+  it("surfaces a real error while accepting an installation return", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts"
+      ? Response.json({ user: {}, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" })
+      : Response.json({ error: "GitHub rejected the active account" }, { status: 503 }));
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/?installation_id=7"), historyAt());
+    expect(document.querySelector("#dashboard-status")?.textContent).toBe("GitHub rejected the active account");
+  });
+
   it("does not start the dashboard controller after navigating outside the dashboard", () => {
     document.body.innerHTML = "<main>Marketing page</main>";
     const fetcher = vi.spyOn(globalThis, "fetch");

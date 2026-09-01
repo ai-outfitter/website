@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 
+import { workflowGraphsFromCatalog } from './catalog-workflow-graphs.mjs';
+
 const html = await readFile('dist/dashboard/index.html', 'utf8');
 const document = new JSDOM(html).window.document;
 const docsHtml = await readFile('dist/docs/index.html', 'utf8');
@@ -28,6 +30,19 @@ assert.ok(document.querySelector('#community-workflows'), 'The dashboard must se
 assert.equal(document.querySelector('#settings-details'), null, 'The dashboard must not expose a settings.yml disclosure');
 assert.equal(document.querySelector('#settings-yaml'), null, 'The dashboard must not render settings.yml contents');
 assert.ok(document.querySelector('#manager-workflow-graph'), 'Workflow detail must include the workflow graph');
-assert.match(document.querySelector('#dashboard-workflow-graphs')?.textContent ?? '', /adversarial-review/, 'The dashboard must embed the workflow graph catalog');
+const workflowCatalog = JSON.parse(await readFile('src/generated/workflow-catalog.json', 'utf8'));
+const graphPayload = JSON.parse(document.querySelector('#dashboard-workflow-graphs')?.textContent ?? '{}');
+assert.deepEqual(Object.keys(graphPayload).sort(), workflowCatalog.map(({ id }) => id).sort(), 'Dashboard graph coverage must match the installable workflow catalog');
+assert.deepEqual(graphPayload, workflowGraphsFromCatalog(workflowCatalog), 'Dashboard graphs must derive from the exact bundled workflow declarations');
+for (const [id, graph] of Object.entries(graphPayload)) {
+  assert.equal(typeof graph.title, 'string', `${id} must have a graph title`);
+  assert.match(graph.source, /^flowchart\s+(LR|TB)\n/, `${id} must have a Mermaid flowchart`);
+  assert.ok(Array.isArray(graph.nodes) && graph.nodes.length > 0, `${id} must have graph nodes`);
+  assert.equal(new Set(graph.nodes.map((node) => node.id)).size, graph.nodes.length, `${id} graph node ids must be unique`);
+  for (const node of graph.nodes) {
+    assert.equal(typeof node.id, 'string', `${id} graph nodes must have ids`);
+    assert.ok(graph.source.includes(node.id), `${id} Mermaid must include node ${node.id}`);
+  }
+}
 
 console.log('Dashboard runtime styles are globally available and rooted beneath .dashboard.');

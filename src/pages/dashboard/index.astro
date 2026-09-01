@@ -1,16 +1,10 @@
 ---
-import { resolve } from 'node:path';
-
-import { loadWorkflows, workflowNodeDetails } from '../../../scripts/workflows.mjs';
+import { workflowGraphsFromCatalog } from '../../../scripts/catalog-workflow-graphs.mjs';
 import WorkflowDiagramFrame from '../../components/WorkflowDiagramFrame.astro';
+import workflowCatalog from '../../generated/workflow-catalog.json';
 import SiteShell from '../../layouts/SiteShell.astro';
 
-const { factory, items } = await loadWorkflows(resolve('docs/workflows/factory.yaml'));
-const workflowGraphs = Object.fromEntries(items.map((workflow) => [workflow.id, {
-  title: workflow.title,
-  source: workflow.mermaid,
-  nodes: workflowNodeDetails(factory, workflow),
-}]));
+const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
 ---
 
 <SiteShell
