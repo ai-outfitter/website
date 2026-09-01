@@ -1,10 +1,12 @@
-<div class="account-nav">
+<div class="account-nav" transition:persist="account-nav">
+  <span id="site-auth-loading" class="site-auth-loading" role="status" aria-live="polite">Loading account…</span>
   <a id="site-auth" href="/dashboard/" hidden>Sign in</a>
   <details id="site-account" class="site-account" hidden>
     <summary id="site-account-trigger">Account</summary>
     <div class="site-account-menu">
       <p>Switch organization</p>
       <div id="site-account-options"></div>
+      <a id="site-add-organization" href="#">Add organization</a>
       <button id="site-sign-out" type="button">Sign out</button>
     </div>
   </details>
@@ -22,6 +24,7 @@
   }
 
   .account-nav > a,
+  .site-auth-loading,
   .site-account summary,
   .site-account button {
     color: var(--site-signal-high, var(--sl-color-text-accent));
@@ -31,6 +34,11 @@
     letter-spacing: 0.09em;
     text-decoration: none;
     text-transform: uppercase;
+  }
+
+  .site-auth-loading {
+    min-width: 8rem;
+    color: var(--site-dim, var(--sl-color-gray-3));
   }
 
   .site-account {
@@ -85,10 +93,13 @@
     color: var(--site-text, var(--sl-color-white));
   }
 
-  .site-account-menu button {
+  .site-account-menu #site-add-organization {
     margin-top: 0.45rem;
     padding-top: 0.9rem;
     border-top: 1px solid var(--site-line, var(--sl-color-gray-5));
+  }
+
+  .site-account-menu button {
     color: var(--site-danger, #ff9c8f);
   }
 

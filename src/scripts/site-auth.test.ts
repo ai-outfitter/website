@@ -2,6 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { startSiteAuth } from "./site-auth";
+import { resetAuthStateForTests } from "./auth-state";
 
 function locationAt(pathname = "/") {
   return { pathname, assign: vi.fn(), reload: vi.fn() } as unknown as Location;
@@ -9,12 +10,16 @@ function locationAt(pathname = "/") {
 
 describe("site authentication navigation", () => {
   beforeEach(() => {
+    resetAuthStateForTests();
+    sessionStorage.clear();
     document.body.innerHTML = `
       <nav>
+        <span id="site-auth-loading">Loading account…</span>
         <a id="site-auth" href="/dashboard/" hidden>Sign in</a>
         <details id="site-account" hidden>
           <summary id="site-account-trigger">Account</summary>
           <div id="site-account-options"></div>
+          <a id="site-add-organization"></a>
           <button id="site-sign-out"></button>
         </details>
       </nav>`;
@@ -22,7 +27,7 @@ describe("site authentication navigation", () => {
 
   it("keeps the sign-in link when no session exists", async () => {
     const fetcher = vi.fn(async () => Response.json({ error: "Sign in required" }, { status: 401 }));
-    await startSiteAuth(document, fetcher as typeof fetch);
+    await startSiteAuth(document, fetcher as typeof fetch, locationAt(), false);
     expect(document.querySelector("#site-auth")?.textContent).toBe("Sign in");
     expect(document.querySelector<HTMLAnchorElement>("#site-auth")?.hidden).toBe(false);
   });
@@ -38,8 +43,9 @@ describe("site authentication navigation", () => {
         { login: "ks.systems", type: "Organization", updatedAt: "2026-08-29T00:00:00Z" },
         { login: "ncrmro", type: "User", updatedAt: "2026-08-31T00:00:00Z" },
       ],
+      githubAppSlug: "ai-outfitter",
     }));
-    await startSiteAuth(document, fetcher as typeof fetch);
+    await startSiteAuth(document, fetcher as typeof fetch, locationAt(), false);
     const link = document.querySelector<HTMLAnchorElement>("#site-auth");
     expect(link?.hidden).toBe(true);
     expect(document.querySelector<HTMLDetailsElement>("#site-account")?.hidden).toBe(false);
@@ -51,17 +57,17 @@ describe("site authentication navigation", () => {
     ]);
   });
 
-  it("uses the dashboard account event without a duplicate request", async () => {
-    document.body.insertAdjacentHTML("beforeend", '<main data-dashboard></main>');
-    const fetcher = vi.fn();
-    await startSiteAuth(document, fetcher as typeof fetch);
-    document.dispatchEvent(new CustomEvent("outfitter:account", { detail: {
+  it("shows Add organization for an authenticated user without an active account", async () => {
+    const fetcher = vi.fn(async () => Response.json({
       user: { name: "Nicholas" },
-      activeAccount: { login: "ncrmro", type: "User" },
+      activeAccount: null,
       accounts: [],
-    } }));
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(document.querySelector("#site-account-trigger")?.textContent).toBe("ncrmro");
+      githubAppSlug: "outfitter-app",
+    }));
+    await startSiteAuth(document, fetcher as typeof fetch, locationAt(), false);
+    expect(document.querySelector("#site-account-trigger")?.textContent).toBe("Nicholas");
+    expect(document.querySelector<HTMLAnchorElement>("#site-add-organization")?.href).toBe("https://github.com/apps/outfitter-app/installations/new");
+    expect(document.querySelector("#site-add-organization")?.nextElementSibling?.id).toBe("site-sign-out");
   });
 
   it("switches organization scope and signs out from the account menu", async () => {
@@ -72,12 +78,13 @@ describe("site authentication navigation", () => {
         { login: "ai-outfitter", type: "Organization" },
         { login: "Unsupervisedcom", type: "Organization" },
       ],
+      githubAppSlug: "ai-outfitter",
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts"
       ? Response.json(index)
       : Response.json({ activeAccount: index.accounts[1] }));
     const location = locationAt();
-    await startSiteAuth(document, fetcher as typeof fetch, location);
+    await startSiteAuth(document, fetcher as typeof fetch, location, false);
 
     document.querySelector<HTMLAnchorElement>('a[href="/dashboard/Unsupervisedcom/"]')?.click();
     await vi.waitFor(() => expect(location.assign).toHaveBeenCalled());
@@ -94,11 +101,11 @@ describe("site authentication navigation", () => {
   it("preserves the selected workflow when switching organizations", async () => {
     const index = {
       user: {}, activeAccount: { login: "ai-outfitter", type: "Organization" },
-      accounts: [{ login: "ai-outfitter", type: "Organization" }, { login: "Unsupervisedcom", type: "Organization" }],
+      accounts: [{ login: "ai-outfitter", type: "Organization" }, { login: "Unsupervisedcom", type: "Organization" }], githubAppSlug: "ai-outfitter",
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts" ? Response.json(index) : Response.json({ activeAccount: index.accounts[1] }));
     const location = locationAt("/dashboard/ai-outfitter/workflows/adversarial-review/");
-    await startSiteAuth(document, fetcher as typeof fetch, location);
+    await startSiteAuth(document, fetcher as typeof fetch, location, false);
     expect(document.querySelector<HTMLAnchorElement>('#site-account-options a[href="/dashboard/Unsupervisedcom/workflows/adversarial-review/"]')).not.toBeNull();
   });
 });

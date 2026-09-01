@@ -1,16 +1,15 @@
 import { dashboardPathForRoute, dashboardRoute } from "../dashboard/routes";
+import {
+  cachedAuthState,
+  clearCachedAuthState,
+  resolveAuthState,
+  updateCachedAccountIndex,
+  AUTH_REVALIDATE_MS,
+  type AccountIndex,
+  type AuthState,
+} from "./auth-state";
 
-type Account = {
-  login: string;
-  type: "User" | "Organization";
-  updatedAt?: string;
-};
-
-type AccountIndex = {
-  user: { name?: string };
-  activeAccount: Account | null;
-  accounts: Account[];
-};
+export const AUTH_STATE_EVENT = "outfitter:auth-state";
 
 function latestOrganizations(index: AccountIndex) {
   return index.accounts
@@ -24,41 +23,56 @@ function latestOrganizations(index: AccountIndex) {
     .map(({ account }) => account);
 }
 
+function elements(document: Document) {
+  return {
+    loading: document.querySelector<HTMLElement>("#site-auth-loading"),
+    link: document.querySelector<HTMLAnchorElement>("#site-auth"),
+    menu: document.querySelector<HTMLDetailsElement>("#site-account"),
+    trigger: document.querySelector<HTMLElement>("#site-account-trigger"),
+    options: document.querySelector<HTMLElement>("#site-account-options"),
+    addOrganization: document.querySelector<HTMLAnchorElement>("#site-add-organization"),
+    signOut: document.querySelector<HTMLButtonElement>("#site-sign-out"),
+  };
+}
+
 function renderSignIn(document: Document) {
-  const link = document.querySelector<HTMLAnchorElement>("#site-auth");
-  const menu = document.querySelector<HTMLDetailsElement>("#site-account");
+  const { loading, link, menu } = elements(document);
+  if (loading) loading.hidden = true;
   if (link) link.hidden = false;
   if (menu) menu.hidden = true;
 }
 
 function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typeof fetch, location: Location) {
-  const link = document.querySelector<HTMLAnchorElement>("#site-auth");
-  const menu = document.querySelector<HTMLDetailsElement>("#site-account");
-  const trigger = document.querySelector<HTMLElement>("#site-account-trigger");
-  const options = document.querySelector<HTMLElement>("#site-account-options");
-  const signOut = document.querySelector<HTMLButtonElement>("#site-sign-out");
-  if (!link || !menu || !trigger || !options || !signOut) return;
-  const account = index.activeAccount;
-  if (!account) return renderSignIn(document);
-
+  const { loading, link, menu, trigger, options, addOrganization, signOut } = elements(document);
+  if (!link || !menu || !trigger || !options || !addOrganization || !signOut) return;
+  if (loading) loading.hidden = true;
   link.hidden = true;
   menu.hidden = false;
-  trigger.textContent = account.login;
-  trigger.setAttribute("aria-label", `Active ${account.type === "Organization" ? "organization" : "account"}: ${account.login}`);
+  const account = index.activeAccount;
+  trigger.textContent = account?.login ?? index.user.name ?? "Account";
+  trigger.setAttribute("aria-label", account
+    ? `Active ${account.type === "Organization" ? "organization" : "account"}: ${account.login}`
+    : "GitHub account options");
+  addOrganization.href = `https://github.com/apps/${encodeURIComponent(index.githubAppSlug)}/installations/new`;
   const route = dashboardRoute(location.pathname || "/");
   options.replaceChildren(...latestOrganizations(index).map((organization) => {
     const option = document.createElement("a");
     option.href = dashboardPathForRoute(organization.login, route);
     option.textContent = organization.login;
-    if (organization.login === account.login) option.setAttribute("aria-current", "page");
+    if (organization.login === account?.login) option.setAttribute("aria-current", "page");
     option.onclick = async (event) => {
       event.preventDefault();
-      if (organization.login !== account.login) {
-        await fetcher("/api/accounts/active", {
+      if (organization.login !== account?.login) {
+        const response = await fetcher("/api/accounts/active", {
           method: "PUT",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ login: organization.login }),
         });
+        if (response.ok) {
+          const body = await response.json() as { activeAccount?: AccountIndex["activeAccount"] };
+          index.activeAccount = body.activeAccount ?? organization;
+          publishAuthState(document, updateCachedAccountIndex(index));
+        }
       }
       location.assign(option.href);
     };
@@ -66,23 +80,53 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   }));
   signOut.onclick = async () => {
     await fetcher("/api/auth/sign-out", { method: "POST", headers: { "content-type": "application/json" } });
+    clearCachedAuthState();
     location.reload();
   };
+}
+
+export function publishAuthState(document: Document, state: AuthState) {
+  document.dispatchEvent(new CustomEvent<AuthState>(AUTH_STATE_EVENT, { detail: state }));
 }
 
 export async function startSiteAuth(
   document: Document = window.document,
   fetcher: typeof fetch = fetch,
   location: Location = window.location,
+  scheduleRevalidation = true,
 ) {
-  if (document.querySelector("[data-dashboard]")) {
-    document.addEventListener("outfitter:account", (event) => {
-      renderAccountMenu(document, (event as CustomEvent<AccountIndex>).detail, fetcher, location);
-    }, { once: true });
-    document.addEventListener("outfitter:signed-out", () => renderSignIn(document), { once: true });
-    return;
+  const render = (state: AuthState) => state.status === "signed-in"
+    ? renderAccountMenu(document, state.index, fetcher, location)
+    : renderSignIn(document);
+  let timer: number | undefined;
+  const schedule = (state: AuthState) => {
+    if (!scheduleRevalidation || typeof window === "undefined") return;
+    if (timer !== undefined) window.clearTimeout(timer);
+    const delay = Math.max(0, AUTH_REVALIDATE_MS - (Date.now() - state.fetchedAt));
+    timer = window.setTimeout(async () => {
+      try {
+        const refreshed = await resolveAuthState(fetcher, undefined, Date.now(), true);
+        render(refreshed);
+        schedule(refreshed);
+      } catch {
+        schedule({ ...state, fetchedAt: Date.now() });
+      }
+    }, delay);
+  };
+  document.addEventListener(AUTH_STATE_EVENT, (event) => {
+    const state = (event as CustomEvent<AuthState>).detail;
+    render(state);
+    schedule(state);
+  });
+  const cached = cachedAuthState();
+  if (cached) { render(cached); schedule(cached); }
+  try {
+    const resolved = await resolveAuthState(fetcher);
+    render(resolved);
+    schedule(resolved);
+    return resolved;
+  } catch {
+    // Keep a neutral loading state when authentication could not be determined.
+    return null;
   }
-  const response = await fetcher("/api/accounts", { headers: { accept: "application/json" } }).catch(() => null);
-  if (!response?.ok) return renderSignIn(document);
-  renderAccountMenu(document, await response.json() as AccountIndex, fetcher, location);
 }
