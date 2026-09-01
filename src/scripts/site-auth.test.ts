@@ -134,7 +134,8 @@ describe("site authentication navigation", () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(210_001);
     expect(fetcher).toHaveBeenCalledTimes(6);
-    expect(document.querySelector<HTMLElement>("#site-auth")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>("#site-auth-loading")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>("#site-auth")?.hidden).toBe(true);
     expect(document.querySelector<HTMLElement>("#site-account")?.hidden).toBe(true);
     await vi.advanceTimersByTimeAsync(300_000);
     expect(fetcher).toHaveBeenCalledTimes(7);

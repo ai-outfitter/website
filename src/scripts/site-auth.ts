@@ -43,6 +43,13 @@ function renderSignIn(document: Document) {
   if (menu) menu.hidden = true;
 }
 
+function renderLoading(document: Document) {
+  const { loading, link, menu } = elements(document);
+  if (loading) loading.hidden = false;
+  if (link) link.hidden = true;
+  if (menu) menu.hidden = true;
+}
+
 function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typeof fetch, location: Location) {
   const { loading, link, menu, trigger, options, addOrganization, signOut } = elements(document);
   if (!link || !menu || !trigger || !options || !addOrganization || !signOut) return;
@@ -117,7 +124,7 @@ export async function startSiteAuth(
       } catch {
         const now = Date.now();
         const current = cachedAuthState(undefined, now);
-        if (!current && state.status === "signed-in" && now - state.fetchedAt > AUTH_MAX_AGE_MS) renderSignIn(document);
+        if (!current && state.status === "signed-in" && now - state.fetchedAt > AUTH_MAX_AGE_MS) renderLoading(document);
         schedule(current ?? state, failedAttempts + 1);
       }
     }, delay);
