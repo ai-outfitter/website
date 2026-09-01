@@ -53,8 +53,8 @@ export function localGitHubToken(
   if (origin) {
     try {
       const parsed = new URL(origin);
-      const loopback = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
-      if (!loopback || parsed.protocol !== "http:" || parsed.port !== env.LOCAL_DEV_PORT) return null;
+      const requestHost = request.headers.get("host") ?? new URL(request.url).host;
+      if (parsed.protocol !== "http:" || parsed.host !== requestHost) return null;
     } catch {
       return null;
     }

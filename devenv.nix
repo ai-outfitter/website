@@ -40,7 +40,7 @@
     tmp=$(mktemp "$envfile.XXXXXX")
     {
       grep -v '^DEV_\(PORT\|URL\)=' "$envfile" 2>/dev/null || :
-      printf 'DEV_PORT=%s\nDEV_URL=http://localhost:%s\n' "$port" "$port"
+      printf 'DEV_PORT=%s\nDEV_URL=http://%s:%s\n' "$port" "$(hostname)" "$port"
     } >"$tmp"
     mv "$tmp" "$envfile"
     echo "$port"

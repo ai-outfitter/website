@@ -74,6 +74,20 @@ describe("local PAT development", () => {
     }), true)).toBeNull();
   });
 
+  it("accepts a same-origin private workstation request", () => {
+    const env = {
+      LOCAL_GITHUB_AUTH: "true",
+      LOCAL_GITHUB_TOKEN: "secret",
+      LOCAL_DEV_PORT: "4323",
+    } as Env;
+    expect(localGitHubToken(env, new Request("http://localhost:4323/api/accounts", {
+      headers: { host: "ncrmro-workstation:4323", origin: "http://ncrmro-workstation:4323" },
+    }), true)).toBe("secret");
+    expect(localGitHubToken(env, new Request("http://localhost:4323/api/accounts", {
+      headers: { host: "ncrmro-workstation:4323", origin: "http://other-host:4323" },
+    }), true)).toBeNull();
+  });
+
   it("discovers the PAT owner and organizations with exact .agents lookups", async () => {
     const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
       if (route === "GET /user") return { data: { id: 7, login: "octo", name: "Octo" } };

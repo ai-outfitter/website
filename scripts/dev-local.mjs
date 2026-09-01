@@ -24,6 +24,10 @@ function rebuildsSite(filename) {
 const portResult = spawnSync("dev-port", ["4321", projectRoot], { encoding: "utf8" });
 if (portResult.status !== 0) throw new Error(portResult.stderr || "Could not allocate a development port");
 const port = portResult.stdout.trim();
+const tailscaleResult = spawnSync("tailscale", ["ip", "-4"], { encoding: "utf8" });
+const bindAddress = tailscaleResult.status === 0
+  ? tailscaleResult.stdout.trim().split(/\s+/)[0]
+  : "127.0.0.1";
 let building = false;
 let queued = false;
 let debounce;
@@ -35,7 +39,7 @@ let shuttingDown = false;
 function startWrangler() {
   intentionalStop = false;
   wrangler = spawn("wrangler", [
-    "dev", "--local", "--ip", "127.0.0.1", "--port", port,
+    "dev", "--local", "--ip", bindAddress, "--port", port,
     "--define", "__LOCAL_PAT_DEV__:true",
     "--var", `LOCAL_DEV_PORT:${port}`,
   ], { cwd: projectRoot, stdio: "inherit" });
