@@ -58,7 +58,9 @@
   git-hooks.hooks.website-check = {
     enable = true;
     name = "website checks";
-    entry = "npm run check:precommit";
+    # Git hooks export the website index path. Do not let documentation sync
+    # reuse that index while reading sibling repositories.
+    entry = "bash -c 'unset GIT_INDEX_FILE; npm run check:precommit'";
     pass_filenames = false;
   };
 

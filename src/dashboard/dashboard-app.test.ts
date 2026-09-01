@@ -2,11 +2,11 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { startDashboard } from "../scripts/dashboard-app";
+import { resetAuthStateForTests, resolveAuthState } from "../scripts/auth-state";
 
 const fixture = `
   <section id="signed-out" hidden><button id="sign-in"></button></section>
   <section id="signed-in" hidden>
-    <a id="install-app"></a>
     <section id="dashboard-overview" hidden>
       <h2 id="configuration-title"></h2><a id="repository-link"></a><div id="configuration-summary"></div>
       <details id="settings-details"><pre id="settings-yaml"></pre></details>
@@ -35,7 +35,11 @@ function locationAt(url: string) { return { href: url, pathname: new URL(url).pa
 function historyAt() { return { replaceState: vi.fn() } as unknown as History; }
 
 describe("dashboard client", () => {
-  beforeEach(() => { document.body.innerHTML = fixture; });
+  beforeEach(() => {
+    resetAuthStateForTests();
+    sessionStorage.clear();
+    document.body.innerHTML = fixture;
+  });
 
   it("keeps the connect view without an authenticated session", async () => {
     await startDashboard(document, vi.fn(async () => Response.json({ error: "Sign in required" }, { status: 401 })) as typeof fetch, locationAt("https://example.com/dashboard/"));
@@ -82,5 +86,47 @@ describe("dashboard client", () => {
     await vi.waitFor(() => expect(document.querySelector("#workflow-preview")?.textContent).toContain("ADD settings.yml"));
     const planCall = fetcher.mock.calls.find(([path]) => path === "/api/accounts/acme/plans");
     expect(JSON.parse(String(planCall?.[1]?.body))).toMatchObject({ target: "workflow", workflow: "founder", action: "install", strategy: "catalog-reference" });
+  });
+
+  it("reuses authentication state when dashboard content is replaced", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({ user: {}, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" });
+      if (path === "/api/accounts/acme/configuration") return Response.json(configuration);
+      if (path.endsWith("/configuration/freshness")) return Response.json({ sources: [] });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), historyAt());
+    document.body.innerHTML = fixture;
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/workflows/review/"), historyAt());
+    expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
+    expect(document.querySelector("#manager-title")?.textContent).toBe("Adversarial review");
+  });
+
+  it("clears a stale session snapshot when protected configuration returns 401", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts"
+      ? Response.json({ user: {}, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" })
+      : Response.json({ error: "Sign in required" }, { status: 401 }));
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), historyAt());
+    expect(document.querySelector<HTMLElement>("#signed-out")?.hidden).toBe(false);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("rechecks a signed-out snapshot after GitHub returns to the dashboard", async () => {
+    await resolveAuthState(
+      vi.fn(async () => Response.json({ error: "Sign in required" }, { status: 401 })) as typeof fetch,
+      sessionStorage,
+      Date.now(),
+    );
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({ user: {}, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" });
+      if (path === "/api/accounts/acme/configuration") return Response.json(configuration);
+      if (path.endsWith("/configuration/freshness")) return Response.json({ sources: [] });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), historyAt());
+    expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
+    expect(document.querySelector<HTMLElement>("#signed-in")?.hidden).toBe(false);
   });
 });

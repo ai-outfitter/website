@@ -23,7 +23,6 @@ import SiteShell from '../../layouts/SiteShell.astro';
             </div>
             <div class="actions">
               <a id="repository-link" href="#" hidden>Open on GitHub</a>
-              <a id="install-app" class="button" href="https://github.com/apps/ai-outfitter/installations/new">Add organization</a>
             </div>
           </div>
           <div id="configuration-summary" class="configuration-summary"></div>
@@ -112,8 +111,8 @@ import SiteShell from '../../layouts/SiteShell.astro';
   </main>
 
   <script>
-    import { startDashboard } from '../../scripts/dashboard-app';
-    startDashboard();
+    import { installDashboardLifecycle } from '../../scripts/dashboard-app';
+    installDashboardLifecycle();
   </script>
 </SiteShell>
 

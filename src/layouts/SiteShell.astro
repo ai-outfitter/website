@@ -1,5 +1,6 @@
 ---
 import logo from '../assets/logo.svg';
+import { ClientRouter } from 'astro:transitions';
 import AccountNav from '../components/AccountNav.astro';
 import PostHogAnalytics from '../components/PostHogAnalytics.astro';
 import '../styles/site.css';
@@ -10,6 +11,7 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const dashboardShell = Astro.url.pathname.startsWith('/dashboard');
 ---
 
 <!doctype html>
@@ -21,10 +23,11 @@ const { title, description } = Astro.props;
     <link rel="icon" href="/favicon.svg" />
     <title>{title} · AI Outfitter</title>
     <PostHogAnalytics />
+    {dashboardShell && <ClientRouter fallback="swap" />}
   </head>
   <body>
     <header class="site-header">
-      <a class="site-brand" href="/" aria-label="AI Outfitter home">
+      <a class="site-brand" href="/" aria-label="AI Outfitter home" data-astro-reload={dashboardShell ? true : undefined}>
         <img src={logo.src} alt="" />
       </a>
       <nav class="site-nav" aria-label="Primary">
