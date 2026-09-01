@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { removeSource, setSourceRef, summarizeSettings } from "./settings";
+import { pinGitHubSource, removeSource, setSourceRef, setWorkflowAcceptance, summarizeSettings } from "./settings";
 
 const settings = `# account configuration
 default_agent: engineer
@@ -39,5 +39,14 @@ describe("settings.yml document edits", () => {
     expect(updated).not.toContain("./local");
     expect(updated).toContain("example/private");
     expect(updated).toContain("example/shared");
+  });
+
+  it("removes only acceptance while preserving sources and organization agents", () => {
+    const accepted = pinGitHubSource(setWorkflowAcceptance(`${settings}agents:\n  resident-agent:\n    enabled: true\n`, "review", true), "ai-outfitter/community-profiles", "v1.4.0");
+    expect(summarizeSettings(accepted).workflows).toEqual(["review"]);
+    const removed = setWorkflowAcceptance(accepted, "review", false);
+    expect(summarizeSettings(removed).workflows).toEqual([]);
+    expect(removed).toContain("ai-outfitter/community-profiles");
+    expect(removed).toContain("resident-agent");
   });
 });

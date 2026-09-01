@@ -1,35 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { classifyWorkflow, readManifest } from "./status";
-import type { Catalog, RepositorySnapshot, WorkflowBundle } from "./management";
+import { classifyWorkflow } from "./status";
+import type { RepositorySnapshot, WorkflowBundle } from "./management";
 
 const workflow: WorkflowBundle = { id: "review", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "new", files: [
   { path: "workflows/review/workflow.yaml", content: "id: review", mode: "100644", sha256: "declaration", blobSha: "blob-declaration" },
-  { path: "skills/reviewer/SKILL.md", content: "review", mode: "100644", sha256: "skill", blobSha: "blob-skill" },
+  { path: "agents/reviewer/agent.md", content: "review", mode: "100644", sha256: "agent", blobSha: "blob-agent" },
 ] };
-const catalog: Catalog = { sourceRepository: workflow.sourceRepository, sourceSha: "new", workflows: [workflow] };
-const snapshot = (files: RepositorySnapshot["files"], manifest: RepositorySnapshot["manifest"] = null): RepositorySnapshot => ({ sha: "head", files, manifest });
+const snapshot = (files: RepositorySnapshot["files"]): RepositorySnapshot => ({ sha: "head", files });
 
 describe("workflow repository status", () => {
-  it("classifies absent, exact unmanaged, and incomplete unmanaged workflows", () => {
-    expect(classifyWorkflow(workflow, catalog, snapshot({})).state).toBe("add");
-    expect(classifyWorkflow(workflow, catalog, snapshot({
-      "workflows/review/workflow.yaml": { mode: "100644", blobSha: "blob-declaration" },
-      "skills/reviewer/SKILL.md": { mode: "100644", blobSha: "blob-skill" },
-    })).state).toBe("installed");
-    expect(classifyWorkflow(workflow, catalog, snapshot({ "workflows/review/workflow.yaml": { mode: "100644", blobSha: "blob-declaration" } })).state).toBe("overridden");
-  });
-
-  it("distinguishes unchanged old installs from modified managed files", () => {
-    const manifest = readManifest({ version: 1, workflows: { review: { source: { github: workflow.sourceRepository, ref: "old" }, sourceSha: "old", strategy: "vendored", managesSource: false, files: { "workflows/review/workflow.yaml": "declaration", "skills/reviewer/SKILL.md": "skill" } } }, files: { "workflows/review/workflow.yaml": { sha256: "declaration", workflows: ["review"] }, "skills/reviewer/SKILL.md": { sha256: "skill", workflows: ["review"] } } });
-    const exact = { "workflows/review/workflow.yaml": { mode: "100644", blobSha: "x", sha256: "declaration" }, "skills/reviewer/SKILL.md": { mode: "100644", blobSha: "y", sha256: "skill" } };
-    expect(classifyWorkflow(workflow, catalog, snapshot(exact, manifest)).state).toBe("outdated");
-    expect(classifyWorkflow(workflow, catalog, snapshot({ ...exact, "skills/reviewer/SKILL.md": { mode: "100644", blobSha: "changed", sha256: "changed" } }, manifest)).state).toBe("overridden");
-    expect(classifyWorkflow(workflow, catalog, snapshot({}, manifest)).state).toBe("overridden");
-  });
-
-  it("accepts only the canonical managed manifest shape", () => {
-    expect(readManifest({ version: 1, workflows: {}, files: {} })).toEqual({ version: 1, workflows: {}, files: {} });
-    expect(readManifest({ version: 2, workflows: {}, files: {} })).toBeNull();
-    expect(readManifest({ version: 1, workflow: "review", sourceSha: "old", files: {} })).toBeNull();
+  it("separates availability, acceptance, customization, and attention", () => {
+    expect(classifyWorkflow(workflow, snapshot({}), false, true).state).toBe("available");
+    expect(classifyWorkflow(workflow, snapshot({}), true, true).state).toBe("accepted");
+    expect(classifyWorkflow(workflow, snapshot({ "agents/reviewer/agent.md": { mode: "100644", blobSha: "local" } }), true, true).state).toBe("customized");
+    expect(classifyWorkflow(workflow, snapshot({}), true, false).state).toBe("needs-attention");
   });
 });

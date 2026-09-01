@@ -17,6 +17,7 @@ export type SettingsSummary = {
   error?: string;
   defaults: { agent?: string };
   sources: SettingsSource[];
+  workflows: string[];
 };
 
 function document(source: string): Document {
@@ -50,21 +51,36 @@ function sourceAt(section: SettingsSource["section"], index: number, value: unkn
 
 export function summarizeSettings(source: string): SettingsSummary {
   const parsed = document(source);
-  if (parsed.errors.length) return { valid: false, error: parsed.errors[0].message, defaults: {}, sources: [] };
+  if (parsed.errors.length) return { valid: false, error: parsed.errors[0].message, defaults: {}, sources: [], workflows: [] };
   const value = parsed.toJS() as unknown;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { valid: false, error: "settings.yml must contain a mapping", defaults: {}, sources: [] };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { valid: false, error: "settings.yml must contain a mapping", defaults: {}, sources: [], workflows: [] };
   const settings = value as Record<string, unknown>;
   const sources: SettingsSource[] = [];
   for (const section of ["sources", "remote_settings"] as const) {
     const values = settings[section];
-    if (values !== undefined && !Array.isArray(values)) return { valid: false, error: `${section} must be a sequence`, defaults: {}, sources: [] };
+    if (values !== undefined && !Array.isArray(values)) return { valid: false, error: `${section} must be a sequence`, defaults: {}, sources: [], workflows: [] };
     for (const [index, entry] of (values ?? [] as unknown[]).entries()) sources.push(sourceAt(section, index, entry));
   }
+  const workflows = settings.workflows;
+  if (workflows !== undefined && (!Array.isArray(workflows) || workflows.some((id) => !string(id)))) return { valid: false, error: "workflows must be a sequence of IDs", defaults: {}, sources: [], workflows: [] };
   return {
     valid: true,
     defaults: { ...(string(settings.default_agent) ? { agent: string(settings.default_agent) } : {}) },
     sources,
+    workflows: [...new Set((workflows ?? []) as string[])],
   };
+}
+
+export function setWorkflowAcceptance(source: string | undefined, workflow: string, accepted: boolean) {
+  const parsed = document(source ?? "{}\n");
+  if (parsed.errors.length || !isMap(parsed.contents)) throw new Error("settings.yml is invalid");
+  let sequence = parsed.get("workflows", true);
+  if (sequence === undefined) { parsed.set("workflows", parsed.createNode([])); sequence = parsed.get("workflows", true); }
+  if (!isSeq(sequence)) throw new Error("workflows must be a sequence");
+  const index = sequence.items.findIndex((item) => String(item) === workflow);
+  if (accepted && index < 0) sequence.add(workflow);
+  if (!accepted && index >= 0) sequence.items.splice(index, 1);
+  return String(parsed);
 }
 
 function sourceMap(parsed: Document, id: string) {
@@ -100,7 +116,7 @@ export function pinGitHubSource(source: string | undefined, github: string, ref:
   if (!isMap(root)) throw new Error("settings.yml must contain a mapping");
   let sequence = parsed.get("sources", true);
   if (sequence === undefined) {
-    parsed.set("sources", []);
+    parsed.set("sources", parsed.createNode([]));
     sequence = parsed.get("sources", true);
   }
   if (!isSeq(sequence)) throw new Error("sources must be a sequence");
