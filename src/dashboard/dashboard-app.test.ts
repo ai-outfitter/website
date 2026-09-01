@@ -9,7 +9,6 @@ const fixture = `
   <section id="signed-in" hidden>
     <section id="dashboard-overview" hidden>
       <h2 id="configuration-title"></h2><a id="repository-link"></a><div id="configuration-summary"></div>
-      <details id="settings-details"><pre id="settings-yaml"></pre></details>
       <div id="catalog-sources"></div><section id="remote-source-section"><div id="remote-sources"></div></section>
       <div id="installed-workflows"></div><div id="community-workflows"></div>
       <div id="source-plan"><div id="source-preview"></div><div id="source-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div></div>
@@ -59,7 +58,6 @@ describe("dashboard client", () => {
     const history = historyAt();
     await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), history);
     expect(document.querySelector("#configuration-title")?.textContent).toBe("acme/.agents");
-    expect(document.querySelector("#settings-yaml")?.textContent).toContain("# keep");
     expect(document.querySelector("#installed-workflows")?.textContent).toContain("Adversarial review");
     expect(document.querySelector("#community-workflows")?.textContent).toContain("Founder");
     expect(document.querySelector("[data-source-state]")?.textContent).toBe("checking");

@@ -26,10 +26,6 @@ import SiteShell from '../../layouts/SiteShell.astro';
             </div>
           </div>
           <div id="configuration-summary" class="configuration-summary"></div>
-          <details id="settings-details" class="settings-file">
-            <summary>View exact settings.yml</summary>
-            <pre id="settings-yaml"></pre>
-          </details>
           <div class="source-section">
             <h3>Catalog sources</h3>
             <div id="catalog-sources" class="source-grid"></div>
@@ -151,9 +147,6 @@ import SiteShell from '../../layouts/SiteShell.astro';
   .dashboard dt { color: var(--site-dim); font: 700 .72rem var(--site-font-mono); text-transform: uppercase; }
   .dashboard dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
   .dashboard .configuration-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-block: 1.2rem; }
-  .dashboard .settings-file { border-block: 1px solid var(--site-line); padding-block: 1rem; }
-  .dashboard .settings-file summary { cursor: pointer; font-weight: 700; }
-  .dashboard .settings-file pre { max-height: 28rem; overflow: auto; padding: 1rem; background: #090a08; white-space: pre; }
   .dashboard .plan-panel { margin-top: 3rem; }
   .dashboard .badge { display: inline-block; padding: .25rem .5rem; border: 1px solid currentColor; border-radius: 999px; font: 750 .68rem var(--site-font-mono); letter-spacing: .08em; text-transform: uppercase; }
   .dashboard .badge.planned { color: var(--site-dim); }

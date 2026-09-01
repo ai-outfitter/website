@@ -25,6 +25,7 @@ for (const selector of ['workflow-card', 'source-card', 'badge']) {
 }
 assert.ok(document.querySelector('#installed-workflows'), 'The dashboard must separate installed workflows');
 assert.ok(document.querySelector('#community-workflows'), 'The dashboard must separate community workflows');
-assert.ok(document.querySelector('#settings-yaml'), 'The dashboard must expose the exact settings.yml content');
+assert.equal(document.querySelector('#settings-details'), null, 'The dashboard must not expose a settings.yml disclosure');
+assert.equal(document.querySelector('#settings-yaml'), null, 'The dashboard must not render settings.yml contents');
 
 console.log('Dashboard runtime styles are globally available and rooted beneath .dashboard.');

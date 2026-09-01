@@ -205,9 +205,6 @@ export class DashboardController {
       badge(this.document, data.settings.valid ? "valid-settings" : "invalid"),
       defaults,
     );
-    const yaml = required(this.document, "settings-yaml");
-    yaml.textContent = data.settings.exists ? data.settings.raw : "# settings.yml does not exist\n";
-    required<HTMLDetailsElement>(this.document, "settings-details").open = !data.settings.valid;
     this.renderSources();
     this.renderWorkflows();
     if (data.repository) void this.loadFreshness();
