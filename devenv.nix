@@ -55,6 +55,13 @@
     exec npm run dev
   '';
 
+  git-hooks.hooks.website-check = {
+    enable = true;
+    name = "website checks";
+    entry = "npm run check:precommit";
+    pass_filenames = false;
+  };
+
   enterShell = ''
     node --version
     npm --version
