@@ -1,6 +1,6 @@
 import type { Octokit } from "@octokit/core";
 import { sourceFreshness, textBlob, type Repository } from "./github";
-import { repositorySnapshot, workflowStatuses, type Catalog } from "./management";
+import { repositorySnapshot, type Catalog } from "./management";
 import { summarizeSettings, type SettingsSource } from "./settings";
 
 export type ConfigurationSource = SettingsSource & {
@@ -14,8 +14,8 @@ export async function repositoryConfiguration(client: Octokit, login: string, re
     login,
     repository: null,
     repositoryUrl,
-    settings: { exists: false, valid: true, raw: "", defaults: {}, sources: [] as ConfigurationSource[] },
-    workflows: catalog.workflows.map(({ files: _files, ...workflow }) => ({ ...workflow, state: "add" as const })),
+    settings: { exists: false, valid: true, raw: "", defaults: {}, sources: [] as ConfigurationSource[], workflows: [] },
+    workflows: catalog.workflows.map(({ files: _files, ...workflow }) => ({ ...workflow, state: "available" as const, components: [] })),
   };
   const snapshot = await repositorySnapshot(client, login);
   const settingsEntry = snapshot.files["settings.yml"];
@@ -23,19 +23,24 @@ export async function repositoryConfiguration(client: Octokit, login: string, re
   const summary = summarizeSettings(raw);
   const sources = summary.sources.map((source): ConfigurationSource => ({
     ...source,
-    dependencies: Object.entries(snapshot.manifest?.workflows ?? {})
-      .filter(([, workflow]) => source.github !== undefined && workflow.source.github === source.github)
-      .map(([id]) => id)
-      .sort(),
+    dependencies: source.github === catalog.sourceRepository ? summary.workflows : [],
     ...(source.github ? { repositoryUrl: `https://github.com/${source.github}` } : {}),
   }));
-  const statuses = workflowStatuses(catalog, snapshot);
+  const catalogSource = summary.sources.find((source) => source.github === catalog.sourceRepository);
   return {
     login,
     repository,
     repositoryUrl,
     settings: { exists: Boolean(settingsEntry), raw, ...summary, sources },
-    workflows: catalog.workflows.map(({ files: _files, ...workflow }) => ({ ...workflow, ...statuses.find((status) => status.id === workflow.id) })),
+    workflows: catalog.workflows.map(({ files, ...workflow }) => {
+      const accepted = summary.workflows.includes(workflow.id);
+      const customized = accepted && files.some((file) => file.path.startsWith("agents/") && snapshot.files[file.path]);
+      const state = !accepted ? "available" : !catalogSource ? "needs-attention" : customized ? "customized" : "accepted";
+      const components = files
+        .filter((file) => !file.path.startsWith(".outfitter/"))
+        .map((file) => ({ type: file.path.split("/")[0], component: file.path, origin: snapshot.files[file.path] ? "organization" : catalog.sourceRepository }));
+      return { ...workflow, state, ...(state === "needs-attention" ? { reason: "The accepted workflow's catalog source is missing." } : {}), components };
+    }),
   };
 }
 

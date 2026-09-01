@@ -9,7 +9,6 @@ import {
   catalogFrom,
   signPlan,
   verifyPlan,
-  type InstallStrategy,
   type PlanRequest,
   type WorkflowBundle,
 } from "./worker/management";
@@ -53,14 +52,11 @@ async function bodyRecord(request: Request) {
 
 function planRequest(body: Record<string, unknown>, account: Account): PlanRequest {
   if (body.target === "workflow") {
-    if (typeof body.workflow !== "string" || !["install", "update", "repair", "remove"].includes(String(body.action))) throw new Error("Invalid workflow plan request");
-    const strategy = body.strategy;
-    if (strategy !== undefined && strategy !== "catalog-reference" && strategy !== "vendored") throw new Error("Invalid installation strategy");
+    if (typeof body.workflow !== "string" || !["accept", "remove"].includes(String(body.action))) throw new Error("Invalid workflow plan request");
     return {
       target: "workflow",
       workflow: body.workflow,
-      action: body.action as "install" | "update" | "repair" | "remove",
-      ...(strategy ? { strategy: strategy as InstallStrategy } : {}),
+      action: body.action as "accept" | "remove",
       private: body.private === true,
       accountType: account.type,
     };
