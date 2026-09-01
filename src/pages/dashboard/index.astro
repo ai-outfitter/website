@@ -58,7 +58,14 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
               <h2>Community profiles</h2>
             </div>
           </div>
-          <div id="community-workflows" class="workflow-grid"></div>
+          <section class="community-profile-group" aria-labelledby="implementation-profiles-title">
+            <h3 id="implementation-profiles-title">Implementation profiles</h3>
+            <div id="implementation-workflows" class="workflow-grid"></div>
+          </section>
+          <section class="community-profile-group" aria-labelledby="supporting-workflows-title">
+            <h3 id="supporting-workflows-title">Supporting workflows</h3>
+            <div id="community-workflows" class="workflow-grid"></div>
+          </section>
         </section>
 
         <div id="source-plan" class="panel plan-panel" hidden>
@@ -171,7 +178,9 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .preview details { border-top: 1px solid var(--site-line); padding-block: .8rem; }
   .dashboard .preview pre { overflow: auto; padding: 1rem; background: #090a08; color: var(--site-text); white-space: pre-wrap; }
   .dashboard .workflow-status-section { margin-top: 4rem; }
+  .dashboard .community-profile-group { margin-top: 2rem; }
   .dashboard .workflow-card { min-height: 12rem; }
+  .dashboard .workflow-card h4 { margin: .8rem 0 .5rem; font-size: 1rem; }
   .dashboard .workflow-card p { color: var(--site-muted); line-height: 1.55; }
   .dashboard .source-section { margin-top: 2rem; }
   .dashboard .source-table-wrap { overflow-x: auto; }

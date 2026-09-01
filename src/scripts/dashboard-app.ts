@@ -327,21 +327,27 @@ export class DashboardController {
 
   private renderWorkflows() {
     const workflows = this.configuration!.workflows;
+    const implementationProfileOrder = new Map([["founder", 0], ["engineer", 1], ["software-factory", 2]]);
     const order = { overridden: 0, outdated: 1, installed: 2, add: 3 };
     const installed = workflows.filter((workflow) => workflow.state !== "add").sort((left, right) => order[left.state] - order[right.state] || (left.title ?? left.id).localeCompare(right.title ?? right.id));
-    const community = workflows.filter((workflow) => workflow.state === "add").sort((left, right) => (left.title ?? left.id).localeCompare(right.title ?? right.id));
+    const available = workflows.filter((workflow) => workflow.state === "add");
+    const implementation = available
+      .filter((workflow) => implementationProfileOrder.has(workflow.id))
+      .sort((left, right) => implementationProfileOrder.get(left.id)! - implementationProfileOrder.get(right.id)!);
+    const community = available.filter((workflow) => !implementationProfileOrder.has(workflow.id)).sort((left, right) => (left.title ?? left.id).localeCompare(right.title ?? right.id));
     this.renderWorkflowGroup("installed-workflows", installed, "No workflows are installed.");
-    this.renderWorkflowGroup("community-workflows", community, "Every community workflow is installed.");
+    this.renderWorkflowGroup("implementation-workflows", implementation, "Every implementation profile is installed.", "h4");
+    this.renderWorkflowGroup("community-workflows", community, "Every supporting workflow is installed.", "h4");
   }
 
-  private renderWorkflowGroup(id: string, workflows: Workflow[], emptyText: string) {
+  private renderWorkflowGroup(id: string, workflows: Workflow[], emptyText: string, headingTag: "h3" | "h4" = "h3") {
     const root = required(this.document, id);
     if (!workflows.length) { const empty = element(this.document, "p", "muted"); empty.textContent = emptyText; root.replaceChildren(empty); return; }
     root.replaceChildren(...workflows.map((workflow) => {
       const card = element(this.document, "a", "workflow-card") as HTMLAnchorElement;
       card.href = workflowManagerPath(this.login!, workflow.id);
       card.appendChild(badge(this.document, workflow.state));
-      const title = element(this.document, "h3"); title.textContent = workflow.title ?? workflow.id;
+      const title = element(this.document, headingTag); title.textContent = workflow.title ?? workflow.id;
       const summary = element(this.document, "p"); summary.textContent = workflow.reason ?? workflow.description ?? "";
       card.appendChild(title); card.appendChild(summary);
       return card;

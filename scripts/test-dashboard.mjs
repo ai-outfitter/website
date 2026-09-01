@@ -28,6 +28,7 @@ for (const selector of ['workflow-card', 'source-table', 'badge']) {
   assert.doesNotMatch(css, new RegExp(`\\.${selector}[^,{]*:where\\(\\.astro-`), `Runtime .${selector} selectors must not require an Astro scope attribute`);
 }
 assert.ok(document.querySelector('#installed-workflows'), 'The dashboard must separate installed workflows');
+assert.ok(document.querySelector('#implementation-workflows'), 'The dashboard must separate primary implementation profiles');
 assert.ok(document.querySelector('#community-workflows'), 'The dashboard must separate community workflows');
 assert.equal(document.querySelector('#settings-details'), null, 'The dashboard must not expose a settings.yml disclosure');
 assert.equal(document.querySelector('#settings-yaml'), null, 'The dashboard must not render settings.yml contents');

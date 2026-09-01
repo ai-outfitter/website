@@ -13,7 +13,7 @@ const fixture = `
     <section id="dashboard-overview" hidden>
       <h2 id="configuration-title"></h2><a id="repository-link"></a><div id="configuration-summary"></div>
       <div id="catalog-sources"></div><section id="remote-source-section"><div id="remote-sources"></div></section>
-      <div id="installed-workflows"></div><div id="community-workflows"></div>
+      <div id="installed-workflows"></div><div id="implementation-workflows"></div><div id="community-workflows"></div>
       <div id="source-plan"><div id="source-preview"></div><div id="source-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div></div>
     </section>
     <section id="workflow-manager" hidden>
@@ -34,6 +34,9 @@ const configuration = {
   workflows: [
     { id: "review", title: "Adversarial review", description: "Review a pull request.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "outdated", strategy: "catalog-reference" },
     { id: "founder", title: "Founder", description: "Plan the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
+    { id: "engineer", title: "Engineer", description: "Deliver the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
+    { id: "software-factory", title: "Software factory", description: "Automate delivery.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
+    { id: "triage", title: "Issue triage", description: "Route issues.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
   ],
 };
 function locationAt(url: string) { return { href: url, pathname: new URL(url).pathname, assign: vi.fn(), reload: vi.fn() } as unknown as Location; }
@@ -66,7 +69,12 @@ describe("dashboard client", () => {
     await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), history);
     expect(document.querySelector("#configuration-title")?.textContent).toBe("acme/.agents");
     expect(document.querySelector("#installed-workflows")?.textContent).toContain("Adversarial review");
-    expect(document.querySelector("#community-workflows")?.textContent).toContain("Founder");
+    expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Founder");
+    expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Engineer");
+    expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Software factory");
+    expect([...document.querySelectorAll("#implementation-workflows h4")].map((heading) => heading.textContent)).toEqual(["Founder", "Engineer", "Software factory"]);
+    expect(document.querySelector("#community-workflows")?.textContent).not.toContain("Founder");
+    expect(document.querySelector("#community-workflows")?.textContent).toContain("Issue triage");
     expect(document.querySelector("#catalog-sources table")?.textContent).toContain("community-profiles");
     expect(document.querySelector("#catalog-sources table")?.textContent).not.toContain("ai-outfitter/community-profiles");
     expect(document.querySelector("#catalog-sources table")?.textContent).not.toContain("Type");
