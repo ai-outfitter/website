@@ -239,45 +239,69 @@ export class DashboardController {
   private renderSourceGroup(id: string, sources: Source[], emptyText: string) {
     const root = required(this.document, id);
     if (!sources.length) { const empty = element(this.document, "p", "muted"); empty.textContent = emptyText; root.replaceChildren(empty); return; }
-    root.replaceChildren(...sources.map((source) => {
-      const card = element(this.document, "article", "source-card");
-      card.dataset.source = source.id;
+    const wrapper = element(this.document, "div", "source-table-wrap");
+    const table = element(this.document, "table", "source-table");
+    const head = element(this.document, "thead");
+    const header = element(this.document, "tr");
+    for (const label of ["Source", "Type", "Ref", "Status", "Used by", "Actions"]) {
+      const cell = element(this.document, "th");
+      cell.scope = "col";
+      cell.textContent = label;
+      header.appendChild(cell);
+    }
+    head.appendChild(header);
+    const body = element(this.document, "tbody");
+    for (const source of sources) {
+      const row = element(this.document, "tr");
+      row.dataset.source = source.id;
+
+      const sourceCell = element(this.document, "td");
+      sourceCell.dataset.label = "Source";
+      if (source.repositoryUrl) { const link = element(this.document, "a"); link.href = source.repositoryUrl; link.textContent = source.location; sourceCell.appendChild(link); }
+      else sourceCell.textContent = source.location;
+
+      const typeCell = element(this.document, "td");
+      typeCell.dataset.label = "Type";
+      typeCell.textContent = source.kind;
+
+      const refCell = element(this.document, "td");
+      refCell.dataset.label = "Ref";
+      refCell.textContent = source.ref ?? "Unpinned";
+
+      const statusCell = element(this.document, "td", "source-status");
+      statusCell.dataset.label = "Status";
       const state = badge(this.document, "checking");
       state.dataset.sourceState = source.id;
-      card.appendChild(state);
-      const title = element(this.document, "h3");
-      if (source.repositoryUrl) { const link = element(this.document, "a"); link.href = source.repositoryUrl; link.textContent = source.location; title.appendChild(link); }
-      else title.textContent = source.location;
-      card.appendChild(title);
-      const metadata = element(this.document, "dl");
-      for (const node of [...this.definition("Type", source.kind), ...this.definition("Ref", source.ref ?? "Unpinned"), ...this.definition("Path", source.path ?? "Repository root")]) metadata.appendChild(node);
-      const [latestTerm, latestValue] = this.definition("Latest", source.kind === "github" ? "Checking…" : "Not tracked");
+      statusCell.appendChild(state);
+      const latestValue = element(this.document, "span", "source-latest muted");
+      latestValue.textContent = source.kind === "github" ? "Checking…" : "Not tracked";
       latestValue.dataset.sourceLatest = source.id;
-      metadata.appendChild(latestTerm); metadata.appendChild(latestValue);
-      card.appendChild(metadata);
-      const dependency = element(this.document, "p", "muted");
+      statusCell.appendChild(latestValue);
+
+      const dependency = element(this.document, "td", "source-dependencies");
+      dependency.dataset.label = "Used by";
       if (source.dependencies.length) {
-        dependency.append("Used by ");
         source.dependencies.forEach((workflow, index) => {
           if (index) dependency.append(", ");
           const link = element(this.document, "a"); link.href = workflowManagerPath(this.login!, workflow); link.textContent = workflow; dependency.appendChild(link);
         });
-      } else dependency.textContent = "No installed workflow depends on this source.";
-      card.appendChild(dependency);
-      const actions = element(this.document, "div", "actions");
+      } else dependency.textContent = "None";
+
+      const actions = element(this.document, "td", "source-actions");
+      actions.dataset.label = "Actions";
       const update = element(this.document, "button", "button") as HTMLButtonElement;
       update.type = "button"; update.textContent = "Update source"; update.disabled = true; update.dataset.sourceUpdate = source.id; update.onclick = () => void this.previewSource(source.id, "update");
       const remove = element(this.document, "button", "button") as HTMLButtonElement;
       remove.type = "button"; remove.textContent = "Remove source"; remove.disabled = source.dependencies.length > 0; remove.onclick = () => void this.previewSource(source.id, "remove");
-      actions.appendChild(update); actions.appendChild(remove); card.appendChild(actions);
-      return card;
-    }));
-  }
+      actions.appendChild(update); actions.appendChild(remove);
 
-  private definition(term: string, value: string) {
-    const dt = element(this.document, "dt"); dt.textContent = term;
-    const dd = element(this.document, "dd"); dd.textContent = value;
-    return [dt, dd] as const;
+      for (const cell of [sourceCell, typeCell, refCell, statusCell, dependency, actions]) row.appendChild(cell);
+      body.appendChild(row);
+    }
+    table.appendChild(head);
+    table.appendChild(body);
+    wrapper.appendChild(table);
+    root.replaceChildren(wrapper);
   }
 
   private async loadFreshness() {

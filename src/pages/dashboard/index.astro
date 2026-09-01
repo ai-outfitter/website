@@ -33,11 +33,11 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
           <div id="configuration-summary" class="configuration-summary"></div>
           <div class="source-section">
             <h3>Catalog sources</h3>
-            <div id="catalog-sources" class="source-grid"></div>
+            <div id="catalog-sources"></div>
           </div>
           <div id="remote-source-section" class="source-section" hidden>
             <h3>Remote settings</h3>
-            <div id="remote-sources" class="source-grid"></div>
+            <div id="remote-sources"></div>
           </div>
         </section>
 
@@ -143,8 +143,8 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .muted, .dashboard .status { color: var(--site-muted); }
   .dashboard .section-heading, .dashboard .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   .dashboard .actions { justify-content: flex-start; }
-  .dashboard .workflow-grid, .dashboard .source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
-  .dashboard .workflow-card, .dashboard .source-card { display: block; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
+  .dashboard .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
+  .dashboard .workflow-card { display: block; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
   .dashboard .workflow-card:hover { border-color: var(--site-signal); }
   .dashboard .manager-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(16rem, .7fr); gap: 1rem; margin-block: 1.5rem; }
   .dashboard .manager-heading-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
@@ -157,9 +157,18 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .preview pre { overflow: auto; padding: 1rem; background: #090a08; color: var(--site-text); white-space: pre-wrap; }
   .dashboard .workflow-status-section { margin-top: 4rem; }
   .dashboard .workflow-card { min-height: 12rem; }
-  .dashboard .workflow-card p, .dashboard .source-card p { color: var(--site-muted); line-height: 1.55; }
+  .dashboard .workflow-card p { color: var(--site-muted); line-height: 1.55; }
   .dashboard .source-section { margin-top: 2rem; }
-  .dashboard .source-card dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .4rem 1rem; }
+  .dashboard .source-table-wrap { overflow-x: auto; }
+  .dashboard .source-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .dashboard .source-table th, .dashboard .source-table td { padding: .75rem .65rem; border-bottom: 1px solid var(--site-line); text-align: left; vertical-align: top; }
+  .dashboard .source-table th { color: var(--site-dim); font: 700 .68rem var(--site-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .dashboard .source-table td:first-child { padding-left: 0; font-weight: 700; overflow-wrap: anywhere; }
+  .dashboard .source-table th:first-child { padding-left: 0; }
+  .dashboard .source-status { min-width: 8.5rem; }
+  .dashboard .source-latest { display: block; margin-top: .4rem; font-size: .76rem; }
+  .dashboard .source-actions { display: flex; gap: .45rem; }
+  .dashboard .source-actions .button { padding: .45rem .55rem; font-size: .68rem; white-space: nowrap; }
   .dashboard dt { color: var(--site-dim); font: 700 .72rem var(--site-font-mono); text-transform: uppercase; }
   .dashboard dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
   .dashboard .configuration-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-block: 1.2rem; }
@@ -172,5 +181,18 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .badge.current, .dashboard .badge.local-only { color: var(--site-signal-high); }
   .dashboard .badge.ahead, .dashboard .badge.unpinned, .dashboard .badge.unavailable { color: #ffd46b; }
   .dashboard .status { min-height: 1.5rem; margin-top: 2rem; }
-  @media (max-width: 48rem) { .dashboard .manager-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 48rem) {
+    .dashboard .manager-grid { grid-template-columns: 1fr; }
+    .dashboard .source-table-wrap { overflow: visible; }
+    .dashboard .source-table, .dashboard .source-table tbody, .dashboard .source-table tr, .dashboard .source-table td { display: block; width: 100%; }
+    .dashboard .source-table thead { display: none; }
+    .dashboard .source-table tr { padding-block: .65rem; border-top: 1px solid var(--site-line); }
+    .dashboard .source-table tr:last-child { border-bottom: 1px solid var(--site-line); }
+    .dashboard .source-table td, .dashboard .source-table td:first-child { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .65rem; padding: .35rem 0; border: 0; }
+    .dashboard .source-table td::before { content: attr(data-label); color: var(--site-dim); font: 700 .68rem var(--site-font-mono); letter-spacing: .06em; text-transform: uppercase; }
+    .dashboard .source-status { min-width: 0; }
+    .dashboard .source-latest { margin-top: .25rem; }
+    .dashboard .source-actions { display: grid; grid-template-columns: 5rem minmax(0, 1fr); }
+    .dashboard .source-actions .button { width: fit-content; margin-right: .35rem; }
+  }
 </style>

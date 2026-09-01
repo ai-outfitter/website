@@ -66,6 +66,9 @@ describe("dashboard client", () => {
     expect(document.querySelector("#configuration-title")?.textContent).toBe("acme/.agents");
     expect(document.querySelector("#installed-workflows")?.textContent).toContain("Adversarial review");
     expect(document.querySelector("#community-workflows")?.textContent).toContain("Founder");
+    expect(document.querySelector("#catalog-sources table")?.textContent).toContain("ai-outfitter/community-profiles");
+    expect(document.querySelector("#catalog-sources")?.textContent).not.toContain("Repository root");
+    expect(document.querySelector("#catalog-sources")?.textContent).not.toContain("Path");
     expect(document.querySelector("[data-source-state]")?.textContent).toBe("checking");
     releaseFreshness!();
     await vi.waitFor(() => expect(document.querySelector("[data-source-state]")?.textContent).toBe("outdated"));
