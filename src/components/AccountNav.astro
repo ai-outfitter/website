@@ -77,7 +77,8 @@
     text-transform: uppercase;
   }
 
-  .site-account-menu a,
+  .site-account-menu :global(.site-account-option),
+  .site-account-menu #site-add-organization,
   .site-account-menu button {
     display: block;
     width: 100%;
@@ -88,7 +89,7 @@
     text-transform: none;
   }
 
-  .site-account-menu a[aria-current="page"] {
+  .site-account-menu :global(.site-account-option[aria-current="page"]) {
     background: var(--site-signal-low, var(--sl-color-gray-5));
     color: var(--site-text, var(--sl-color-white));
   }

@@ -51,6 +51,7 @@ describe("site authentication navigation", () => {
     expect(link?.hidden).toBe(true);
     expect(document.querySelector<HTMLDetailsElement>("#site-account")?.hidden).toBe(false);
     expect(document.querySelector("#site-account-trigger")?.textContent).toBe("ai-outfitter");
+    expect([...document.querySelectorAll("#site-account-options a")].every((option) => option.classList.contains("site-account-option"))).toBe(true);
     expect([...document.querySelectorAll<HTMLAnchorElement>("#site-account-options a")].map((option) => [option.textContent, option.pathname])).toEqual([
       ["Unsupervisedcom", "/dashboard/Unsupervisedcom/"],
       ["ncrmro", "/dashboard/ncrmro/"],

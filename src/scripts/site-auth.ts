@@ -63,6 +63,7 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   const route = dashboardRoute(location.pathname || "/");
   options.replaceChildren(...accountOptions(index).map((availableAccount) => {
     const option = document.createElement("a");
+    option.className = "site-account-option";
     option.href = dashboardPathForRoute(availableAccount.login, route);
     option.textContent = availableAccount.login;
     if (availableAccount.login === account?.login) option.setAttribute("aria-current", "page");

@@ -21,6 +21,8 @@ assert.equal(document.querySelector('#install-app'), null, 'Add organization mus
 assert.doesNotMatch(document.querySelector('[data-dashboard]')?.textContent ?? '', /Add organization/, 'The dashboard body must not duplicate the authenticated navigation action');
 assert.ok(document.querySelector('meta[name="astro-view-transitions-enabled"]'), 'The dashboard must enable client transitions');
 assert.doesNotMatch(docsHtml, /astro-view-transitions-enabled/, 'Static documentation must not enable client transitions');
+assert.match(css, /\.site-account-option/, 'Runtime account options must have a global style selector');
+assert.doesNotMatch(css, /\.site-account-option\[[^\]]*astro-/, 'Runtime account-option styles must not require an Astro scope attribute');
 for (const selector of ['workflow-card', 'source-table', 'badge']) {
   assert.match(css, new RegExp(`\\.dashboard \\.${selector}(?:[,{:.#\\[])`), `Runtime .${selector} elements must be styled beneath .dashboard`);
   assert.doesNotMatch(css, new RegExp(`\\.${selector}[^,{]*:where\\(\\.astro-`), `Runtime .${selector} selectors must not require an Astro scope attribute`);
