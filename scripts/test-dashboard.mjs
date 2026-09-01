@@ -27,5 +27,7 @@ assert.ok(document.querySelector('#installed-workflows'), 'The dashboard must se
 assert.ok(document.querySelector('#community-workflows'), 'The dashboard must separate community workflows');
 assert.equal(document.querySelector('#settings-details'), null, 'The dashboard must not expose a settings.yml disclosure');
 assert.equal(document.querySelector('#settings-yaml'), null, 'The dashboard must not render settings.yml contents');
+assert.ok(document.querySelector('#manager-workflow-graph'), 'Workflow detail must include the workflow graph');
+assert.match(document.querySelector('#dashboard-workflow-graphs')?.textContent ?? '', /adversarial-review/, 'The dashboard must embed the workflow graph catalog');
 
 console.log('Dashboard runtime styles are globally available and rooted beneath .dashboard.');

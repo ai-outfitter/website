@@ -1,5 +1,16 @@
 ---
+import { resolve } from 'node:path';
+
+import { loadWorkflows, workflowNodeDetails } from '../../../scripts/workflows.mjs';
+import WorkflowDiagramFrame from '../../components/WorkflowDiagramFrame.astro';
 import SiteShell from '../../layouts/SiteShell.astro';
+
+const { factory, items } = await loadWorkflows(resolve('docs/workflows/factory.yaml'));
+const workflowGraphs = Object.fromEntries(items.map((workflow) => [workflow.id, {
+  title: workflow.title,
+  source: workflow.mermaid,
+  nodes: workflowNodeDetails(factory, workflow),
+}]));
 ---
 
 <SiteShell
@@ -76,6 +87,11 @@ import SiteShell from '../../layouts/SiteShell.astro';
           <span id="manager-state" class="badge"></span>
         </div>
         <p id="manager-description" class="lede small"></p>
+        <section id="manager-graph" class="manager-graph">
+          <h3>Workflow graph</h3>
+          <WorkflowDiagramFrame id="manager-workflow-graph" title="Workflow" />
+        </section>
+        <script is:inline id="dashboard-workflow-graphs" type="application/json" set:html={JSON.stringify(workflowGraphs).replaceAll('<', '\\u003c')}></script>
         <dl id="manager-metadata" class="metadata"></dl>
         <div class="manager-grid">
           <div>
@@ -136,6 +152,8 @@ import SiteShell from '../../layouts/SiteShell.astro';
   .dashboard .workflow-card, .dashboard .source-card { display: block; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
   .dashboard .workflow-card:hover { border-color: var(--site-signal); }
   .dashboard .manager-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(16rem, .7fr); gap: 1rem; margin-block: 1.5rem; }
+  .dashboard .manager-graph { margin-block: 2rem; }
+  .dashboard .workflow-diagram { --sl-color-black: #090a08; --sl-color-gray-2: var(--site-muted); --sl-color-gray-3: var(--site-dim); --sl-color-gray-5: var(--site-line); --sl-color-gray-6: var(--site-canvas-raised); --sl-color-white: var(--site-text); --sl-color-accent: var(--site-signal); --sl-color-accent-low: var(--site-signal-low); --sl-color-accent-high: var(--site-signal-high); }
   .dashboard .preview { margin-top: 1.5rem; }
   .dashboard .preview details { border-top: 1px solid var(--site-line); padding-block: .8rem; }
   .dashboard .preview pre { overflow: auto; padding: 1rem; background: #090a08; color: var(--site-text); white-space: pre-wrap; }

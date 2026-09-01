@@ -99,17 +99,20 @@ export async function startSiteAuth(
     ? renderAccountMenu(document, state.index, fetcher, location)
     : renderSignIn(document);
   let timer: number | undefined;
-  const schedule = (state: AuthState) => {
+  const schedule = (state: AuthState, failedAttempts = 0) => {
     if (!scheduleRevalidation || typeof window === "undefined") return;
     if (timer !== undefined) window.clearTimeout(timer);
-    const delay = Math.max(0, AUTH_REVALIDATE_MS - (Date.now() - state.fetchedAt));
+    const delay = failedAttempts
+      ? Math.min(30_000 * (2 ** (failedAttempts - 1)), 300_000)
+      : Math.max(0, AUTH_REVALIDATE_MS - (Date.now() - state.fetchedAt));
     timer = window.setTimeout(async () => {
       try {
         const refreshed = await resolveAuthState(fetcher, undefined, Date.now(), true);
         render(refreshed);
-        schedule(refreshed);
+        schedule(refreshed, refreshed.fetchedAt === state.fetchedAt ? failedAttempts + 1 : 0);
       } catch {
-        schedule({ ...state, fetchedAt: Date.now() });
+        const current = cachedAuthState();
+        if (current) schedule(current, failedAttempts + 1);
       }
     }, delay);
   };

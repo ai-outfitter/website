@@ -16,7 +16,7 @@
     "build": "npm run docs:sync && npm run agents:catalog && astro build",
     "preview": "wrangler dev",
     "check": "npm run docs:sync && npm run agents:catalog && astro check",
-    "check:precommit": "npm run check && npm run test:worker",
+    "check:precommit": "npm run check && npm run test:worker && npm run build && npm run test:dashboard",
     "agents:catalog": "node scripts/generate-agents-catalog.mjs",
     "test:analytics": "node scripts/test-analytics.mjs",
     "test:dashboard": "node scripts/test-dashboard.mjs",

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cachedAuthState, resetAuthStateForTests, resolveAuthState } from "./auth-state";
+import { cachedAuthState, clearCachedAuthState, resetAuthStateForTests, resolveAuthState, updateCachedAccountIndex } from "./auth-state";
 
 const index = {
   user: { name: "Nicholas" },
@@ -45,5 +45,24 @@ describe("client authentication state", () => {
     );
     expect(signedOut.status).toBe("signed-out");
     expect(cachedAuthState(sessionStorage, 1_001)).toEqual(signedOut);
+  });
+
+  it("does not let a cleared in-flight request restore authentication", async () => {
+    let release: ((response: Response) => void) | undefined;
+    const response = new Promise<Response>((resolve) => { release = resolve; });
+    const pending = resolveAuthState(vi.fn(async () => response) as typeof fetch, sessionStorage, 1_000, true);
+    clearCachedAuthState(sessionStorage);
+    release!(Response.json(index));
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(cachedAuthState(sessionStorage, 1_001)).toBeNull();
+  });
+
+  it("preserves the authoritative fetch time when republishing an index", async () => {
+    await resolveAuthState(vi.fn(async () => Response.json(index)) as typeof fetch, sessionStorage, 1_000);
+    const republished = updateCachedAccountIndex({ ...index }, sessionStorage, 30_000);
+    expect(republished.fetchedAt).toBe(1_000);
+    const fetcher = vi.fn(async () => Response.json(index));
+    await resolveAuthState(fetcher as typeof fetch, sessionStorage, 62_000);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

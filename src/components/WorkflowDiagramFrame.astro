@@ -1,0 +1,27 @@
+---
+import './WorkflowDiagram.css';
+
+interface Props {
+  id?: string;
+  title: string;
+  source?: string;
+  nodes?: Array<unknown>;
+}
+
+const { id, title, source = '', nodes = [] } = Astro.props;
+---
+
+<figure id={id} class="workflow-diagram" data-workflow-diagram data-workflow-title={title}>
+  <div class="workflow-diagram__canvas" role="group" aria-label={`${title} workflow diagram`}></div>
+  <p class="workflow-diagram__status" aria-live="polite">Rendering workflow…</p>
+  <script is:inline type="text/plain" data-workflow-source set:html={source}></script>
+  <script is:inline type="application/json" data-workflow-nodes set:html={JSON.stringify(nodes).replaceAll('<', '\\u003c')}></script>
+  <dialog class="workflow-node-dialog" data-workflow-node-dialog>
+    <form method="dialog" class="workflow-node-dialog__close-form">
+      <button class="workflow-node-dialog__close" aria-label="Close step details">×</button>
+    </form>
+    <p class="workflow-node-dialog__eyebrow">Workflow step</p>
+    <h2 data-node-title></h2>
+    <dl data-node-details></dl>
+  </dialog>
+</figure>

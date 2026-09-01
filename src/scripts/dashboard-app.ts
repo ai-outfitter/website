@@ -1,6 +1,7 @@
 import { dashboardPath, dashboardRoute, workflowManagerPath, type DashboardRoute } from "../dashboard/routes";
 import { cachedAuthState, clearCachedAuthState, resolveAuthState, updateCachedAccountIndex, type AccountIndex } from "./auth-state";
 import { publishAuthState } from "./site-auth";
+import { renderWorkflowDiagram, type WorkflowDiagramNode } from "./workflow-diagram";
 
 type Repository = { fullName: string; defaultBranch: string; private: boolean; canPush: boolean };
 type Account = { login: string; type: "User" | "Organization"; installationId: number | null; repository: Repository | null };
@@ -44,6 +45,7 @@ type Freshness = {
   reason?: string;
 };
 type PlanChange = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null };
+type WorkflowGraph = { title: string; source: string; nodes: WorkflowDiagramNode[] };
 type Fetcher = typeof fetch;
 
 function required<T = HTMLElement>(document: Document, id: string): T {
@@ -85,7 +87,8 @@ export class DashboardController {
 
   async start() {
     this.bind();
-    this.route = dashboardRoute(new URL(this.location.href).pathname);
+    const currentUrl = new URL(this.location.href);
+    this.route = dashboardRoute(currentUrl.pathname);
     const routeAccount = this.route?.page === "overview" || this.route?.page === "workflow" ? this.route.account : null;
     const prefetched: Promise<Configuration | Error> | null = routeAccount
       ? this.request<Configuration>(`/api/accounts/${encodeURIComponent(routeAccount)}/configuration`).catch((error: unknown) => error instanceof Error ? error : new Error("Configuration request failed"))
@@ -93,15 +96,18 @@ export class DashboardController {
     try {
       // A GitHub sign-in returns to this static page in the same browser tab,
       // so a recent signed-out navigation snapshot must not mask the new cookie.
-      const auth = await resolveAuthState(this.fetcher, undefined, Date.now(), cachedAuthState()?.status === "signed-out");
+      const forceAccounts = currentUrl.searchParams.has("installation_id") || cachedAuthState()?.status === "signed-out";
+      const auth = await resolveAuthState(this.fetcher, undefined, Date.now(), forceAccounts);
+      if (!this.active()) return;
       if (auth.status === "signed-out") return this.signedOut();
       this.index = auth.index;
     }
     catch (error) {
-      this.showError(error);
+      if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
       return;
     }
     const installed = await this.acceptInstallationReturn();
+    if (!this.active()) return;
     const requested = routeAccount && this.index.accounts.some((account) => account.login === routeAccount) ? routeAccount : null;
     const login = installed ?? requested ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
     if (!login) {
@@ -110,11 +116,15 @@ export class DashboardController {
       publishAuthState(this.document, updateCachedAccountIndex(this.index));
       return;
     }
-    if (this.index.activeAccount?.login !== login) await this.setActiveAccount(login);
+    if (this.index.activeAccount?.login !== login) {
+      await this.setActiveAccount(login);
+      if (!this.active()) return;
+    }
     this.login = login;
     this.canonicalize(login);
     publishAuthState(this.document, updateCachedAccountIndex(this.index));
     const result = requested === login ? await prefetched : null;
+    if (!this.active()) return;
     if (result instanceof Error) {
       if ((result as { status?: number }).status === 401) return this.signedOut();
       throw result;
@@ -124,11 +134,14 @@ export class DashboardController {
 
   dispose() { this.abort.abort(); }
 
+  private active() { return !this.abort.signal.aborted; }
+
   private request<T>(path: string, options?: RequestInit) {
     return api<T>(this.fetcher, path, { ...options, signal: this.abort.signal });
   }
 
   private signedOut() {
+    if (!this.active()) return;
     clearCachedAuthState();
     required(this.document, "signed-in").hidden = true;
     required(this.document, "signed-out").hidden = false;
@@ -144,8 +157,9 @@ export class DashboardController {
     try {
       const callback = new URL(this.location.href);
       const data = await this.request<{ url: string }>("/api/auth/sign-in/social", { method: "POST", body: JSON.stringify({ provider: "github", callbackURL: `${callback.pathname}${callback.search}` }) });
+      if (!this.active()) return;
       this.location.assign(data.url);
-    } catch (error) { this.showError(error); }
+    } catch (error) { if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error); }
   }
 
   private async acceptInstallationReturn() {
@@ -155,10 +169,12 @@ export class DashboardController {
     const account = this.index.accounts.find((candidate) => candidate.installationId !== null && String(candidate.installationId) === installationId);
     if (!account) { this.status("This session cannot access that GitHub App installation."); return null; }
     await this.setActiveAccount(account.login);
+    if (!this.active()) return null;
     return account.login;
   }
 
   private canonicalize(login: string) {
+    if (!this.active()) return;
     const route = this.route;
     let path = dashboardPath(login);
     if (route?.page === "install" || route?.page === "workflow") path = workflowManagerPath(login, route.workflow);
@@ -169,7 +185,7 @@ export class DashboardController {
 
   private async setActiveAccount(login: string) {
     const response = await this.request<{ activeAccount: Account }>("/api/accounts/active", { method: "PUT", body: JSON.stringify({ login }) });
-    if (this.index) {
+    if (this.active() && this.index) {
       this.index.activeAccount = response.activeAccount;
       publishAuthState(this.document, updateCachedAccountIndex(this.index));
     }
@@ -177,14 +193,17 @@ export class DashboardController {
 
   private async load(login: string, configuration?: Configuration) {
     try {
-      this.configuration = configuration ?? await this.request<Configuration>(`/api/accounts/${encodeURIComponent(login)}/configuration`);
+      const loaded = configuration ?? await this.request<Configuration>(`/api/accounts/${encodeURIComponent(login)}/configuration`);
+      if (!this.active()) return;
+      this.configuration = loaded;
       const workflowId = this.route?.page === "workflow" ? this.route.workflow : null;
       if (workflowId) this.renderManager(workflowId); else this.renderOverview();
       required(this.document, "signed-in").hidden = false;
       this.status("");
     } catch (error) {
+      if (!this.active() || (error as { name?: string }).name === "AbortError") return;
       if ((error as { status?: number }).status === 401) this.signedOut();
-      else if ((error as { name?: string }).name !== "AbortError") this.showError(error);
+      else this.showError(error);
     }
   }
 
@@ -266,6 +285,7 @@ export class DashboardController {
   private async loadFreshness() {
     try {
       const result = await this.request<{ sources: Freshness[] }>(`/api/accounts/${encodeURIComponent(this.login!)}/configuration/freshness`);
+      if (!this.active()) return;
       for (const freshness of result.sources) {
         this.freshness.set(freshness.id, freshness);
         const state = [...this.document.querySelectorAll<HTMLElement>("[data-source-state]")].find((element) => element.dataset.sourceState === freshness.id);
@@ -275,7 +295,9 @@ export class DashboardController {
         const latest = [...this.document.querySelectorAll<HTMLElement>("[data-source-latest]")].find((element) => element.dataset.sourceLatest === freshness.id);
         if (latest) latest.textContent = freshness.latestRef ? `${freshness.latestRef} · ${freshness.latestKind === "release" ? "release" : "default branch"}` : freshness.reason ?? "Unavailable";
       }
-    } catch (error) { this.status(error instanceof Error ? `Source checks failed: ${error.message}` : "Source checks failed."); }
+    } catch (error) {
+      if (this.active() && (error as { name?: string }).name !== "AbortError") this.status(error instanceof Error ? `Source checks failed: ${error.message}` : "Source checks failed.");
+    }
   }
 
   private renderWorkflows() {
@@ -310,6 +332,7 @@ export class DashboardController {
     required(this.document, "manager-title").textContent = workflow.title ?? workflow.id;
     const state = required(this.document, "manager-state"); state.className = `badge ${workflow.state}`; state.textContent = workflow.state;
     required(this.document, "manager-description").textContent = workflow.reason ?? workflow.description ?? "";
+    this.renderManagerGraph(workflowId);
     const metadata = required(this.document, "manager-metadata");
     metadata.replaceChildren(...this.definition("Source", workflow.sourceRepository), ...this.definition("Revision", workflow.sourceSha), ...this.definition("Repository", `${this.login}/.agents`));
     const strategy = required<HTMLSelectElement>(this.document, "install-strategy");
@@ -335,6 +358,31 @@ export class DashboardController {
     } else strategy.onchange = null;
   }
 
+  private renderManagerGraph(workflowId: string) {
+    const catalog = required<HTMLScriptElement>(this.document, "dashboard-workflow-graphs");
+    const graphs = JSON.parse(catalog.textContent ?? "{}") as Record<string, WorkflowGraph>;
+    const graph = graphs[workflowId];
+    const section = required(this.document, "manager-graph");
+    section.hidden = !graph;
+    if (!graph) return;
+    const diagram = required(this.document, "manager-workflow-graph");
+    diagram.dataset.workflowTitle = graph.title;
+    const canvas = diagram.querySelector<HTMLElement>(".workflow-diagram__canvas");
+    const status = diagram.querySelector<HTMLElement>(".workflow-diagram__status");
+    const source = diagram.querySelector<HTMLElement>("[data-workflow-source]");
+    const nodes = diagram.querySelector<HTMLElement>("[data-workflow-nodes]");
+    if (!canvas || !status || !source || !nodes) return;
+    canvas.replaceChildren();
+    canvas.setAttribute("aria-label", `${graph.title} workflow diagram`);
+    status.textContent = "Rendering workflow…";
+    source.textContent = graph.source;
+    nodes.textContent = JSON.stringify(graph.nodes.map((node) => {
+      const referencedWorkflow = node.href?.match(/^\/workflows\/([^/]+)\/?$/)?.[1];
+      return referencedWorkflow ? { ...node, href: workflowManagerPath(this.login!, decodeURIComponent(referencedWorkflow)) } : node;
+    }));
+    void renderWorkflowDiagram(diagram, `dashboard-${workflowId}`, this.abort.signal);
+  }
+
   private async previewWorkflow(workflow: Workflow, action: "install" | "update" | "repair" | "remove") {
     const strategy = required<HTMLSelectElement>(this.document, "install-strategy").value;
     await this.preview("workflow", {
@@ -350,6 +398,7 @@ export class DashboardController {
   private async preview(scope: "workflow" | "source", request: Record<string, unknown>) {
     try {
       const result = await this.request<{ token: string; plan: { baseSha: string | null; changes: PlanChange[] } }>(`/api/accounts/${encodeURIComponent(this.login!)}/plans`, { method: "POST", body: JSON.stringify(request) });
+      if (!this.active()) return;
       this.planToken = result.token; this.planScope = scope;
       const root = required(this.document, `${scope}-preview`);
       const summary = element(this.document, "p"); summary.textContent = `Previewing ${result.plan.changes.length} file change${result.plan.changes.length === 1 ? "" : "s"}.`;
@@ -364,7 +413,10 @@ export class DashboardController {
       const direct = apply.querySelector<HTMLButtonElement>('[data-apply="direct"]');
       if (pr) pr.hidden = result.plan.baseSha === null;
       if (direct) direct.textContent = result.plan.baseSha === null ? "Create repository" : "Commit to default branch";
-    } catch (error) { this.planToken = null; this.planScope = null; this.showError(error); }
+    } catch (error) {
+      if (!this.active() || (error as { name?: string }).name === "AbortError") return;
+      this.planToken = null; this.planScope = null; this.showError(error);
+    }
   }
 
   private async apply(mode: "pull-request" | "direct") {
@@ -372,12 +424,13 @@ export class DashboardController {
     if (!confirm(mode === "direct" ? "Commit these changes to the default branch?" : "Open a pull request with these changes?")) return;
     try {
       const result = await this.request<{ pullRequestUrl?: string; commitUrl?: string }>(`/api/accounts/${encodeURIComponent(this.login!)}/plans/apply`, { method: "POST", body: JSON.stringify({ token: this.planToken, mode }) });
+      if (!this.active()) return;
       const target = result.pullRequestUrl ?? result.commitUrl;
       if (target) this.location.assign(target);
-    } catch (error) { this.showError(error); }
+    } catch (error) { if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error); }
   }
 
-  private status(message: string) { required(this.document, "dashboard-status").textContent = message; }
+  private status(message: string) { if (this.active()) required(this.document, "dashboard-status").textContent = message; }
   private showError(error: unknown) { this.status(error instanceof Error ? error.message : "Unexpected dashboard error"); }
 }
 
@@ -390,10 +443,15 @@ let activeController: DashboardController | null = null;
 export function installDashboardLifecycle(documentRef: Document = document) {
   const start = () => {
     activeController?.dispose();
+    activeController = null;
+    if (!documentRef.querySelector("[data-dashboard]")) return;
     activeController = new DashboardController(documentRef, fetch, location, history);
     void activeController.start();
   };
-  documentRef.addEventListener("astro:before-swap", () => activeController?.dispose());
+  documentRef.addEventListener("astro:before-swap", () => {
+    activeController?.dispose();
+    activeController = null;
+  });
   documentRef.addEventListener("astro:page-load", start);
   return start;
 }

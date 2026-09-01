@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { startDashboard } from "../scripts/dashboard-app";
+import { DashboardController, installDashboardLifecycle, startDashboard } from "../scripts/dashboard-app";
 import { resetAuthStateForTests, resolveAuthState } from "../scripts/auth-state";
+import { renderWorkflowDiagram } from "../scripts/workflow-diagram";
+
+vi.mock("../scripts/workflow-diagram", () => ({ renderWorkflowDiagram: vi.fn(async () => undefined) }));
 
 const fixture = `
   <section id="signed-out" hidden><button id="sign-in"></button></section>
@@ -15,6 +18,8 @@ const fixture = `
     </section>
     <section id="workflow-manager" hidden>
       <a id="manager-back"></a><h2 id="manager-title"></h2><span id="manager-state"></span><p id="manager-description"></p><dl id="manager-metadata"></dl>
+      <section id="manager-graph"><figure id="manager-workflow-graph"><div class="workflow-diagram__canvas"></div><p class="workflow-diagram__status"></p><script data-workflow-source></script><script data-workflow-nodes></script></figure></section>
+      <script id="dashboard-workflow-graphs" type="application/json">{"review":{"title":"Adversarial review","source":"flowchart LR\\n  inspect[Inspect]","nodes":[{"id":"inspect","title":"Inspect","kind":"step","details":[]},{"id":"nested","title":"Founder","kind":"workflow","href":"/workflows/founder/","details":[]}]}}</script>
       <select id="install-strategy"><option value="catalog-reference"></option><option value="vendored"></option></select>
       <div id="repository-options"></div><select id="visibility"><option value="public"></option></select><div id="workflow-actions"></div>
       <div id="workflow-preview"></div><div id="workflow-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div>
@@ -35,6 +40,7 @@ function historyAt() { return { replaceState: vi.fn() } as unknown as History; }
 
 describe("dashboard client", () => {
   beforeEach(() => {
+    vi.mocked(renderWorkflowDiagram).mockClear();
     resetAuthStateForTests();
     sessionStorage.clear();
     document.body.innerHTML = fixture;
@@ -99,6 +105,9 @@ describe("dashboard client", () => {
     await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/workflows/review/"), historyAt());
     expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
     expect(document.querySelector("#manager-title")?.textContent).toBe("Adversarial review");
+    expect(document.querySelector("[data-workflow-source]")?.textContent).toContain("flowchart LR");
+    expect(JSON.parse(document.querySelector("[data-workflow-nodes]")?.textContent ?? "[]")[1].href).toBe("/dashboard/acme/workflows/founder/");
+    expect(renderWorkflowDiagram).toHaveBeenCalledWith(document.querySelector("#manager-workflow-graph"), "dashboard-review", expect.any(AbortSignal));
   });
 
   it("clears a stale session snapshot when protected configuration returns 401", async () => {
@@ -126,5 +135,43 @@ describe("dashboard client", () => {
     await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), historyAt());
     expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
     expect(document.querySelector<HTMLElement>("#signed-in")?.hidden).toBe(false);
+  });
+
+  it("refreshes accounts before accepting a returned GitHub App installation", async () => {
+    const previous = { ...account, installationId: 7 };
+    const installed = { ...account, login: "new-org", installationId: 9 };
+    await resolveAuthState(vi.fn(async () => Response.json({ user: {}, activeAccount: previous, accounts: [previous], githubAppSlug: "ai-outfitter" })) as typeof fetch, sessionStorage, Date.now());
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({ user: {}, activeAccount: previous, accounts: [previous, installed], githubAppSlug: "ai-outfitter" });
+      if (path === "/api/accounts/active") return Response.json({ activeAccount: installed });
+      if (path === "/api/accounts/new-org/configuration") return Response.json({ ...configuration, login: "new-org" });
+      if (path.endsWith("/configuration/freshness")) return Response.json({ sources: [] });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/?installation_id=9"), historyAt());
+    expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
+    expect(fetcher).toHaveBeenCalledWith("/api/accounts/active", expect.objectContaining({ body: JSON.stringify({ login: "new-org" }) }));
+  });
+
+  it("does not mutate the page or active account after disposal", async () => {
+    let release: ((response: Response) => void) | undefined;
+    const accounts = new Promise<Response>((resolve) => { release = resolve; });
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts" ? accounts : Response.json({ activeAccount: account }));
+    const controller = new DashboardController(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/?installation_id=7"), historyAt());
+    const started = controller.start();
+    controller.dispose();
+    release!(Response.json({ user: {}, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" }));
+    await started;
+    expect(fetcher.mock.calls.some(([path]) => path === "/api/accounts/active")).toBe(false);
+    expect(document.querySelector<HTMLElement>("#signed-in")?.hidden).toBe(true);
+  });
+
+  it("does not start the dashboard controller after navigating outside the dashboard", () => {
+    document.body.innerHTML = "<main>Marketing page</main>";
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    installDashboardLifecycle(document)();
+    expect(fetcher).not.toHaveBeenCalled();
+    fetcher.mockRestore();
   });
 });

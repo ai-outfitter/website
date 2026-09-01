@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startSiteAuth } from "./site-auth";
 import { resetAuthStateForTests } from "./auth-state";
 
@@ -9,6 +9,7 @@ function locationAt(pathname = "/") {
 }
 
 describe("site authentication navigation", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     resetAuthStateForTests();
     sessionStorage.clear();
@@ -107,5 +108,24 @@ describe("site authentication navigation", () => {
     const location = locationAt("/dashboard/ai-outfitter/workflows/adversarial-review/");
     await startSiteAuth(document, fetcher as typeof fetch, location, false);
     expect(document.querySelector<HTMLAnchorElement>('#site-account-options a[href="/dashboard/Unsupervisedcom/workflows/adversarial-review/"]')).not.toBeNull();
+  });
+
+  it("backs off when a forced revalidation cannot refresh cached state", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const index = {
+      user: {}, activeAccount: { login: "ai-outfitter", type: "Organization" },
+      accounts: [{ login: "ai-outfitter", type: "Organization" }], githubAppSlug: "ai-outfitter",
+    };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(Response.json(index))
+      .mockResolvedValue(Response.json({ error: "Unavailable" }, { status: 503 }));
+    await startSiteAuth(document, fetcher as typeof fetch, locationAt(), true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
