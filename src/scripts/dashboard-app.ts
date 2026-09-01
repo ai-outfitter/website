@@ -11,9 +11,9 @@ type Workflow = {
   description?: string;
   sourceRepository: string;
   sourceSha: string;
-  state: "add" | "installed" | "outdated" | "overridden";
-  strategy?: "catalog-reference" | "vendored";
+  state: "available" | "accepted" | "customized" | "needs-attention";
   reason?: string;
+  components?: Array<{ type: string; component: string; origin: string }>;
 };
 type Source = {
   id: string;
@@ -30,7 +30,7 @@ type Configuration = {
   login: string;
   repository: Repository | null;
   repositoryUrl: string;
-  settings: { exists: boolean; valid: boolean; error?: string; raw: string; defaults: { agent?: string }; sources: Source[] };
+  settings: { exists: boolean; valid: boolean; error?: string; raw: string; defaults: { agent?: string }; sources: Source[]; workflows: string[] };
   workflows: Workflow[];
 };
 type Freshness = {
@@ -328,16 +328,16 @@ export class DashboardController {
   private renderWorkflows() {
     const workflows = this.configuration!.workflows;
     const implementationProfileOrder = new Map([["founder", 0], ["engineer", 1], ["software-factory", 2]]);
-    const order = { overridden: 0, outdated: 1, installed: 2, add: 3 };
-    const installed = workflows.filter((workflow) => workflow.state !== "add").sort((left, right) => order[left.state] - order[right.state] || (left.title ?? left.id).localeCompare(right.title ?? right.id));
-    const available = workflows.filter((workflow) => workflow.state === "add");
+    const order = { "needs-attention": 0, customized: 1, accepted: 2, available: 3 };
+    const installed = workflows.filter((workflow) => workflow.state !== "available").sort((left, right) => order[left.state] - order[right.state] || (left.title ?? left.id).localeCompare(right.title ?? right.id));
+    const available = workflows.filter((workflow) => workflow.state === "available");
     const implementation = available
       .filter((workflow) => implementationProfileOrder.has(workflow.id))
       .sort((left, right) => implementationProfileOrder.get(left.id)! - implementationProfileOrder.get(right.id)!);
     const community = available.filter((workflow) => !implementationProfileOrder.has(workflow.id)).sort((left, right) => (left.title ?? left.id).localeCompare(right.title ?? right.id));
-    this.renderWorkflowGroup("installed-workflows", installed, "No workflows are installed.");
-    this.renderWorkflowGroup("implementation-workflows", implementation, "Every implementation profile is installed.", "h4");
-    this.renderWorkflowGroup("community-workflows", community, "Every supporting workflow is installed.", "h4");
+    this.renderWorkflowGroup("installed-workflows", installed, "No workflows are accepted.");
+    this.renderWorkflowGroup("implementation-workflows", implementation, "Every implementation profile is accepted.", "h4");
+    this.renderWorkflowGroup("community-workflows", community, "Every supporting workflow is accepted.", "h4");
   }
 
   private renderWorkflowGroup(id: string, workflows: Workflow[], emptyText: string, headingTag: "h3" | "h4" = "h3") {
@@ -347,11 +347,11 @@ export class DashboardController {
       const card = element(this.document, "a", "workflow-card") as HTMLAnchorElement;
       card.href = workflowManagerPath(this.login!, workflow.id);
       const state = badge(this.document, workflow.state);
-      if (workflow.state !== "add") card.appendChild(state);
+      if (workflow.state !== "available") card.appendChild(state);
       const title = element(this.document, headingTag); title.textContent = workflow.title ?? workflow.id;
       const summary = element(this.document, "p"); summary.textContent = workflow.reason ?? workflow.description ?? "";
       card.appendChild(title); card.appendChild(summary);
-      if (workflow.state === "add") card.appendChild(state);
+      if (workflow.state === "available") card.appendChild(state);
       return card;
     }));
   }
@@ -367,31 +367,16 @@ export class DashboardController {
     required(this.document, "manager-description").textContent = workflow.reason ?? workflow.description ?? "";
     required(this.document, "manager-source").textContent = workflow.sourceRepository;
     this.renderManagerGraph(workflowId);
-    const strategy = required<HTMLSelectElement>(this.document, "install-strategy");
-    strategy.value = workflow.strategy ?? "catalog-reference";
-    this.renderManagerConfiguration(workflowId, strategy.value);
+    this.renderManagerConfiguration(workflow);
     required(this.document, "repository-options").hidden = Boolean(this.configuration!.repository);
     const actions = required(this.document, "workflow-actions");
-    const definitions: Array<{ action: "install" | "update" | "repair" | "remove"; label: string; primary?: boolean }> = workflow.state === "add"
-      ? [{ action: "install", label: "Preview installation", primary: true }]
-      : workflow.state === "outdated"
-        ? [{ action: "update", label: "Preview update", primary: true }, { action: "remove", label: "Preview removal" }]
-        : workflow.state === "overridden"
-          ? [{ action: "repair", label: "Preview repair", primary: true }, { action: "remove", label: "Preview removal" }]
-          : [{ action: "update", label: "Preview strategy change", primary: true }, { action: "remove", label: "Preview removal" }];
+    const definitions: Array<{ action: "accept" | "remove"; label: string; primary?: boolean }> = workflow.state === "available"
+      ? [{ action: "accept", label: "Preview acceptance", primary: true }]
+      : [{ action: "remove", label: "Remove acceptance" }];
     actions.replaceChildren(...definitions.map(({ action, label, primary }) => {
       const button = element(this.document, "button", `button${primary ? " primary" : ""}`) as HTMLButtonElement;
       button.type = "button"; button.textContent = label; button.dataset.workflowAction = action; button.onclick = () => void this.previewWorkflow(workflow, action); return button;
     }));
-    if (workflow.state === "installed") {
-      const update = actions.querySelector<HTMLButtonElement>('[data-workflow-action="update"]');
-      const installedStrategy = workflow.strategy ?? "catalog-reference";
-      if (update) update.disabled = true;
-      strategy.onchange = () => {
-        if (update) update.disabled = strategy.value === installedStrategy;
-        this.renderManagerConfigurationNote(strategy.value);
-      };
-    } else strategy.onchange = () => this.renderManagerConfigurationNote(strategy.value);
   }
 
   private workflowGraph(workflowId: string) {
@@ -399,24 +384,16 @@ export class DashboardController {
     return (JSON.parse(catalog.textContent ?? "{}") as Record<string, WorkflowGraph>)[workflowId];
   }
 
-  private renderManagerConfiguration(workflowId: string, strategy: string) {
+  private renderManagerConfiguration(workflow: Workflow) {
     const rows = required(this.document, "manager-configuration-rows");
-    const configuration = this.workflowGraph(workflowId)?.configuration ?? [];
-    rows.replaceChildren(...configuration.map(({ label, items }) => {
+    const configuration = workflow.components ?? [];
+    rows.replaceChildren(...configuration.map(({ type, component, origin }) => {
       const row = element(this.document, "tr");
-      const heading = element(this.document, "th"); heading.scope = "row"; heading.textContent = label;
-      const values = element(this.document, "td", "manager-configuration-items");
-      for (const item of items) { const value = element(this.document, "span", "manager-configuration-item"); value.textContent = item; values.appendChild(value); }
-      row.appendChild(heading); row.appendChild(values); return row;
+      for (const value of [type, component, origin]) { const cell = element(this.document, "td"); cell.textContent = value; row.appendChild(cell); }
+      return row;
     }));
     required(this.document, "manager-configuration").hidden = configuration.length === 0;
-    this.renderManagerConfigurationNote(strategy);
-  }
-
-  private renderManagerConfigurationNote(strategy: string) {
-    required(this.document, "manager-configuration-note").textContent = strategy === "vendored"
-      ? "These files are copied into the repository."
-      : "These components are resolved from the pinned catalog source.";
+    required(this.document, "manager-configuration-note").textContent = "Effective components use normal Outfitter precedence; organization resources override catalog resources with the same ID.";
   }
 
   private renderManagerGraph(workflowId: string) {
@@ -442,10 +419,9 @@ export class DashboardController {
     void renderWorkflowDiagram(diagram, `dashboard-${workflowId}`, this.abort.signal);
   }
 
-  private async previewWorkflow(workflow: Workflow, action: "install" | "update" | "repair" | "remove") {
-    const strategy = required<HTMLSelectElement>(this.document, "install-strategy").value;
+  private async previewWorkflow(workflow: Workflow, action: "accept" | "remove") {
     await this.preview("workflow", {
-      target: "workflow", workflow: workflow.id, action, strategy,
+      target: "workflow", workflow: workflow.id, action,
       private: required<HTMLSelectElement>(this.document, "visibility").value === "private",
     });
   }
