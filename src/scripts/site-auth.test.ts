@@ -33,7 +33,7 @@ describe("site authentication navigation", () => {
     expect(document.querySelector<HTMLAnchorElement>("#site-auth")?.hidden).toBe(false);
   });
 
-  it("shows the active account and the three latest organizations", async () => {
+  it("shows every available organization and personal account", async () => {
     const fetcher = vi.fn(async () => Response.json({
       user: { name: "Nicholas" },
       activeAccount: { login: "ai-outfitter", type: "Organization" },
@@ -53,8 +53,10 @@ describe("site authentication navigation", () => {
     expect(document.querySelector("#site-account-trigger")?.textContent).toBe("ai-outfitter");
     expect([...document.querySelectorAll<HTMLAnchorElement>("#site-account-options a")].map((option) => [option.textContent, option.pathname])).toEqual([
       ["Unsupervisedcom", "/dashboard/Unsupervisedcom/"],
+      ["ncrmro", "/dashboard/ncrmro/"],
       ["ai-outfitter", "/dashboard/ai-outfitter/"],
       ["ks.systems", "/dashboard/ks.systems/"],
+      ["old", "/dashboard/old/"],
     ]);
   });
 

@@ -4,7 +4,7 @@
   <details id="site-account" class="site-account" hidden>
     <summary id="site-account-trigger">Account</summary>
     <div class="site-account-menu">
-      <p>Switch organization</p>
+      <p>Switch account</p>
       <div id="site-account-options"></div>
       <a id="site-add-organization" href="#">Add organization</a>
       <button id="site-sign-out" type="button">Sign out</button>
@@ -91,6 +91,11 @@
   .site-account-menu a[aria-current="page"] {
     background: var(--site-signal-low, var(--sl-color-gray-5));
     color: var(--site-text, var(--sl-color-white));
+  }
+
+  #site-account-options {
+    max-height: min(24rem, 60vh);
+    overflow-y: auto;
   }
 
   .site-account-menu #site-add-organization {

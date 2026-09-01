@@ -12,15 +12,13 @@ import {
 
 export const AUTH_STATE_EVENT = "outfitter:auth-state";
 
-function latestOrganizations(index: AccountIndex) {
+function accountOptions(index: AccountIndex) {
   return index.accounts
-    .filter((account) => account.type === "Organization")
     .map((account, position) => ({ account, position }))
     .sort((left, right) => {
       const byUpdated = (right.account.updatedAt ?? "").localeCompare(left.account.updatedAt ?? "");
       return byUpdated || left.position - right.position;
     })
-    .slice(0, 3)
     .map(({ account }) => account);
 }
 
@@ -63,22 +61,22 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
     : "GitHub account options");
   addOrganization.href = `https://github.com/apps/${encodeURIComponent(index.githubAppSlug)}/installations/new`;
   const route = dashboardRoute(location.pathname || "/");
-  options.replaceChildren(...latestOrganizations(index).map((organization) => {
+  options.replaceChildren(...accountOptions(index).map((availableAccount) => {
     const option = document.createElement("a");
-    option.href = dashboardPathForRoute(organization.login, route);
-    option.textContent = organization.login;
-    if (organization.login === account?.login) option.setAttribute("aria-current", "page");
+    option.href = dashboardPathForRoute(availableAccount.login, route);
+    option.textContent = availableAccount.login;
+    if (availableAccount.login === account?.login) option.setAttribute("aria-current", "page");
     option.onclick = async (event) => {
       event.preventDefault();
-      if (organization.login !== account?.login) {
+      if (availableAccount.login !== account?.login) {
         const response = await fetcher("/api/accounts/active", {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ login: organization.login }),
+          body: JSON.stringify({ login: availableAccount.login }),
         });
         if (response.ok) {
           const body = await response.json() as { activeAccount?: AccountIndex["activeAccount"] };
-          index.activeAccount = body.activeAccount ?? organization;
+          index.activeAccount = body.activeAccount ?? availableAccount;
           publishAuthState(document, updateCachedAccountIndex(index));
         }
       }
