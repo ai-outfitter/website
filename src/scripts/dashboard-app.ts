@@ -89,14 +89,19 @@ export class DashboardController {
       ? api<Configuration>(this.fetcher, `/api/accounts/${encodeURIComponent(routeAccount)}/configuration`).catch((error: unknown) => error instanceof Error ? error : new Error("Configuration request failed"))
       : null;
     try { this.index = await api<AccountIndex>(this.fetcher, "/api/accounts"); }
-    catch (error) { if ((error as { status?: number }).status !== 401) this.showError(error); return; }
-    required(this.document, "signed-out").hidden = true;
-    required(this.document, "signed-in").hidden = false;
+    catch (error) {
+      if ((error as { status?: number }).status === 401) {
+        required(this.document, "signed-out").hidden = false;
+        this.document.dispatchEvent(new CustomEvent("outfitter:signed-out"));
+      } else this.showError(error);
+      return;
+    }
     required<HTMLAnchorElement>(this.document, "install-app").href = `https://github.com/apps/${encodeURIComponent(this.index.githubAppSlug)}/installations/new`;
     const installed = await this.acceptInstallationReturn();
     const requested = routeAccount && this.index.accounts.some((account) => account.login === routeAccount) ? routeAccount : null;
     const login = installed ?? requested ?? this.index.activeAccount?.login ?? this.index.accounts[0]?.login;
     if (!login) {
+      required(this.document, "signed-in").hidden = false;
       this.status("Install the GitHub App for your personal account or organization to continue.");
       this.document.dispatchEvent(new CustomEvent("outfitter:account", { detail: this.index }));
       return;
@@ -152,6 +157,8 @@ export class DashboardController {
       this.configuration = configuration ?? await api<Configuration>(this.fetcher, `/api/accounts/${encodeURIComponent(login)}/configuration`);
       const workflowId = this.route?.page === "workflow" ? this.route.workflow : null;
       if (workflowId) this.renderManager(workflowId); else this.renderOverview();
+      required(this.document, "signed-in").hidden = false;
+      this.status("");
     } catch (error) { this.showError(error); }
   }
 

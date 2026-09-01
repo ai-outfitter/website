@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { startDashboard } from "../scripts/dashboard-app";
 
 const fixture = `
-  <section id="signed-out"><button id="sign-in"></button></section>
+  <section id="signed-out" hidden><button id="sign-in"></button></section>
   <section id="signed-in" hidden>
     <a id="install-app"></a>
     <section id="dashboard-overview" hidden>

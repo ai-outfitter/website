@@ -11,7 +11,7 @@ describe("site authentication navigation", () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <nav>
-        <a id="site-auth" href="/dashboard/">Sign in</a>
+        <a id="site-auth" href="/dashboard/" hidden>Sign in</a>
         <details id="site-account" hidden>
           <summary id="site-account-trigger">Account</summary>
           <div id="site-account-options"></div>
@@ -24,6 +24,7 @@ describe("site authentication navigation", () => {
     const fetcher = vi.fn(async () => Response.json({ error: "Sign in required" }, { status: 401 }));
     await startSiteAuth(document, fetcher as typeof fetch);
     expect(document.querySelector("#site-auth")?.textContent).toBe("Sign in");
+    expect(document.querySelector<HTMLAnchorElement>("#site-auth")?.hidden).toBe(false);
   });
 
   it("shows the active account and the three latest organizations", async () => {

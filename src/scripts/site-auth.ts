@@ -24,6 +24,13 @@ function latestOrganizations(index: AccountIndex) {
     .map(({ account }) => account);
 }
 
+function renderSignIn(document: Document) {
+  const link = document.querySelector<HTMLAnchorElement>("#site-auth");
+  const menu = document.querySelector<HTMLDetailsElement>("#site-account");
+  if (link) link.hidden = false;
+  if (menu) menu.hidden = true;
+}
+
 function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typeof fetch, location: Location) {
   const link = document.querySelector<HTMLAnchorElement>("#site-auth");
   const menu = document.querySelector<HTMLDetailsElement>("#site-account");
@@ -32,7 +39,7 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   const signOut = document.querySelector<HTMLButtonElement>("#site-sign-out");
   if (!link || !menu || !trigger || !options || !signOut) return;
   const account = index.activeAccount;
-  if (!account) return;
+  if (!account) return renderSignIn(document);
 
   link.hidden = true;
   menu.hidden = false;
@@ -72,9 +79,10 @@ export async function startSiteAuth(
     document.addEventListener("outfitter:account", (event) => {
       renderAccountMenu(document, (event as CustomEvent<AccountIndex>).detail, fetcher, location);
     }, { once: true });
+    document.addEventListener("outfitter:signed-out", () => renderSignIn(document), { once: true });
     return;
   }
   const response = await fetcher("/api/accounts", { headers: { accept: "application/json" } }).catch(() => null);
-  if (!response?.ok) return;
+  if (!response?.ok) return renderSignIn(document);
   renderAccountMenu(document, await response.json() as AccountIndex, fetcher, location);
 }
