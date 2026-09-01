@@ -10,14 +10,14 @@ import {
 } from "./capabilities";
 
 describe("dashboard capabilities", () => {
-  it("reports local readiness only for an exact installed workflow", () => {
-    expect(assessLocalExecution("installed").state).toBe("available");
-    expect(assessLocalExecution("outdated").state).toBe("needs-configuration");
-    expect(assessLocalExecution("overridden")).toMatchObject({
+  it("reports local readiness independently from customization", () => {
+    expect(assessLocalExecution("accepted").state).toBe("available");
+    expect(assessLocalExecution("customized").state).toBe("available");
+    expect(assessLocalExecution("needs-attention")).toMatchObject({
       state: "needs-configuration",
-      summary: expect.stringContaining("changed"),
+      summary: expect.stringContaining("missing"),
     });
-    expect(assessLocalExecution("add").state).toBe("needs-configuration");
+    expect(assessLocalExecution("available").state).toBe("needs-configuration");
   });
 
   it("keeps every future provider explicitly planned", () => {

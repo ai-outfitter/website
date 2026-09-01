@@ -21,7 +21,6 @@ const fixture = `
       <section id="manager-graph"><figure id="manager-workflow-graph"><div class="workflow-diagram__canvas"></div><p class="workflow-diagram__status"></p><script data-workflow-source></script><script data-workflow-nodes></script></figure></section>
       <script id="dashboard-workflow-graphs" type="application/json">{"review":{"title":"Adversarial review","source":"flowchart LR\\n  inspect[Inspect]","nodes":[{"id":"inspect","title":"Inspect","kind":"step","details":[]},{"id":"nested","title":"Founder","kind":"workflow","href":"/workflows/founder/","details":[]}],"configuration":[{"label":"Agents","items":["Code Review"]},{"label":"MCPs","items":["GitHub Write"]}]}}</script>
       <section id="manager-configuration"><p id="manager-configuration-note"></p><table><tbody id="manager-configuration-rows"></tbody></table></section>
-      <select id="install-strategy"><option value="catalog-reference"></option><option value="vendored"></option></select>
       <div id="repository-options"></div><select id="visibility"><option value="public"></option></select><div id="workflow-actions"></div>
       <div id="workflow-preview"></div><div id="workflow-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div>
     </section>
@@ -30,13 +29,13 @@ const fixture = `
 const account = { login: "acme", type: "Organization", installationId: 7, repository: { fullName: "acme/.agents", defaultBranch: "main", private: true, canPush: true } };
 const configuration = {
   login: "acme", repository: account.repository, repositoryUrl: "https://github.com/acme/.agents",
-  settings: { exists: true, valid: true, raw: "# keep\nsources:\n  - github: ai-outfitter/community-profiles\n    ref: v1\n", defaults: {}, sources: [{ id: "sources:0", section: "sources", kind: "github", location: "ai-outfitter/community-profiles", github: "ai-outfitter/community-profiles", ref: "v1", dependencies: ["review"], repositoryUrl: "https://github.com/ai-outfitter/community-profiles" }] },
+  settings: { exists: true, valid: true, raw: "# keep\nsources:\n  - github: ai-outfitter/community-profiles\n    ref: v1\nworkflows:\n  - review\n", defaults: {}, workflows: ["review"], sources: [{ id: "sources:0", section: "sources", kind: "github", location: "ai-outfitter/community-profiles", github: "ai-outfitter/community-profiles", ref: "v1", dependencies: ["review"], repositoryUrl: "https://github.com/ai-outfitter/community-profiles" }] },
   workflows: [
-    { id: "review", title: "Adversarial review", description: "Review a pull request.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "outdated", strategy: "catalog-reference" },
-    { id: "founder", title: "Founder", description: "Plan the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
-    { id: "engineer", title: "Engineer", description: "Deliver the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
-    { id: "software-factory", title: "Software factory", description: "Automate delivery.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
-    { id: "triage", title: "Issue triage", description: "Route issues.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "add" },
+    { id: "review", title: "Adversarial review", description: "Review a pull request.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "accepted", components: [{ type: "agents", component: "agents/code-review/agent.md", origin: "ai-outfitter/community-profiles" }, { type: "mcp", component: "github-write", origin: "ai-outfitter/community-profiles" }] },
+    { id: "founder", title: "Founder", description: "Plan the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
+    { id: "engineer", title: "Engineer", description: "Deliver the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
+    { id: "software-factory", title: "Software factory", description: "Automate delivery.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
+    { id: "triage", title: "Issue triage", description: "Route issues.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
   ],
 };
 function locationAt(url: string) { return { href: url, pathname: new URL(url).pathname, assign: vi.fn(), reload: vi.fn() } as unknown as Location; }
@@ -73,7 +72,7 @@ describe("dashboard client", () => {
     expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Engineer");
     expect(document.querySelector("#implementation-workflows")?.textContent).toContain("Software factory");
     expect([...document.querySelectorAll("#implementation-workflows h4")].map((heading) => heading.textContent)).toEqual(["Founder", "Engineer", "Software factory"]);
-    expect(document.querySelector("#implementation-workflows .workflow-card")?.lastElementChild).toMatchObject({ textContent: "add" });
+    expect(document.querySelector("#implementation-workflows .workflow-card")?.lastElementChild).toMatchObject({ textContent: "available" });
     expect(document.querySelector("#community-workflows")?.textContent).not.toContain("Founder");
     expect(document.querySelector("#community-workflows")?.textContent).toContain("Issue triage");
     expect(document.querySelector("#catalog-sources table")?.textContent).toContain("community-profiles");
@@ -90,7 +89,7 @@ describe("dashboard client", () => {
   });
 
   it("canonicalizes accountless installs and previews an explicit install action", async () => {
-    const noRepository = { ...configuration, repository: null, settings: { exists: false, valid: true, raw: "", defaults: {}, sources: [] }, workflows: configuration.workflows.map((workflow) => ({ ...workflow, state: "add" })) };
+    const noRepository = { ...configuration, repository: null, settings: { exists: false, valid: true, raw: "", defaults: {}, sources: [], workflows: [] }, workflows: configuration.workflows.map((workflow) => ({ ...workflow, state: "available" })) };
     const fetcher = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       void options;
       const path = String(input);
@@ -106,7 +105,7 @@ describe("dashboard client", () => {
     document.querySelector<HTMLButtonElement>("#workflow-actions button")?.click();
     await vi.waitFor(() => expect(document.querySelector("#workflow-preview")?.textContent).toContain("ADD settings.yml"));
     const planCall = fetcher.mock.calls.find(([path]) => path === "/api/accounts/acme/plans");
-    expect(JSON.parse(String(planCall?.[1]?.body))).toMatchObject({ target: "workflow", workflow: "founder", action: "install", strategy: "catalog-reference" });
+    expect(JSON.parse(String(planCall?.[1]?.body))).toMatchObject({ target: "workflow", workflow: "founder", action: "accept" });
   });
 
   it("reuses authentication state when dashboard content is replaced", async () => {
@@ -123,9 +122,9 @@ describe("dashboard client", () => {
     expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
     expect(document.querySelector("#manager-title")?.textContent).toBe("Adversarial review");
     expect(document.querySelector("#manager-source")?.textContent).toBe("ai-outfitter/community-profiles");
-    expect(document.querySelector("#manager-configuration-rows")?.textContent).toContain("Code Review");
-    expect(document.querySelector("#manager-configuration-rows")?.textContent).toContain("GitHub Write");
-    expect(document.querySelector("#manager-configuration-note")?.textContent).toContain("pinned catalog source");
+    expect(document.querySelector("#manager-configuration-rows")?.textContent).toContain("agents/code-review/agent.md");
+    expect(document.querySelector("#manager-configuration-rows")?.textContent).toContain("github-write");
+    expect(document.querySelector("#manager-configuration-note")?.textContent).toContain("normal Outfitter precedence");
     expect(document.querySelector("[data-workflow-source]")?.textContent).toContain("flowchart LR");
     expect(JSON.parse(document.querySelector("[data-workflow-nodes]")?.textContent ?? "[]")[1].href).toBe("/dashboard/acme/workflows/founder/");
     expect(renderWorkflowDiagram).toHaveBeenCalledWith(document.querySelector("#manager-workflow-graph"), "dashboard-review", expect.any(AbortSignal));
