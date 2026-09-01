@@ -72,23 +72,24 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
       </section>
 
       <section id="workflow-manager" class="panel manager" hidden>
-        <a id="manager-back" href="#">← Repository overview</a>
         <div class="section-heading">
           <div>
-            <p class="panel-label">Workflow manager</p>
+            <p class="panel-label">Workflow</p>
             <h2 id="manager-title">Loading workflow…</h2>
           </div>
-          <span id="manager-state" class="badge"></span>
+          <div class="manager-heading-actions">
+            <a id="manager-back" href="#">← Repository overview</a>
+            <span id="manager-state" class="badge"></span>
+          </div>
         </div>
         <p id="manager-description" class="lede small"></p>
         <section id="manager-graph" class="manager-graph">
-          <h3>Workflow graph</h3>
           <WorkflowDiagramFrame id="manager-workflow-graph" title="Workflow" />
         </section>
         <script is:inline id="dashboard-workflow-graphs" type="application/json" set:html={JSON.stringify(workflowGraphs).replaceAll('<', '\\u003c')}></script>
-        <dl id="manager-metadata" class="metadata"></dl>
         <div class="manager-grid">
           <div>
+            <p class="manager-source">Source: <span id="manager-source"></span></p>
             <label for="install-strategy">Installation strategy</label>
             <select id="install-strategy">
               <option value="catalog-reference">Pinned catalog reference</option>
@@ -146,8 +147,11 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .workflow-card, .dashboard .source-card { display: block; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; text-decoration: none; }
   .dashboard .workflow-card:hover { border-color: var(--site-signal); }
   .dashboard .manager-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(16rem, .7fr); gap: 1rem; margin-block: 1.5rem; }
+  .dashboard .manager-heading-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .dashboard .manager-source { margin: 0 0 1.25rem; color: var(--site-dim); font: 700 .72rem var(--site-font-mono); }
   .dashboard .manager-graph { margin-block: 2rem; }
   .dashboard .workflow-diagram { --sl-color-black: #090a08; --sl-color-gray-2: var(--site-muted); --sl-color-gray-3: var(--site-dim); --sl-color-gray-5: var(--site-line); --sl-color-gray-6: var(--site-canvas-raised); --sl-color-white: var(--site-text); --sl-color-accent: var(--site-signal); --sl-color-accent-low: var(--site-signal-low); --sl-color-accent-high: var(--site-signal-high); }
+  .dashboard .workflow-diagram__canvas { padding-inline: 0; border: 0; border-radius: 0; background: transparent; }
   .dashboard .preview { margin-top: 1.5rem; }
   .dashboard .preview details { border-top: 1px solid var(--site-line); padding-block: .8rem; }
   .dashboard .preview pre { overflow: auto; padding: 1rem; background: #090a08; color: var(--site-text); white-space: pre-wrap; }
@@ -155,7 +159,7 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .workflow-card { min-height: 12rem; }
   .dashboard .workflow-card p, .dashboard .source-card p { color: var(--site-muted); line-height: 1.55; }
   .dashboard .source-section { margin-top: 2rem; }
-  .dashboard .source-card dl, .dashboard .metadata { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .4rem 1rem; }
+  .dashboard .source-card dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .4rem 1rem; }
   .dashboard dt { color: var(--site-dim); font: 700 .72rem var(--site-font-mono); text-transform: uppercase; }
   .dashboard dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
   .dashboard .configuration-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-block: 1.2rem; }

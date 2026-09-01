@@ -17,7 +17,7 @@ const fixture = `
       <div id="source-plan"><div id="source-preview"></div><div id="source-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div></div>
     </section>
     <section id="workflow-manager" hidden>
-      <a id="manager-back"></a><h2 id="manager-title"></h2><span id="manager-state"></span><p id="manager-description"></p><dl id="manager-metadata"></dl>
+      <a id="manager-back"></a><h2 id="manager-title"></h2><span id="manager-source"></span><span id="manager-state"></span><p id="manager-description"></p>
       <section id="manager-graph"><figure id="manager-workflow-graph"><div class="workflow-diagram__canvas"></div><p class="workflow-diagram__status"></p><script data-workflow-source></script><script data-workflow-nodes></script></figure></section>
       <script id="dashboard-workflow-graphs" type="application/json">{"review":{"title":"Adversarial review","source":"flowchart LR\\n  inspect[Inspect]","nodes":[{"id":"inspect","title":"Inspect","kind":"step","details":[]},{"id":"nested","title":"Founder","kind":"workflow","href":"/workflows/founder/","details":[]}]}}</script>
       <select id="install-strategy"><option value="catalog-reference"></option><option value="vendored"></option></select>
@@ -105,6 +105,7 @@ describe("dashboard client", () => {
     await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/workflows/review/"), historyAt());
     expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
     expect(document.querySelector("#manager-title")?.textContent).toBe("Adversarial review");
+    expect(document.querySelector("#manager-source")?.textContent).toBe("ai-outfitter/community-profiles");
     expect(document.querySelector("[data-workflow-source]")?.textContent).toContain("flowchart LR");
     expect(JSON.parse(document.querySelector("[data-workflow-nodes]")?.textContent ?? "[]")[1].href).toBe("/dashboard/acme/workflows/founder/");
     expect(renderWorkflowDiagram).toHaveBeenCalledWith(document.querySelector("#manager-workflow-graph"), "dashboard-review", expect.any(AbortSignal));

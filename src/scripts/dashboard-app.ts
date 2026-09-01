@@ -330,9 +330,8 @@ export class DashboardController {
     required(this.document, "manager-title").textContent = workflow.title ?? workflow.id;
     const state = required(this.document, "manager-state"); state.className = `badge ${workflow.state}`; state.textContent = workflow.state;
     required(this.document, "manager-description").textContent = workflow.reason ?? workflow.description ?? "";
+    required(this.document, "manager-source").textContent = workflow.sourceRepository;
     this.renderManagerGraph(workflowId);
-    const metadata = required(this.document, "manager-metadata");
-    metadata.replaceChildren(...this.definition("Source", workflow.sourceRepository), ...this.definition("Revision", workflow.sourceSha), ...this.definition("Repository", `${this.login}/.agents`));
     const strategy = required<HTMLSelectElement>(this.document, "install-strategy");
     strategy.value = workflow.strategy ?? "catalog-reference";
     required(this.document, "repository-options").hidden = Boolean(this.configuration!.repository);
