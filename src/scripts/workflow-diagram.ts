@@ -23,7 +23,74 @@ function initialize() {
   initialized = true;
 }
 
-export async function renderWorkflowDiagram(diagram: HTMLElement, renderId = "workflow", signal?: AbortSignal) {
+function showNodeDetails(dialog: HTMLDialogElement, node: WorkflowDiagramNode) {
+  const heading = dialog.querySelector<HTMLElement>("[data-node-title]");
+  const details = dialog.querySelector<HTMLElement>("[data-node-details]");
+  if (!heading || !details) return;
+  heading.textContent = node.title;
+  details.replaceChildren(...node.details.flatMap((detail) => {
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = detail.label;
+    description.textContent = detail.value;
+    return [term, description];
+  }));
+  dialog.showModal();
+}
+
+function renderWorkflowTimeline(canvas: HTMLElement, nodes: WorkflowDiagramNode[], dialog: HTMLDialogElement) {
+  const list = document.createElement("ol");
+  list.className = "workflow-diagram__steps";
+  for (const node of nodes) {
+    const item = document.createElement("li");
+    item.className = "workflow-diagram__step";
+    const marker = document.createElement("span");
+    marker.className = "workflow-diagram__step-marker";
+    marker.setAttribute("aria-hidden", "true");
+    item.appendChild(marker);
+    if (node !== nodes.at(-1)) {
+      const connector = document.createElement("span");
+      connector.className = "workflow-diagram__step-connector";
+      connector.setAttribute("aria-hidden", "true");
+      item.appendChild(connector);
+    }
+    const control = document.createElement(node.href ? "a" : "button");
+    control.className = "workflow-diagram__step-control";
+    if (control instanceof HTMLAnchorElement) control.href = node.href!;
+    else {
+      control.type = "button";
+      control.addEventListener("click", () => showNodeDetails(dialog, node));
+    }
+    const title = document.createElement("span");
+    title.className = "workflow-diagram__step-title";
+    title.textContent = node.title;
+    control.appendChild(title);
+    const description = node.details.find((detail) => detail.label === "Description")?.value;
+    if (description) {
+      const summary = document.createElement("span");
+      summary.className = "workflow-diagram__step-description";
+      summary.textContent = description;
+      control.appendChild(summary);
+    }
+    const context = node.details.filter((detail) => detail.label !== "Description").slice(0, 2);
+    if (context.length) {
+      const metadata = document.createElement("span");
+      metadata.className = "workflow-diagram__step-meta";
+      metadata.textContent = context.map((detail) => `${detail.label}: ${detail.value}`).join(" · ");
+      control.appendChild(metadata);
+    }
+    item.appendChild(control);
+    list.appendChild(item);
+  }
+  canvas.setAttribute("aria-label", `${diagramTitle(canvas)} workflow steps`);
+  canvas.replaceChildren(list);
+}
+
+function diagramTitle(canvas: HTMLElement) {
+  return canvas.closest<HTMLElement>("[data-workflow-diagram]")?.dataset.workflowTitle ?? "Workflow";
+}
+
+export async function renderWorkflowDiagram(diagram: HTMLElement, renderId = "workflow", signal?: AbortSignal, narrowOverride?: boolean) {
   const canvas = diagram.querySelector<HTMLElement>(".workflow-diagram__canvas");
   const data = diagram.querySelector<HTMLElement>("[data-workflow-source]");
   const nodeData = diagram.querySelector<HTMLElement>("[data-workflow-nodes]");
@@ -31,14 +98,20 @@ export async function renderWorkflowDiagram(diagram: HTMLElement, renderId = "wo
   const dialog = diagram.querySelector<HTMLDialogElement>("[data-workflow-node-dialog]");
   if (!canvas || !data || !nodeData || !status || !dialog) return;
   try {
+    const nodes = JSON.parse(nodeData.textContent ?? "[]") as WorkflowDiagramNode[];
+    const narrow = narrowOverride ?? narrowScreen?.matches ?? false;
+    if (narrow) {
+      renderWorkflowTimeline(canvas, nodes, dialog);
+      status.textContent = "";
+      status.classList.remove("workflow-diagram__error");
+      return;
+    }
     initialize();
-    const narrow = narrowScreen?.matches ?? false;
-    const source = (data.textContent ?? "").replace(/^flowchart\s+(LR|TB)/, `flowchart ${narrow ? "TB" : "LR"}`);
-    const rendered = await mermaid.render(`${renderId}-${narrow ? "tb" : "lr"}`, source);
+    const source = (data.textContent ?? "").replace(/^flowchart\s+(LR|TB)/, "flowchart LR");
+    const rendered = await mermaid.render(`${renderId}-lr`, source);
     if (signal?.aborted) return;
     canvas.innerHTML = rendered.svg;
     rendered.bindFunctions?.(canvas);
-    const nodes = JSON.parse(nodeData.textContent ?? "[]") as WorkflowDiagramNode[];
     const renderedNodeFor = (nodeId: string) => [...canvas.querySelectorAll<SVGGElement>("g.node")]
       .find((element) => element.id.includes(`flowchart-${nodeId}-`));
     for (const node of nodes) {
@@ -50,18 +123,7 @@ export async function renderWorkflowDiagram(diagram: HTMLElement, renderId = "wo
       renderedNode.setAttribute("aria-label", node.href ? `Open ${node.title} workflow` : `View details for ${node.title}`);
       const activate = () => {
         if (node.href) return window.location.assign(node.href);
-        const heading = dialog.querySelector<HTMLElement>("[data-node-title]");
-        const details = dialog.querySelector<HTMLElement>("[data-node-details]");
-        if (!heading || !details) return;
-        heading.textContent = node.title;
-        details.replaceChildren(...node.details.flatMap((detail) => {
-          const term = document.createElement("dt");
-          const description = document.createElement("dd");
-          term.textContent = detail.label;
-          description.textContent = detail.value;
-          return [term, description];
-        }));
-        dialog.showModal();
+        showNodeDetails(dialog, node);
       };
       renderedNode.addEventListener("click", activate);
       renderedNode.addEventListener("keydown", (event) => {
@@ -69,14 +131,6 @@ export async function renderWorkflowDiagram(diagram: HTMLElement, renderId = "wo
         event.preventDefault();
         activate();
       });
-    }
-    if (narrow && nodes[0]) {
-      const firstNode = renderedNodeFor(nodes[0].id);
-      if (firstNode) {
-        const canvasBounds = canvas.getBoundingClientRect();
-        const nodeBounds = firstNode.getBoundingClientRect();
-        canvas.scrollLeft += nodeBounds.left + nodeBounds.width / 2 - canvasBounds.left - canvas.clientWidth / 2;
-      }
     }
     status.textContent = "";
     status.classList.remove("workflow-diagram__error");

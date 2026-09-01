@@ -24,6 +24,10 @@
   color: var(--sl-color-gray-2);
 }
 
+.workflow-diagram__status:empty {
+  display: none;
+}
+
 .workflow-diagram__error {
   color: var(--sl-color-accent-high);
 }
@@ -224,10 +228,101 @@
   stroke: var(--sl-color-gray-2) !important;
 }
 
+.workflow-diagram__steps {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-diagram__step {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.workflow-diagram__step:not(:last-child) {
+  padding-bottom: 1.5rem;
+}
+
+.workflow-diagram__step-marker {
+  position: absolute;
+  z-index: 1;
+  top: 0.55rem;
+  left: 0.2rem;
+  box-sizing: border-box;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--sl-color-accent, var(--site-signal));
+  box-shadow: 0 0 0 3px var(--sl-color-black, var(--site-ink));
+}
+
+.workflow-diagram__step-connector {
+  position: absolute;
+  top: 1.35rem;
+  bottom: -0.35rem;
+  left: 0.59rem;
+  width: 2px;
+  background: var(--sl-color-gray-3, var(--site-dim));
+}
+
+.workflow-diagram__step-control {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+.workflow-diagram__step-control:hover .workflow-diagram__step-title,
+.workflow-diagram__step-control:focus-visible .workflow-diagram__step-title {
+  color: var(--sl-color-accent-high, var(--site-signal-high));
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.workflow-diagram__step-title,
+.workflow-diagram__step-description,
+.workflow-diagram__step-meta {
+  display: block;
+}
+
+.workflow-diagram__step-title {
+  color: var(--sl-color-white, var(--site-text));
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.workflow-diagram__step-description {
+  margin-top: 0.3rem;
+  color: var(--sl-color-gray-2, var(--site-muted));
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.workflow-diagram__step-meta {
+  margin-top: 0.4rem;
+  color: var(--sl-color-gray-2, var(--site-muted));
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 50rem) {
   .workflow-diagram__canvas {
-    min-height: 18rem;
-    place-items: center start;
-    padding: 0.75rem;
+    display: block;
+    min-height: 0;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 }
