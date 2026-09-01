@@ -66,12 +66,16 @@ describe("dashboard client", () => {
     expect(document.querySelector("#configuration-title")?.textContent).toBe("acme/.agents");
     expect(document.querySelector("#installed-workflows")?.textContent).toContain("Adversarial review");
     expect(document.querySelector("#community-workflows")?.textContent).toContain("Founder");
-    expect(document.querySelector("#catalog-sources table")?.textContent).toContain("ai-outfitter/community-profiles");
+    expect(document.querySelector("#catalog-sources table")?.textContent).toContain("community-profiles");
+    expect(document.querySelector("#catalog-sources table")?.textContent).not.toContain("ai-outfitter/community-profiles");
+    expect(document.querySelector("#catalog-sources table")?.textContent).not.toContain("Type");
+    expect(document.querySelector("#catalog-sources table")?.textContent).not.toContain("Status");
     expect(document.querySelector("#catalog-sources")?.textContent).not.toContain("Repository root");
     expect(document.querySelector("#catalog-sources")?.textContent).not.toContain("Path");
-    expect(document.querySelector("[data-source-state]")?.textContent).toBe("checking");
+    expect(document.querySelector<HTMLElement>("[data-source-ref-indicator]")?.hidden).toBe(true);
     releaseFreshness!();
-    await vi.waitFor(() => expect(document.querySelector("[data-source-state]")?.textContent).toBe("outdated"));
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>("[data-source-ref-indicator]")?.hidden).toBe(false));
+    expect(document.querySelector("[data-source-ref-indicator]")?.textContent).toBe("↑");
     expect(history.replaceState).toHaveBeenCalledWith(null, "", "/dashboard/acme/");
   });
 

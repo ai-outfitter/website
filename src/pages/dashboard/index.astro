@@ -165,10 +165,11 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .source-table th { color: var(--site-dim); font: 700 .68rem var(--site-font-mono); letter-spacing: .08em; text-transform: uppercase; }
   .dashboard .source-table td:first-child { padding-left: 0; font-weight: 700; overflow-wrap: anywhere; }
   .dashboard .source-table th:first-child { padding-left: 0; }
-  .dashboard .source-status { min-width: 8.5rem; }
-  .dashboard .source-latest { display: block; margin-top: .4rem; font-size: .76rem; }
-  .dashboard .source-actions { display: flex; gap: .45rem; }
-  .dashboard .source-actions .button { padding: .45rem .55rem; font-size: .68rem; white-space: nowrap; }
+  .dashboard .source-ref { font-family: var(--site-font-mono); }
+  .dashboard .source-ref-indicator { margin-left: .4rem; color: #ffd46b; font-size: 1rem; font-weight: 800; }
+  .dashboard .source-action-list { display: flex; gap: .75rem; white-space: nowrap; }
+  .dashboard .source-action { padding: 0; border: 0; background: transparent; color: var(--site-signal-high); cursor: pointer; font: 700 .74rem Inter, sans-serif; text-decoration: underline; text-underline-offset: .2em; }
+  .dashboard .source-action:disabled { color: var(--site-dim); cursor: not-allowed; text-decoration: none; }
   .dashboard dt { color: var(--site-dim); font: 700 .72rem var(--site-font-mono); text-transform: uppercase; }
   .dashboard dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
   .dashboard .configuration-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-block: 1.2rem; }
@@ -190,9 +191,6 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
     .dashboard .source-table tr:last-child { border-bottom: 1px solid var(--site-line); }
     .dashboard .source-table td, .dashboard .source-table td:first-child { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .65rem; padding: .35rem 0; border: 0; }
     .dashboard .source-table td::before { content: attr(data-label); color: var(--site-dim); font: 700 .68rem var(--site-font-mono); letter-spacing: .06em; text-transform: uppercase; }
-    .dashboard .source-status { min-width: 0; }
-    .dashboard .source-latest { margin-top: .25rem; }
-    .dashboard .source-actions { display: grid; grid-template-columns: 5rem minmax(0, 1fr); }
-    .dashboard .source-actions .button { width: fit-content; margin-right: .35rem; }
+    .dashboard .source-action-list { flex-wrap: wrap; }
   }
 </style>

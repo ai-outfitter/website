@@ -243,7 +243,7 @@ export class DashboardController {
     const table = element(this.document, "table", "source-table");
     const head = element(this.document, "thead");
     const header = element(this.document, "tr");
-    for (const label of ["Source", "Type", "Ref", "Status", "Used by", "Actions"]) {
+    for (const label of ["Source", "Ref", "Used by", "Actions"]) {
       const cell = element(this.document, "th");
       cell.scope = "col";
       cell.textContent = label;
@@ -257,26 +257,19 @@ export class DashboardController {
 
       const sourceCell = element(this.document, "td");
       sourceCell.dataset.label = "Source";
-      if (source.repositoryUrl) { const link = element(this.document, "a"); link.href = source.repositoryUrl; link.textContent = source.location; sourceCell.appendChild(link); }
-      else sourceCell.textContent = source.location;
-
-      const typeCell = element(this.document, "td");
-      typeCell.dataset.label = "Type";
-      typeCell.textContent = source.kind;
+      const sourceLabel = source.location.startsWith("ai-outfitter/") ? source.location.slice("ai-outfitter/".length) : source.location;
+      if (source.repositoryUrl) { const link = element(this.document, "a"); link.href = source.repositoryUrl; link.textContent = sourceLabel; sourceCell.appendChild(link); }
+      else sourceCell.textContent = sourceLabel;
 
       const refCell = element(this.document, "td");
       refCell.dataset.label = "Ref";
-      refCell.textContent = source.ref ?? "Unpinned";
-
-      const statusCell = element(this.document, "td", "source-status");
-      statusCell.dataset.label = "Status";
-      const state = badge(this.document, "checking");
-      state.dataset.sourceState = source.id;
-      statusCell.appendChild(state);
-      const latestValue = element(this.document, "span", "source-latest muted");
-      latestValue.textContent = source.kind === "github" ? "Checking…" : "Not tracked";
-      latestValue.dataset.sourceLatest = source.id;
-      statusCell.appendChild(latestValue);
+      const ref = element(this.document, "span", "source-ref");
+      ref.textContent = source.ref ?? "Unpinned";
+      const freshnessIndicator = element(this.document, "span", "source-ref-indicator");
+      freshnessIndicator.dataset.sourceRefIndicator = source.id;
+      freshnessIndicator.hidden = true;
+      refCell.appendChild(ref);
+      refCell.appendChild(freshnessIndicator);
 
       const dependency = element(this.document, "td", "source-dependencies");
       dependency.dataset.label = "Used by";
@@ -289,13 +282,14 @@ export class DashboardController {
 
       const actions = element(this.document, "td", "source-actions");
       actions.dataset.label = "Actions";
-      const update = element(this.document, "button", "button") as HTMLButtonElement;
-      update.type = "button"; update.textContent = "Update source"; update.disabled = true; update.dataset.sourceUpdate = source.id; update.onclick = () => void this.previewSource(source.id, "update");
-      const remove = element(this.document, "button", "button") as HTMLButtonElement;
-      remove.type = "button"; remove.textContent = "Remove source"; remove.disabled = source.dependencies.length > 0; remove.onclick = () => void this.previewSource(source.id, "remove");
-      actions.appendChild(update); actions.appendChild(remove);
+      const actionList = element(this.document, "div", "source-action-list");
+      const update = element(this.document, "button", "source-action") as HTMLButtonElement;
+      update.type = "button"; update.textContent = "Update"; update.disabled = true; update.dataset.sourceUpdate = source.id; update.onclick = () => void this.previewSource(source.id, "update");
+      const remove = element(this.document, "button", "source-action") as HTMLButtonElement;
+      remove.type = "button"; remove.textContent = "Remove"; remove.disabled = source.dependencies.length > 0; remove.onclick = () => void this.previewSource(source.id, "remove");
+      actionList.appendChild(update); actionList.appendChild(remove); actions.appendChild(actionList);
 
-      for (const cell of [sourceCell, typeCell, refCell, statusCell, dependency, actions]) row.appendChild(cell);
+      for (const cell of [sourceCell, refCell, dependency, actions]) row.appendChild(cell);
       body.appendChild(row);
     }
     table.appendChild(head);
@@ -310,12 +304,16 @@ export class DashboardController {
       if (!this.active()) return;
       for (const freshness of result.sources) {
         this.freshness.set(freshness.id, freshness);
-        const state = [...this.document.querySelectorAll<HTMLElement>("[data-source-state]")].find((element) => element.dataset.sourceState === freshness.id);
-        if (state) { state.className = `badge ${freshness.status}`; state.textContent = freshness.status.replaceAll("-", " "); }
         const update = [...this.document.querySelectorAll<HTMLButtonElement>("[data-source-update]")].find((element) => element.dataset.sourceUpdate === freshness.id);
         if (update) update.disabled = !freshness.latestRef || freshness.status === "current" || freshness.status === "unavailable" || freshness.status === "invalid" || freshness.status === "local-only";
-        const latest = [...this.document.querySelectorAll<HTMLElement>("[data-source-latest]")].find((element) => element.dataset.sourceLatest === freshness.id);
-        if (latest) latest.textContent = freshness.latestRef ? `${freshness.latestRef} · ${freshness.latestKind === "release" ? "release" : "default branch"}` : freshness.reason ?? "Unavailable";
+        const indicator = [...this.document.querySelectorAll<HTMLElement>("[data-source-ref-indicator]")].find((element) => element.dataset.sourceRefIndicator === freshness.id);
+        if (indicator) {
+          indicator.hidden = freshness.status !== "outdated";
+          indicator.textContent = freshness.status === "outdated" ? "↑" : "";
+          indicator.setAttribute("role", "img");
+          indicator.setAttribute("aria-label", "Update available");
+          indicator.title = freshness.latestRef ? `Update available: ${freshness.latestRef}` : "Update available";
+        }
       }
     } catch (error) {
       if (this.active() && (error as { name?: string }).name !== "AbortError") this.status(error instanceof Error ? `Source checks failed: ${error.message}` : "Source checks failed.");
