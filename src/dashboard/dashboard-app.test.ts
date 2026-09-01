@@ -19,7 +19,8 @@ const fixture = `
     <section id="workflow-manager" hidden>
       <a id="manager-back"></a><h2 id="manager-title"></h2><span id="manager-source"></span><span id="manager-state"></span><p id="manager-description"></p>
       <section id="manager-graph"><figure id="manager-workflow-graph"><div class="workflow-diagram__canvas"></div><p class="workflow-diagram__status"></p><script data-workflow-source></script><script data-workflow-nodes></script></figure></section>
-      <script id="dashboard-workflow-graphs" type="application/json">{"review":{"title":"Adversarial review","source":"flowchart LR\\n  inspect[Inspect]","nodes":[{"id":"inspect","title":"Inspect","kind":"step","details":[]},{"id":"nested","title":"Founder","kind":"workflow","href":"/workflows/founder/","details":[]}]}}</script>
+      <script id="dashboard-workflow-graphs" type="application/json">{"review":{"title":"Adversarial review","source":"flowchart LR\\n  inspect[Inspect]","nodes":[{"id":"inspect","title":"Inspect","kind":"step","details":[]},{"id":"nested","title":"Founder","kind":"workflow","href":"/workflows/founder/","details":[]}],"configuration":[{"label":"Agents","items":["Code Review"]},{"label":"MCPs","items":["GitHub Write"]}]}}</script>
+      <section id="manager-configuration"><p id="manager-configuration-note"></p><table><tbody id="manager-configuration-rows"></tbody></table></section>
       <select id="install-strategy"><option value="catalog-reference"></option><option value="vendored"></option></select>
       <div id="repository-options"></div><select id="visibility"><option value="public"></option></select><div id="workflow-actions"></div>
       <div id="workflow-preview"></div><div id="workflow-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div>
@@ -113,6 +114,9 @@ describe("dashboard client", () => {
     expect(fetcher.mock.calls.filter(([path]) => path === "/api/accounts")).toHaveLength(1);
     expect(document.querySelector("#manager-title")?.textContent).toBe("Adversarial review");
     expect(document.querySelector("#manager-source")?.textContent).toBe("ai-outfitter/community-profiles");
+    expect(document.querySelector("#manager-configuration-rows")?.textContent).toContain("Code Review");
+    expect(document.querySelector("#manager-configuration-rows")?.textContent).toContain("GitHub Write");
+    expect(document.querySelector("#manager-configuration-note")?.textContent).toContain("pinned catalog source");
     expect(document.querySelector("[data-workflow-source]")?.textContent).toContain("flowchart LR");
     expect(JSON.parse(document.querySelector("[data-workflow-nodes]")?.textContent ?? "[]")[1].href).toBe("/dashboard/acme/workflows/founder/");
     expect(renderWorkflowDiagram).toHaveBeenCalledWith(document.querySelector("#manager-workflow-graph"), "dashboard-review", expect.any(AbortSignal));

@@ -45,7 +45,12 @@ type Freshness = {
   reason?: string;
 };
 type PlanChange = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null };
-type WorkflowGraph = { title: string; source: string; nodes: WorkflowDiagramNode[] };
+type WorkflowGraph = {
+  title: string;
+  source: string;
+  nodes: WorkflowDiagramNode[];
+  configuration?: Array<{ label: string; items: string[] }>;
+};
 type Fetcher = typeof fetch;
 
 function required<T = HTMLElement>(document: Document, id: string): T {
@@ -356,6 +361,7 @@ export class DashboardController {
     this.renderManagerGraph(workflowId);
     const strategy = required<HTMLSelectElement>(this.document, "install-strategy");
     strategy.value = workflow.strategy ?? "catalog-reference";
+    this.renderManagerConfiguration(workflowId, strategy.value);
     required(this.document, "repository-options").hidden = Boolean(this.configuration!.repository);
     const actions = required(this.document, "workflow-actions");
     const definitions: Array<{ action: "install" | "update" | "repair" | "remove"; label: string; primary?: boolean }> = workflow.state === "add"
@@ -373,14 +379,40 @@ export class DashboardController {
       const update = actions.querySelector<HTMLButtonElement>('[data-workflow-action="update"]');
       const installedStrategy = workflow.strategy ?? "catalog-reference";
       if (update) update.disabled = true;
-      strategy.onchange = () => { if (update) update.disabled = strategy.value === installedStrategy; };
-    } else strategy.onchange = null;
+      strategy.onchange = () => {
+        if (update) update.disabled = strategy.value === installedStrategy;
+        this.renderManagerConfigurationNote(strategy.value);
+      };
+    } else strategy.onchange = () => this.renderManagerConfigurationNote(strategy.value);
+  }
+
+  private workflowGraph(workflowId: string) {
+    const catalog = required<HTMLScriptElement>(this.document, "dashboard-workflow-graphs");
+    return (JSON.parse(catalog.textContent ?? "{}") as Record<string, WorkflowGraph>)[workflowId];
+  }
+
+  private renderManagerConfiguration(workflowId: string, strategy: string) {
+    const rows = required(this.document, "manager-configuration-rows");
+    const configuration = this.workflowGraph(workflowId)?.configuration ?? [];
+    rows.replaceChildren(...configuration.map(({ label, items }) => {
+      const row = element(this.document, "tr");
+      const heading = element(this.document, "th"); heading.scope = "row"; heading.textContent = label;
+      const values = element(this.document, "td", "manager-configuration-items");
+      for (const item of items) { const value = element(this.document, "span", "manager-configuration-item"); value.textContent = item; values.appendChild(value); }
+      row.appendChild(heading); row.appendChild(values); return row;
+    }));
+    required(this.document, "manager-configuration").hidden = configuration.length === 0;
+    this.renderManagerConfigurationNote(strategy);
+  }
+
+  private renderManagerConfigurationNote(strategy: string) {
+    required(this.document, "manager-configuration-note").textContent = strategy === "vendored"
+      ? "These files are copied into the repository."
+      : "These components are resolved from the pinned catalog source.";
   }
 
   private renderManagerGraph(workflowId: string) {
-    const catalog = required<HTMLScriptElement>(this.document, "dashboard-workflow-graphs");
-    const graphs = JSON.parse(catalog.textContent ?? "{}") as Record<string, WorkflowGraph>;
-    const graph = graphs[workflowId];
+    const graph = this.workflowGraph(workflowId);
     const section = required(this.document, "manager-graph");
     section.hidden = !graph;
     if (!graph) return;

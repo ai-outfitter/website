@@ -40,11 +40,19 @@ for (const [id, graph] of Object.entries(graphPayload)) {
   assert.equal(typeof graph.title, 'string', `${id} must have a graph title`);
   assert.match(graph.source, /^flowchart\s+(LR|TB)\n/, `${id} must have a Mermaid flowchart`);
   assert.ok(Array.isArray(graph.nodes) && graph.nodes.length > 0, `${id} must have graph nodes`);
+  assert.ok(Array.isArray(graph.configuration) && graph.configuration.length > 0, `${id} must describe its included configuration`);
   assert.equal(new Set(graph.nodes.map((node) => node.id)).size, graph.nodes.length, `${id} graph node ids must be unique`);
   for (const node of graph.nodes) {
     assert.equal(typeof node.id, 'string', `${id} graph nodes must have ids`);
     assert.ok(graph.source.includes(node.id), `${id} Mermaid must include node ${node.id}`);
   }
 }
+const founderConfiguration = Object.fromEntries(graphPayload.founder.configuration.map(({ label, items }) => [label, items]));
+assert.deepEqual(founderConfiguration.Workflows, ['Adversarial Review', 'Founder']);
+assert.deepEqual(founderConfiguration.Agents, ['Code Review', 'Founder']);
+assert.deepEqual(founderConfiguration.MCPs, ['GitHub Write']);
+assert.deepEqual(founderConfiguration.Skills, ['Code Review']);
+assert.deepEqual(founderConfiguration['Prompt fragments'], ['Adversarial Review Practice', 'RFC 2119 Requirements']);
+assert.deepEqual(founderConfiguration.Environments, ['Delegated Runtime', 'Local']);
 
 console.log('Dashboard runtime styles are globally available and rooted beneath .dashboard.');
