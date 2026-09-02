@@ -52,11 +52,11 @@ async function bodyRecord(request: Request) {
 
 function planRequest(body: Record<string, unknown>, account: Account): PlanRequest {
   if (body.target === "workflow") {
-    if (typeof body.workflow !== "string" || !["accept", "remove"].includes(String(body.action))) throw new Error("Invalid workflow plan request");
+    if (typeof body.workflow !== "string" || !["enable", "remove"].includes(String(body.action))) throw new Error("Invalid workflow plan request");
     return {
       target: "workflow",
       workflow: body.workflow,
-      action: body.action as "accept" | "remove",
+      action: body.action as "enable" | "remove",
       private: body.private === true,
       accountType: account.type,
     };

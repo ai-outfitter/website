@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,16 +47,8 @@ function repositoriesRoot() {
   throw new Error("Set COMMUNITY_PROFILES_DIR and OUTFITTER_CLI when repository siblings are unavailable.");
 }
 const repositoryRoot = repositoriesRoot();
-let community = resolve(process.env.COMMUNITY_PROFILES_DIR || join(repositoryRoot, "community-profiles"));
-const workflowCatalogWorktree = `${community}.worktrees/feat/workflow-catalog`;
-if (!process.env.COMMUNITY_PROFILES_DIR) {
-  try { await access(join(workflowCatalogWorktree, "workflows")); community = workflowCatalogWorktree; } catch { /* use the explicitly configured or default checkout */ }
-}
-let outfitter = process.env.OUTFITTER_CLI || "outfitter";
-const workflowOutfitter = join(repositoryRoot, "outfitter.worktrees/feat/workflow-resources/code/cli/dist/cli.js");
-if (!process.env.OUTFITTER_CLI) {
-  try { await access(workflowOutfitter); outfitter = workflowOutfitter; } catch { /* use the Outfitter available on PATH */ }
-}
+const community = resolve(process.env.COMMUNITY_PROFILES_DIR || join(repositoryRoot, "community-profiles"));
+const outfitter = process.env.OUTFITTER_CLI || "outfitter";
 const scratch = await mkdtemp(join(tmpdir(), "website-workflows-"));
 const sharedFiles = new Map();
 

@@ -11,7 +11,7 @@ import {
 
 describe("dashboard capabilities", () => {
   it("reports local readiness independently from customization", () => {
-    expect(assessLocalExecution("accepted").state).toBe("available");
+    expect(assessLocalExecution("enabled").state).toBe("available");
     expect(assessLocalExecution("customized").state).toBe("available");
     expect(assessLocalExecution("needs-attention")).toMatchObject({
       state: "needs-configuration",

@@ -1,10 +1,10 @@
 import type { Octokit } from "@octokit/core";
 import { base64url, secureEqual } from "./crypto";
 import { sourceFreshness, textBlob, tree } from "./github";
-import { pinGitHubSource, removeSource, setSourceRef, setWorkflowAcceptance, summarizeSettings } from "./settings";
+import { pinGitHubSource, removeSource, setSourceRef, setWorkflowEnablement, summarizeSettings } from "./settings";
 
-export type WorkflowState = "available" | "accepted" | "customized" | "needs-attention";
-export type WorkflowAction = "accept" | "remove";
+export type WorkflowState = "available" | "enabled" | "customized" | "needs-attention";
+export type WorkflowAction = "enable" | "remove";
 export type SourceAction = "update" | "remove";
 export type WorkflowStatus = { id: string; state: WorkflowState; sourceSha: string; reason?: string };
 export type Change = { path: string; action: "add" | "update" | "delete"; before: string | null; after: string | null; mode: "100644" | "100755" };
@@ -59,8 +59,8 @@ export async function buildPlan(client: Octokit, input: { repository: string; ca
     const request = input.request;
     const selected = input.catalog.workflows.find((workflow) => workflow.id === request.workflow);
     if (!selected) throw new Error("Invalid workflow selection");
-    after = setWorkflowAcceptance(raw ?? undefined, selected.id, request.action === "accept");
-    if (request.action === "accept") after = pinGitHubSource(after, input.catalog.sourceRepository, input.catalog.sourceRef);
+    after = setWorkflowEnablement(raw ?? undefined, selected.id, request.action === "enable");
+    if (request.action === "enable") after = pinGitHubSource(after, input.catalog.sourceRepository, input.catalog.sourceRef);
     intent = { target: "workflow", id: selected.id, action: request.action };
   } else {
     const request = input.request;

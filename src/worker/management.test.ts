@@ -6,16 +6,16 @@ const plan = (expiresAt = Date.now() + 60_000): Plan => ({
   repository: "octo/.agents",
   baseSha: "base",
   sourceSha: "source",
-  intent: { target: "workflow", id: "review", action: "accept" },
+  intent: { target: "workflow", id: "review", action: "enable" },
   changes: [{ path: "settings.yml", action: "add", before: null, after: "workflows:\n  - review\n", mode: "100644" }],
   warnings: [],
   expiresAt,
 });
 
-describe("workflow acceptance plans", () => {
+describe("workflow enablement plans", () => {
   it("creates only settings.yml and pins the catalog release tag", async () => {
     const workflow: WorkflowBundle = { id: "review", sourceRepository: "ai-outfitter/community-profiles", sourceRef: "v-test", sourceSha: "a".repeat(40), files: [] };
-    const result = await buildPlan({} as never, { repository: "acme/.agents", catalog: catalogFrom([workflow]), request: { target: "workflow", workflow: "review", action: "accept" }, repositoryExists: false });
+    const result = await buildPlan({} as never, { repository: "acme/.agents", catalog: catalogFrom([workflow]), request: { target: "workflow", workflow: "review", action: "enable" }, repositoryExists: false });
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]).toMatchObject({ path: "settings.yml", action: "add" });
     expect(summarizeSettings(result.changes[0].after!).workflows).toEqual(["review"]);

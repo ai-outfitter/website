@@ -33,13 +33,13 @@ export async function repositoryConfiguration(client: Octokit, login: string, re
     repositoryUrl,
     settings: { exists: Boolean(settingsEntry), raw, ...summary, sources },
     workflows: catalog.workflows.map(({ files, ...workflow }) => {
-      const accepted = summary.workflows.includes(workflow.id);
-      const customized = accepted && files.some((file) => file.path.startsWith("agents/") && snapshot.files[file.path]);
-      const state = !accepted ? "available" : !catalogSource ? "needs-attention" : customized ? "customized" : "accepted";
+      const enabled = summary.workflows.includes(workflow.id);
+      const customized = enabled && files.some((file) => file.path.startsWith("agents/") && snapshot.files[file.path]);
+      const state = !enabled ? "available" : !catalogSource ? "needs-attention" : customized ? "customized" : "enabled";
       const components = files
         .filter((file) => !file.path.startsWith(".outfitter/"))
         .map((file) => ({ type: file.path.split("/")[0], component: file.path, origin: snapshot.files[file.path] ? "organization" : catalog.sourceRepository }));
-      return { ...workflow, state, ...(state === "needs-attention" ? { reason: "The accepted workflow's catalog source is missing." } : {}), components };
+      return { ...workflow, state, ...(state === "needs-attention" ? { reason: "The enabled workflow's catalog source is missing." } : {}), components };
     }),
   };
 }

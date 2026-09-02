@@ -9,9 +9,9 @@ const workflow: WorkflowBundle = { id: "review", sourceRepository: "ai-outfitter
 const snapshot = (files: RepositorySnapshot["files"]): RepositorySnapshot => ({ sha: "head", files });
 
 describe("workflow repository status", () => {
-  it("separates availability, acceptance, customization, and attention", () => {
+  it("separates availability, enablement, customization, and attention", () => {
     expect(classifyWorkflow(workflow, snapshot({}), false, true).state).toBe("available");
-    expect(classifyWorkflow(workflow, snapshot({}), true, true).state).toBe("accepted");
+    expect(classifyWorkflow(workflow, snapshot({}), true, true).state).toBe("enabled");
     expect(classifyWorkflow(workflow, snapshot({ "agents/reviewer/agent.md": { mode: "100644", blobSha: "local" } }), true, true).state).toBe("customized");
     expect(classifyWorkflow(workflow, snapshot({}), true, false).state).toBe("needs-attention");
   });

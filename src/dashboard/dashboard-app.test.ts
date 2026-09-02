@@ -31,7 +31,7 @@ const configuration = {
   login: "acme", repository: account.repository, repositoryUrl: "https://github.com/acme/.agents",
   settings: { exists: true, valid: true, raw: "# keep\nsources:\n  - github: ai-outfitter/community-profiles\n    ref: v1\nworkflows:\n  - review\n", defaults: {}, workflows: ["review"], sources: [{ id: "sources:0", section: "sources", kind: "github", location: "ai-outfitter/community-profiles", github: "ai-outfitter/community-profiles", ref: "v1", dependencies: ["review"], repositoryUrl: "https://github.com/ai-outfitter/community-profiles" }] },
   workflows: [
-    { id: "review", title: "Adversarial review", description: "Review a pull request.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "accepted", components: [{ type: "agents", component: "agents/code-review/agent.md", origin: "ai-outfitter/community-profiles" }, { type: "mcp", component: "github-write", origin: "ai-outfitter/community-profiles" }] },
+    { id: "review", title: "Adversarial review", description: "Review a pull request.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "enabled", components: [{ type: "agents", component: "agents/code-review/agent.md", origin: "ai-outfitter/community-profiles" }, { type: "mcp", component: "github-write", origin: "ai-outfitter/community-profiles" }] },
     { id: "founder", title: "Founder", description: "Plan the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
     { id: "engineer", title: "Engineer", description: "Deliver the work.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
     { id: "software-factory", title: "Software factory", description: "Automate delivery.", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "a".repeat(40), state: "available" },
@@ -113,7 +113,7 @@ describe("dashboard client", () => {
     document.querySelector<HTMLButtonElement>("#workflow-actions button")?.click();
     await vi.waitFor(() => expect(document.querySelector("#workflow-preview")?.textContent).toContain("ADD settings.yml"));
     const planCall = fetcher.mock.calls.find(([path]) => path === "/api/accounts/acme/plans");
-    expect(JSON.parse(String(planCall?.[1]?.body))).toMatchObject({ target: "workflow", workflow: "founder", action: "accept" });
+    expect(JSON.parse(String(planCall?.[1]?.body))).toMatchObject({ target: "workflow", workflow: "founder", action: "enable" });
   });
 
   it("reuses authentication state when dashboard content is replaced", async () => {

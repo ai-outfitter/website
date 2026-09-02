@@ -71,15 +71,15 @@ export function summarizeSettings(source: string): SettingsSummary {
   };
 }
 
-export function setWorkflowAcceptance(source: string | undefined, workflow: string, accepted: boolean) {
+export function setWorkflowEnablement(source: string | undefined, workflow: string, enabled: boolean) {
   const parsed = document(source ?? "{}\n");
   if (parsed.errors.length || !isMap(parsed.contents)) throw new Error("settings.yml is invalid");
   let sequence = parsed.get("workflows", true);
   if (sequence === undefined) { parsed.set("workflows", parsed.createNode([])); sequence = parsed.get("workflows", true); }
   if (!isSeq(sequence)) throw new Error("workflows must be a sequence");
   const index = sequence.items.findIndex((item) => String(item) === workflow);
-  if (accepted && index < 0) sequence.add(workflow);
-  if (!accepted && index >= 0) sequence.items.splice(index, 1);
+  if (enabled && index < 0) sequence.add(workflow);
+  if (!enabled && index >= 0) sequence.items.splice(index, 1);
   return String(parsed);
 }
 

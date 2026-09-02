@@ -11,7 +11,7 @@ type Workflow = {
   description?: string;
   sourceRepository: string;
   sourceSha: string;
-  state: "available" | "accepted" | "customized" | "needs-attention";
+  state: "available" | "enabled" | "customized" | "needs-attention";
   reason?: string;
   components?: Array<{ type: string; component: string; origin: string }>;
 };
@@ -328,16 +328,16 @@ export class DashboardController {
   private renderWorkflows() {
     const workflows = this.configuration!.workflows;
     const implementationProfileOrder = new Map([["founder", 0], ["engineer", 1], ["software-factory", 2]]);
-    const order = { "needs-attention": 0, customized: 1, accepted: 2, available: 3 };
+    const order = { "needs-attention": 0, customized: 1, enabled: 2, available: 3 };
     const installed = workflows.filter((workflow) => workflow.state !== "available").sort((left, right) => order[left.state] - order[right.state] || (left.title ?? left.id).localeCompare(right.title ?? right.id));
     const available = workflows.filter((workflow) => workflow.state === "available");
     const implementation = available
       .filter((workflow) => implementationProfileOrder.has(workflow.id))
       .sort((left, right) => implementationProfileOrder.get(left.id)! - implementationProfileOrder.get(right.id)!);
     const community = available.filter((workflow) => !implementationProfileOrder.has(workflow.id)).sort((left, right) => (left.title ?? left.id).localeCompare(right.title ?? right.id));
-    this.renderWorkflowGroup("installed-workflows", installed, "No workflows are accepted.");
-    this.renderWorkflowGroup("implementation-workflows", implementation, "Every implementation profile is accepted.", "h4");
-    this.renderWorkflowGroup("community-workflows", community, "Every supporting workflow is accepted.", "h4");
+    this.renderWorkflowGroup("installed-workflows", installed, "No workflows are enabled.");
+    this.renderWorkflowGroup("implementation-workflows", implementation, "Every implementation profile is enabled.", "h4");
+    this.renderWorkflowGroup("community-workflows", community, "Every supporting workflow is enabled.", "h4");
   }
 
   private renderWorkflowGroup(id: string, workflows: Workflow[], emptyText: string, headingTag: "h3" | "h4" = "h3") {
@@ -370,9 +370,9 @@ export class DashboardController {
     this.renderManagerConfiguration(workflow);
     required(this.document, "repository-options").hidden = Boolean(this.configuration!.repository);
     const actions = required(this.document, "workflow-actions");
-    const definitions: Array<{ action: "accept" | "remove"; label: string; primary?: boolean }> = workflow.state === "available"
-      ? [{ action: "accept", label: "Preview acceptance", primary: true }]
-      : [{ action: "remove", label: "Remove acceptance" }];
+    const definitions: Array<{ action: "enable" | "remove"; label: string; primary?: boolean }> = workflow.state === "available"
+      ? [{ action: "enable", label: "Preview enablement", primary: true }]
+      : [{ action: "remove", label: "Remove enablement" }];
     actions.replaceChildren(...definitions.map(({ action, label, primary }) => {
       const button = element(this.document, "button", `button${primary ? " primary" : ""}`) as HTMLButtonElement;
       button.type = "button"; button.textContent = label; button.dataset.workflowAction = action; button.onclick = () => void this.previewWorkflow(workflow, action); return button;
@@ -419,7 +419,7 @@ export class DashboardController {
     void renderWorkflowDiagram(diagram, `dashboard-${workflowId}`, this.abort.signal);
   }
 
-  private async previewWorkflow(workflow: Workflow, action: "accept" | "remove") {
+  private async previewWorkflow(workflow: Workflow, action: "enable" | "remove") {
     await this.preview("workflow", {
       target: "workflow", workflow: workflow.id, action,
       private: required<HTMLSelectElement>(this.document, "visibility").value === "private",

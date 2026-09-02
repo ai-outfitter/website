@@ -8,21 +8,21 @@ export type CapabilityAssessment = {
   prerequisites?: string[];
 };
 
-export type AcceptedWorkflowState = "available" | "accepted" | "customized" | "needs-attention" | undefined;
+export type EnabledWorkflowState = "available" | "enabled" | "customized" | "needs-attention" | undefined;
 
-export function assessLocalExecution(state: AcceptedWorkflowState): CapabilityAssessment {
-  if (state === "accepted" || state === "customized") {
+export function assessLocalExecution(state: EnabledWorkflowState): CapabilityAssessment {
+  if (state === "enabled" || state === "customized") {
     return {
       id: "local-execution",
       title: "Run locally",
       state: "available",
-      summary: "The accepted workflow is ready for Outfitter to resolve locally.",
+      summary: "The enabled workflow is ready for Outfitter to resolve locally.",
     };
   }
 
   const reason = state === "needs-attention"
-    ? "The accepted workflow has a missing or invalid dependency."
-    : "Accept a workflow in this account's .agents repository first.";
+    ? "The enabled workflow has a missing or invalid dependency."
+    : "Enable a workflow in this account's .agents repository first.";
 
   return {
     id: "local-execution",
