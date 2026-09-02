@@ -95,9 +95,10 @@ devenv shell -- npm run deploy:dry-run
 
 ## Deploy
 
-Cloudflare Workers Builds automatically builds and deploys every push to
-`main`. Production MUST be built from the current `origin/main`; do not deploy
-from a stale local checkout.
+GitHub Actions checks, builds, and deploys every push to `main` with Wrangler.
+The production deploy runs only after the complete site job passes and uses the
+`CLOUDFLARE_API_TOKEN` Actions secret. Pull requests run the same checks and a
+Wrangler dry run but MUST NOT deploy.
 
 For recovery or an intentional manual deployment, the deploy command updates
 its clean source-repository cache, syncs the docs, checks and builds the site,
