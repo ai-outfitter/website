@@ -69,19 +69,20 @@ jobs:
         with:
           name: preview-assets
           path: dist
-      - name: Deploy preview Worker version
+      - name: Deploy Worker Preview
         id: deploy
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PREVIEW_ALIAS: pr-${{ github.event.number }}
+          PREVIEW_NAME: pr-${{ github.event.number }}
         run: |
-          npm exec -- wrangler versions upload \
-            --preview-alias "$PREVIEW_ALIAS" \
+          npm exec -- wrangler preview \
+            --name "$PREVIEW_NAME" \
             --message "Preview for PR #${{ github.event.number }} at ${{ github.event.pull_request.head.sha }}" \
-            --tag "$PREVIEW_ALIAS" | tee "$RUNNER_TEMP/wrangler-preview.log"
+            --tag "$PREVIEW_NAME" \
+            --json | tee "$RUNNER_TEMP/wrangler-preview.json"
 
-          preview_url=$(sed -nE 's#.*(https://[^[:space:]]+\.workers\.dev).*#\1#p' "$RUNNER_TEMP/wrangler-preview.log" | tail -1)
+          preview_url=$(jq -r '.deployment_urls[0] // .preview_urls[0] // empty' "$RUNNER_TEMP/wrangler-preview.json")
           if [[ -z "$preview_url" ]]; then
             echo "Wrangler did not return a preview URL." >&2
             exit 1

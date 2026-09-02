@@ -6,7 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/worker.ts",
   "workers_dev": false,
-  "preview_urls": true,
   "routes": [
     {
       "pattern": "ai-outfitter.com",
