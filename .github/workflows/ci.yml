@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
 jobs:
   site:
@@ -36,8 +37,56 @@ jobs:
       - run: npm run test:search
       - run: npm run test:workflows
       - run: npm exec -- wrangler deploy --dry-run
+      - name: Package preview assets
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-assets
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
       - name: Deploy production Worker
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm exec -- wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  preview:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: site
+    runs-on: ubuntu-latest
+    environment:
+      name: preview/pr-${{ github.event.number }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: preview-assets
+          path: dist
+      - name: Deploy preview Worker version
+        id: deploy
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIEW_ALIAS: pr-${{ github.event.number }}
+        run: |
+          npm exec -- wrangler versions upload \
+            --preview-alias "$PREVIEW_ALIAS" \
+            --message "Preview for PR #${{ github.event.number }} at ${{ github.event.pull_request.head.sha }}" \
+            --tag "$PREVIEW_ALIAS" | tee "$RUNNER_TEMP/wrangler-preview.log"
+
+          preview_url=$(sed -nE 's#.*(https://[^[:space:]]+\.workers\.dev).*#\1#p' "$RUNNER_TEMP/wrangler-preview.log" | tail -1)
+          if [[ -z "$preview_url" ]]; then
+            echo "Wrangler did not return a preview URL." >&2
+            exit 1
+          fi
+
+          echo "url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "### Cloudflare preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$preview_url]($preview_url)" >> "$GITHUB_STEP_SUMMARY"
