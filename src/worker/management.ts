@@ -31,7 +31,7 @@ export function catalogFrom(workflows: WorkflowBundle[]): Catalog {
   const sourceSha = workflows[0]?.sourceSha ?? "";
   const sourceRepository = workflows[0]?.sourceRepository ?? "";
   if (workflows.some((workflow) => workflow.sourceSha !== sourceSha || workflow.sourceRepository !== sourceRepository)) throw new Error("Catalog workflows must share one source revision");
-  return { sourceRepository, sourceSha, sourceRef: "v1.4.0", workflows };
+  return { sourceRepository, sourceSha, sourceRef: "v1.5.0", workflows };
 }
 
 export async function repositorySnapshot(client: Octokit, owner: string): Promise<RepositorySnapshot> {

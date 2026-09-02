@@ -19,7 +19,7 @@ describe("workflow acceptance plans", () => {
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]).toMatchObject({ path: "settings.yml", action: "add" });
     expect(summarizeSettings(result.changes[0].after!).workflows).toEqual(["review"]);
-    expect(result.changes[0].after).toContain("ref: v1.4.0");
+    expect(result.changes[0].after).toContain("ref: v1.5.0");
     expect(result.changes.some((change) => change.path.startsWith(".outfitter/") || change.path.startsWith("workflows/"))).toBe(false);
   });
 
