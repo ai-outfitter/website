@@ -14,7 +14,28 @@
   --site-signal-high: #ffb36b;
   --site-signal-low: #3b2417;
   --site-danger: #ff9c8f;
+  --site-grid: rgba(255, 139, 61, 0.025);
+  --site-glow: #262019;
   --site-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  background: #fffdf7;
+  color: #171914;
+  --site-ink: #fffdf7;
+  --site-canvas: #f8f5ed;
+  --site-canvas-raised: #efede5;
+  --site-line: #deddd4;
+  --site-text: #171914;
+  --site-muted: #4d5049;
+  --site-dim: #73766d;
+  --site-signal: #c33f12;
+  --site-signal-high: #631c08;
+  --site-signal-low: #ffe3d8;
+  --site-danger: #9e2b1e;
+  --site-grid: rgba(195, 63, 18, 0.055);
+  --site-glow: #ffe3d8;
 }
 
 * {
@@ -25,9 +46,9 @@ body {
   min-width: 20rem;
   margin: 0;
   background:
-    linear-gradient(rgba(255, 139, 61, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 139, 61, 0.025) 1px, transparent 1px),
-    radial-gradient(circle at 80% 0%, #262019 0, transparent 32rem),
+    linear-gradient(var(--site-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--site-grid) 1px, transparent 1px),
+    radial-gradient(circle at 80% 0%, var(--site-glow) 0, transparent 32rem),
     var(--site-ink);
   background-size: 32px 32px, 32px 32px, auto, auto;
   color: var(--site-text);
