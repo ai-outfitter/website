@@ -6,7 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/worker.ts",
   "workers_dev": false,
-  "preview_urls": true,
   "routes": [
     {
       "pattern": "ai-outfitter.com",
@@ -35,5 +34,22 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
+  },
+  "env": {
+    "preview": {
+      "workers_dev": true,
+      "preview_urls": false,
+      "routes": [],
+      "vars": {
+        "BETTER_AUTH_URL": "https://ai-outfitter.com",
+        "GITHUB_APP_SLUG": "ai-outfitter",
+        "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
+      },
+      "durable_objects": {
+        "bindings": [
+          { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
+        ]
+      }
+    }
   }
 }
