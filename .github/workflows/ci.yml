@@ -77,7 +77,7 @@ jobs:
           PREVIEW_NAME: ai-outfitter-website-pr-${{ github.event.number }}
         run: |
           npm exec -- wrangler deploy \
-            --config wrangler.preview.jsonc \
+            --env preview \
             --name "$PREVIEW_NAME" \
             --message "Preview for PR #${{ github.event.number }} at ${{ github.event.pull_request.head.sha }}" \
             --tag "pr-${{ github.event.number }}" | tee "$RUNNER_TEMP/wrangler-preview.log"
