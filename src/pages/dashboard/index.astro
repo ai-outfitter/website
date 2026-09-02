@@ -148,6 +148,8 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .button { display: inline-block; padding: .75rem .95rem; cursor: pointer; text-decoration: none; }
   .dashboard .button.primary { background: var(--site-signal); color: #211107; }
   .dashboard .button:disabled { cursor: not-allowed; opacity: .45; }
+  .dashboard .button.loading::before { display: inline-block; width: .75rem; height: .75rem; margin-right: .55rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; content: ""; vertical-align: -.12rem; animation: dashboard-spin .7s linear infinite; }
+  @keyframes dashboard-spin { to { transform: rotate(360deg); } }
   .dashboard select { min-width: min(100%, 18rem); padding: .7rem; background: var(--site-ink); text-transform: none; }
   .dashboard label { display: block; margin-bottom: .45rem; font-weight: 700; }
   .dashboard .muted, .dashboard .status { color: var(--site-muted); }

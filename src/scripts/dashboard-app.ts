@@ -464,12 +464,29 @@ export class DashboardController {
   private async apply(mode: "pull-request" | "direct") {
     if (!this.planToken || !this.planScope) return this.status("Preview the repository change first.");
     if (!confirm(mode === "direct" ? "Commit these changes to the default branch?" : "Open a pull request with these changes?")) return;
+    const actions = required(this.document, `${this.planScope}-apply-actions`);
+    const buttons = [...actions.querySelectorAll<HTMLButtonElement>("button[data-apply]")];
+    const labels = buttons.map((button) => button.textContent ?? "");
+    const selected = buttons.find((button) => button.dataset.apply === mode);
+    actions.setAttribute("aria-busy", "true");
+    buttons.forEach((button) => { button.disabled = true; });
+    if (selected) { selected.classList.add("loading"); selected.textContent = mode === "pull-request" ? "Opening pull request…" : "Committing…"; }
+    this.status(mode === "pull-request" ? "Creating the GitHub pull request…" : "Committing the change to GitHub…");
+    const restore = () => {
+      actions.removeAttribute("aria-busy");
+      buttons.forEach((button, index) => { button.disabled = false; button.classList.remove("loading"); button.textContent = labels[index]; });
+    };
     try {
       const result = await this.request<{ pullRequestUrl?: string; commitUrl?: string }>(`/api/accounts/${encodeURIComponent(this.login!)}/plans/apply`, { method: "POST", body: JSON.stringify({ token: this.planToken, mode }) });
       if (!this.active()) return;
       const target = result.pullRequestUrl ?? result.commitUrl;
-      if (target) this.location.assign(target);
-    } catch (error) { if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error); }
+      if (!target) { restore(); return this.status("GitHub completed the request without returning a destination."); }
+      this.status(mode === "pull-request" ? "Pull request created. Opening GitHub…" : "Commit created. Opening GitHub…");
+      this.location.assign(target);
+    } catch (error) {
+      if (this.active()) restore();
+      if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
+    }
   }
 
   private status(message: string) { if (this.active()) required(this.document, "dashboard-status").textContent = message; }
