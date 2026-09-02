@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, closed]
   push:
     branches: [main]
 
@@ -11,6 +12,7 @@ permissions:
 
 jobs:
   site:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     env:
       # Upstream workflow-catalog branches are intentionally unpublished. CI
@@ -52,7 +54,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
   preview:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     needs: site
     runs-on: ubuntu-latest
     environment:
@@ -91,3 +93,19 @@ jobs:
           echo "url=$preview_url" >> "$GITHUB_OUTPUT"
           echo "### Cloudflare preview" >> "$GITHUB_STEP_SUMMARY"
           echo "[$preview_url]($preview_url)" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Delete preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIEW_NAME: ai-outfitter-website-pr-${{ github.event.number }}
+        run: npm exec -- wrangler delete "$PREVIEW_NAME" --force
