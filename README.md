@@ -98,10 +98,11 @@ devenv shell -- npm run deploy:dry-run
 GitHub Actions checks, builds, and deploys every push to `main` with Wrangler.
 The production deploy runs only after the complete site job passes and uses the
 `CLOUDFLARE_API_TOKEN` Actions secret. After the same checks pass,
-same-repository pull requests publish an isolated, static Cloudflare Worker
-and expose its stable URL as a GitHub environment. The Worker is updated on
-every push. Pull requests from forks run the checks and Wrangler dry run but do
-not receive the deployment secret.
+same-repository pull requests upload a native version preview of the production
+Worker using `wrangler.jsonc` and expose its stable `pr-<number>` alias as a
+GitHub environment. Uploading a version does not direct production traffic to
+it. Pull requests from forks run the checks and Wrangler dry run but do not
+receive the deployment secret.
 
 For recovery or an intentional manual deployment, the deploy command updates
 its clean source-repository cache, syncs the docs, checks and builds the site,
