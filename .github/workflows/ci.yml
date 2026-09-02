@@ -98,14 +98,26 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
       - name: Delete preview Worker
+        shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 52b3dd3372a05fd2be0eb0f8ec36f9d3
           PREVIEW_NAME: ai-outfitter-website-pr-${{ github.event.number }}
-        run: npm exec -- wrangler delete "$PREVIEW_NAME" --force
+        run: |
+          response_file=$(mktemp)
+          status=$(curl --silent --show-error \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --request DELETE \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$PREVIEW_NAME?force=true")
+
+          if [[ "$status" == "200" || "$status" == "404" ]]; then
+            echo "Deleted $PREVIEW_NAME (Cloudflare HTTP $status)."
+            exit 0
+          fi
+
+          echo "Cloudflare could not delete $PREVIEW_NAME (HTTP $status)." >&2
+          jq '{success, errors, messages}' "$response_file" >&2
+          exit 1
