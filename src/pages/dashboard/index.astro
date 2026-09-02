@@ -39,6 +39,14 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
             <h3>Remote settings</h3>
             <div id="remote-sources"></div>
           </div>
+          <div id="source-plan" class="plan-panel" tabindex="-1" hidden>
+            <h3>Preview source change</h3>
+            <div id="source-preview" class="preview"></div>
+            <div id="source-apply-actions" class="actions" hidden>
+              <button class="button primary" type="button" data-apply="pull-request">Open pull request</button>
+              <button class="button" type="button" data-apply="direct">Commit to default branch</button>
+            </div>
+          </div>
         </section>
 
         <section class="workflow-status-section">
@@ -68,14 +76,6 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
           </section>
         </section>
 
-        <div id="source-plan" class="panel plan-panel" hidden>
-          <h2>Preview source change</h2>
-          <div id="source-preview" class="preview"></div>
-          <div id="source-apply-actions" class="actions" hidden>
-            <button class="button primary" type="button" data-apply="pull-request">Open pull request</button>
-            <button class="button" type="button" data-apply="direct">Commit to default branch</button>
-          </div>
-        </div>
       </section>
 
       <section id="workflow-manager" class="panel manager" hidden>

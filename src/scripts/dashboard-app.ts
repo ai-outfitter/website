@@ -289,7 +289,7 @@ export class DashboardController {
       actions.dataset.label = "Actions";
       const actionList = element(this.document, "div", "source-action-list");
       const update = element(this.document, "button", "source-action") as HTMLButtonElement;
-      update.type = "button"; update.textContent = "Update"; update.disabled = true; update.dataset.sourceUpdate = source.id; update.onclick = () => void this.previewSource(source.id, "update");
+      update.type = "button"; update.textContent = "Preview update"; update.disabled = true; update.dataset.sourceUpdate = source.id; update.onclick = () => void this.previewSource(source.id, "update");
       const remove = element(this.document, "button", "source-action") as HTMLButtonElement;
       remove.type = "button"; remove.textContent = "Remove"; remove.disabled = source.dependencies.length > 0; remove.onclick = () => void this.previewSource(source.id, "remove");
       actionList.appendChild(update); actionList.appendChild(remove); actions.appendChild(actionList);
@@ -432,6 +432,7 @@ export class DashboardController {
 
   private async preview(scope: "workflow" | "source", request: Record<string, unknown>) {
     try {
+      this.status(scope === "source" ? "Preparing source update preview…" : "Preparing workflow preview…");
       const result = await this.request<{ token: string; plan: { baseSha: string | null; changes: PlanChange[] } }>(`/api/accounts/${encodeURIComponent(this.login!)}/plans`, { method: "POST", body: JSON.stringify(request) });
       if (!this.active()) return;
       this.planToken = result.token; this.planScope = scope;
@@ -442,12 +443,18 @@ export class DashboardController {
         heading.textContent = `${change.action.toUpperCase()} ${change.path}`; content.textContent = change.after ?? "(deleted)"; item.appendChild(heading); item.appendChild(content); return item;
       });
       root.replaceChildren(summary, ...details);
-      if (scope === "source") required(this.document, "source-plan").hidden = false;
+      if (scope === "source") {
+        const panel = required(this.document, "source-plan");
+        panel.hidden = false;
+        panel.focus({ preventScroll: true });
+        if (typeof panel.scrollIntoView === "function") panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
       const apply = required(this.document, `${scope}-apply-actions`); apply.hidden = false;
       const pr = apply.querySelector<HTMLButtonElement>('[data-apply="pull-request"]');
       const direct = apply.querySelector<HTMLButtonElement>('[data-apply="direct"]');
       if (pr) pr.hidden = result.plan.baseSha === null;
       if (direct) direct.textContent = result.plan.baseSha === null ? "Create repository" : "Commit to default branch";
+      this.status("Review the change below, then choose how to apply it.");
     } catch (error) {
       if (!this.active() || (error as { name?: string }).name === "AbortError") return;
       this.planToken = null; this.planScope = null; this.showError(error);

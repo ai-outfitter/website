@@ -14,7 +14,7 @@ const fixture = `
       <h2 id="configuration-title"></h2><a id="repository-link"></a><div id="configuration-summary"></div>
       <div id="catalog-sources"></div><section id="remote-source-section"><div id="remote-sources"></div></section>
       <div id="installed-workflows"></div><div id="implementation-workflows"></div><div id="community-workflows"></div>
-      <div id="source-plan"><div id="source-preview"></div><div id="source-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div></div>
+      <div id="source-plan" tabindex="-1" hidden><div id="source-preview"></div><div id="source-apply-actions"><button data-apply="pull-request"></button><button data-apply="direct"></button></div></div>
     </section>
     <section id="workflow-manager" hidden>
       <a id="manager-back"></a><h2 id="manager-title"></h2><span id="manager-source"></span><span id="manager-state"></span><p id="manager-description"></p>
@@ -62,6 +62,7 @@ describe("dashboard client", () => {
       if (path === "/api/accounts/acme/configuration") return Response.json(configuration);
       if (path === "/api/accounts") return Response.json({ user: { name: "Octo" }, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter" });
       if (path.endsWith("/configuration/freshness")) { await freshnessWait; return Response.json({ sources: [{ id: "sources:0", status: "outdated", latestRef: "v2" }] }); }
+      if (path === "/api/accounts/acme/plans") return Response.json({ token: "signed", plan: { baseSha: "base", changes: [{ path: "settings.yml", action: "update", before: "ref: v1\n", after: "ref: v2\n" }] } });
       throw new Error(`Unexpected request: ${path}`);
     });
     const history = historyAt();
@@ -85,6 +86,13 @@ describe("dashboard client", () => {
     releaseFreshness!();
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>("[data-source-ref-indicator]")?.hidden).toBe(false));
     expect(document.querySelector("[data-source-ref-indicator]")?.textContent).toBe("↑");
+    const update = document.querySelector<HTMLButtonElement>("[data-source-update]");
+    expect(update?.textContent).toBe("Preview update");
+    update?.click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>("#source-plan")?.hidden).toBe(false));
+    expect(document.activeElement?.id).toBe("source-plan");
+    expect(document.querySelector("#source-preview")?.textContent).toContain("UPDATE settings.yml");
+    expect(document.querySelector("#dashboard-status")?.textContent).toContain("Review the change below");
     expect(history.replaceState).toHaveBeenCalledWith(null, "", "/dashboard/acme/");
   });
 
