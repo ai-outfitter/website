@@ -20,7 +20,7 @@ export type Plan = {
   expiresAt: number;
 };
 export type BundleFile = { path: string; content: string; mode: "100644" | "100755"; sha256: string; blobSha?: string };
-export type WorkflowBundle = { id: string; title?: string; description?: string; sourceRepository: string; sourceSha: string; files: BundleFile[] };
+export type WorkflowBundle = { id: string; title?: string; description?: string; sourceRepository: string; sourceRef: string; sourceSha: string; files: BundleFile[] };
 export type Catalog = { sourceRepository: string; sourceSha: string; sourceRef: string; workflows: WorkflowBundle[] };
 export type RepositorySnapshot = { sha: string; files: Record<string, { mode: string; blobSha: string }> };
 export type PlanRequest =
@@ -30,8 +30,9 @@ export type PlanRequest =
 export function catalogFrom(workflows: WorkflowBundle[]): Catalog {
   const sourceSha = workflows[0]?.sourceSha ?? "";
   const sourceRepository = workflows[0]?.sourceRepository ?? "";
-  if (workflows.some((workflow) => workflow.sourceSha !== sourceSha || workflow.sourceRepository !== sourceRepository)) throw new Error("Catalog workflows must share one source revision");
-  return { sourceRepository, sourceSha, sourceRef: "v1.5.0", workflows };
+  const sourceRef = workflows[0]?.sourceRef ?? "";
+  if (workflows.some((workflow) => workflow.sourceSha !== sourceSha || workflow.sourceRef !== sourceRef || workflow.sourceRepository !== sourceRepository)) throw new Error("Catalog workflows must share one source revision");
+  return { sourceRepository, sourceSha, sourceRef, workflows };
 }
 
 export async function repositorySnapshot(client: Octokit, owner: string): Promise<RepositorySnapshot> {

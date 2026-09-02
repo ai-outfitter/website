@@ -19,7 +19,8 @@ async function validateEmbeddedCatalog() {
   const catalog = JSON.parse(await readFile(generatedCatalog, "utf8"));
   if (!Array.isArray(catalog) || !catalog.length) throw new Error("Embedded workflow catalog is empty");
   const sourceSha = catalog[0].sourceSha;
-  if (!/^[0-9a-f]{40}$/.test(sourceSha) || catalog.some((workflow) => workflow.sourceSha !== sourceSha)) throw new Error("Embedded workflows must share one full source SHA");
+  const sourceRef = catalog[0].sourceRef;
+  if (!sourceRef || !/^[0-9a-f]{40}$/.test(sourceSha) || catalog.some((workflow) => workflow.sourceSha !== sourceSha || workflow.sourceRef !== sourceRef)) throw new Error("Embedded workflows must share one source release");
   for (const workflow of catalog) {
     if (!workflow.id || !Array.isArray(workflow.files) || !workflow.files.length) throw new Error(`Embedded workflow is incomplete: ${workflow.id ?? "unknown"}`);
     const paths = new Set();
@@ -78,6 +79,8 @@ try {
   });
   run("validate", "--strict");
   const sourceSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: community, encoding: "utf8" }).trim();
+  const sourceRef = execFileSync("git", ["tag", "--contains", sourceSha, "--sort=-version:refname"], { cwd: community, encoding: "utf8" }).trim().split("\n")[0];
+  if (!sourceRef) throw new Error(`Community catalog ${sourceSha} is not contained in a release tag`);
   const ids = (await readdir(join(community, "workflows"), { withFileTypes: true }))
     .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
   const catalog = [];
@@ -98,7 +101,7 @@ try {
       }
       bundledFiles.push({ path: relativePath, content, mode, sha256: sha256(content), blobSha: gitBlobSha(content) });
     }
-    catalog.push({ id, title: declaration.title, description: declaration.description, sourceRepository, sourceSha, files: bundledFiles });
+    catalog.push({ id, title: declaration.title, description: declaration.description, sourceRepository, sourceRef, sourceSha, files: bundledFiles });
   }
   await mkdir(join(projectRoot, "src/generated"), { recursive: true });
   await writeFile(generatedCatalog, `${JSON.stringify(catalog, null, 2)}\n`);

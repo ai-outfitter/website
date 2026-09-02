@@ -4,6 +4,7 @@
     "title": "Adversarial review",
     "description": "Assign a distinct review agent to inspect a change and return one actionable verdict.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -55,6 +56,7 @@
     "title": "Bug issue",
     "description": "Investigate a fix issue and assign the resulting coding work to a resident agent.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -106,6 +108,7 @@
     "title": "Engineer",
     "description": "Research, implement, review, and merge changes through a human-authenticated engineering agent.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -213,6 +216,7 @@
     "title": "Founder",
     "description": "Ship a verified local change as a human-authenticated founder agent with independent review.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -285,6 +289,7 @@
     "title": "Grafana alert investigation",
     "description": "Investigate a Grafana alert, create a fix issue, and hand it to issue triage.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -497,6 +502,7 @@
     "title": "Issue triage",
     "description": "Classify untyped issues and route features, fixes, and research to their delivery workflows.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -667,6 +673,7 @@
     "title": "Organization-wide delegation",
     "description": "Publish shared agent profiles and delegate bounded work into issue triage.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -858,6 +865,7 @@
     "title": "Persona review",
     "description": "Review an artifact from a selected persona's perspective and save a sourced report.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -993,6 +1001,7 @@
     "title": "Research triage",
     "description": "Classify research requests into market, technical, or business investigation tracks.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {
@@ -1044,6 +1053,7 @@
     "title": "Software factory",
     "description": "Delegate typed issues to a resident engineer for CI-gated implementation and independent review.",
     "sourceRepository": "ai-outfitter/community-profiles",
+    "sourceRef": "v1.5.0",
     "sourceSha": "e9ee9725246013b3ed8721e0db07475f76cc0d28",
     "files": [
       {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classifyWorkflow } from "./status";
 import type { RepositorySnapshot, WorkflowBundle } from "./management";
 
-const workflow: WorkflowBundle = { id: "review", sourceRepository: "ai-outfitter/community-profiles", sourceSha: "new", files: [
+const workflow: WorkflowBundle = { id: "review", sourceRepository: "ai-outfitter/community-profiles", sourceRef: "v-test", sourceSha: "new", files: [
   { path: "workflows/review/workflow.yaml", content: "id: review", mode: "100644", sha256: "declaration", blobSha: "blob-declaration" },
   { path: "agents/reviewer/agent.md", content: "review", mode: "100644", sha256: "agent", blobSha: "blob-agent" },
 ] };
