@@ -101,6 +101,7 @@ The production deploy runs only after the complete site job passes and uses the
 same-repository pull requests deploy an isolated Worker from the `preview`
 environment in the original `wrangler.jsonc` and expose its stable URL as a
 GitHub environment. Preview deploys do not use the production custom domain.
+Closing the pull request deletes its PR-numbered preview Worker.
 Pull requests from forks run the checks and Wrangler dry run but do not receive
 the deployment secret.
 
