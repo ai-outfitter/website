@@ -20,7 +20,7 @@ Do one of these in the issue, as a person with write access:
 - add the `ai-outfitter` label;
 - comment with `@ai-outfitter` in the text.
 
-Within a few seconds the App comments on the issue that it picked the work up.
+Within a minute the run comments on the issue that it picked the work up.
 
 ## 3. Get the pull request
 
