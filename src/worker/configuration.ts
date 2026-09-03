@@ -29,7 +29,7 @@ export async function repositoryConfiguration(client: Octokit, login: string, re
   const catalogSource = summary.sources.find((source) => source.github === catalog.sourceRepository);
   return {
     login,
-    repository,
+    repository: { ...repository, headSha: snapshot.sha },
     repositoryUrl,
     settings: { exists: Boolean(settingsEntry), raw, ...summary, sources },
     workflows: catalog.workflows.map(({ files, ...workflow }) => {

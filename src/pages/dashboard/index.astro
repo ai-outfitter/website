@@ -19,7 +19,95 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
     </section>
 
     <section id="signed-in" hidden>
+      <section id="onboarding" class="onboarding" hidden>
+        <header class="dashboard-hero">
+          <p class="panel-label">Get started</p>
+          <h2 id="onboarding-title">Set up your first workflow</h2>
+          <p class="lede">Pick the workflow this account starts with, create its <code>.agents</code> repository, fork a playground with a contrived issue, then run the workflow from your own workstation.</p>
+          <p class="muted"><a id="onboarding-overview-link" href="#">Skip to the repository overview</a></p>
+        </header>
+
+        <section class="panel onboarding-step" data-step="workflow">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Step 1</p>
+              <h3>Choose the first workflow</h3>
+            </div>
+            <span id="onboarding-workflow-state" class="badge"></span>
+          </div>
+          <p class="muted">The engineer workflow is the local <code>.agents</code> loop: your agent takes an issue, an implementer subagent builds it in a git worktree, CI runs on a draft pull request, the pull request is marked ready, and a reviewer subagent submits a formal adversarial review.</p>
+          <div id="onboarding-workflow-choices" class="workflow-grid" role="radiogroup" aria-label="First workflow"></div>
+        </section>
+
+        <section class="panel onboarding-step" data-step="repository">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Step 2</p>
+              <h3 id="onboarding-repository-title">Create the .agents repository</h3>
+            </div>
+            <span id="onboarding-repository-state" class="badge"></span>
+          </div>
+          <p id="onboarding-repository-summary" class="muted"></p>
+          <div id="onboarding-repository-options" class="manager-grid" hidden>
+            <div>
+              <label for="onboarding-visibility">Repository visibility</label>
+              <select id="onboarding-visibility">
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="onboarding-preview" class="button primary" type="button">Preview repository</button>
+          </div>
+          <div id="onboarding-preview-output" class="preview"></div>
+          <div id="onboarding-apply-actions" class="actions" hidden>
+            <button id="onboarding-apply" class="button primary" type="button">Create repository</button>
+          </div>
+        </section>
+
+        <section class="panel onboarding-step" data-step="playground">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Step 3</p>
+              <h3>Fork a playground</h3>
+            </div>
+            <span id="onboarding-playground-state" class="badge"></span>
+          </div>
+          <p class="muted">Forks <code>ai-outfitter/bash-saver</code> into this account as <code>outfitter-playground</code>, enables Actions and issues, and files one deliberately small issue with acceptance criteria. Its CI already passes, so the only thing under test is the workflow.</p>
+          <div id="onboarding-playground-summary" class="onboarding-links"></div>
+          <div class="actions">
+            <button id="onboarding-playground" class="button primary" type="button">Create playground</button>
+          </div>
+        </section>
+
+        <section class="panel onboarding-step" data-step="local">
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Step 4</p>
+              <h3>Run it from your workstation</h3>
+            </div>
+            <span id="onboarding-local-state" class="badge"></span>
+          </div>
+          <p class="muted">Install Outfitter, point <code>~/.agents</code> at the organization catalog, clone the playground, and hand the issue to the local engineer. The commands update as the steps above complete.</p>
+          <div class="onboarding-commands">
+            <pre id="onboarding-commands" tabindex="0"></pre>
+            <button id="onboarding-copy" class="button" type="button">Copy commands</button>
+          </div>
+          <p id="onboarding-local-note" class="muted"></p>
+        </section>
+      </section>
+
       <section id="dashboard-overview" hidden>
+        <section id="overview-start" class="panel onboarding-callout" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="panel-label">Get started</p>
+              <h2>No .agents repository yet</h2>
+            </div>
+            <a id="overview-start-link" class="button primary" href="#">Set up the first workflow</a>
+          </div>
+        </section>
         <section class="panel configuration">
           <div class="section-heading">
             <div>
@@ -204,6 +292,22 @@ const workflowGraphs = workflowGraphsFromCatalog(workflowCatalog);
   .dashboard .badge.current, .dashboard .badge.local-only { color: var(--site-signal-high); }
   .dashboard .badge.ahead, .dashboard .badge.unpinned, .dashboard .badge.unavailable { color: #ffd46b; }
   .dashboard .status { min-height: 1.5rem; margin-top: 2rem; }
+  .dashboard .onboarding-step { margin-block: 1.5rem; }
+  .dashboard .onboarding-step h3 { margin: 0; font-size: clamp(1.25rem, 3vw, 1.7rem); letter-spacing: -.03em; }
+  .dashboard .onboarding-callout { border-color: var(--site-signal); }
+  .dashboard .workflow-choice { display: flex; flex-direction: column; min-height: 9rem; padding: 1.15rem; border: 1px solid var(--site-line); background: var(--site-ink); color: inherit; cursor: pointer; text-align: left; font: inherit; }
+  .dashboard .workflow-choice:hover, .dashboard .workflow-choice[aria-checked="true"] { border-color: var(--site-signal); }
+  .dashboard .workflow-choice[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--site-signal); }
+  .dashboard .workflow-choice h4 { margin: .6rem 0 .4rem; font-size: 1rem; }
+  .dashboard .workflow-choice p { margin: 0; color: var(--site-muted); line-height: 1.5; }
+  .dashboard .workflow-choice .badge { align-self: flex-start; }
+  .dashboard .onboarding-links { display: flex; flex-wrap: wrap; gap: .6rem 1.5rem; margin-block: 1rem; }
+  .dashboard .onboarding-commands { position: relative; margin-top: 1.25rem; }
+  .dashboard .onboarding-commands pre { overflow: auto; margin: 0; padding: 1rem 1rem 3.5rem; background: #090a08; color: var(--site-text); font: .85rem/1.55 var(--site-font-mono); }
+  .dashboard .onboarding-commands .button { position: absolute; right: .75rem; bottom: .75rem; }
+  .dashboard .badge.done { color: var(--site-signal-high); }
+  .dashboard .badge.pending { color: var(--site-dim); }
+  .dashboard .badge.selected { color: var(--site-signal-high); }
   @media (max-width: 48rem) {
     .dashboard .manager-grid { grid-template-columns: 1fr; }
     .dashboard .source-table-wrap { overflow: visible; }

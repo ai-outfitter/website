@@ -27,6 +27,11 @@ for (const selector of ['workflow-card', 'source-table', 'badge']) {
   assert.match(css, new RegExp(`\\.dashboard \\.${selector}(?:[,{:.#\\[])`), `Runtime .${selector} elements must be styled beneath .dashboard`);
   assert.doesNotMatch(css, new RegExp(`\\.${selector}[^,{]*:where\\(\\.astro-`), `Runtime .${selector} selectors must not require an Astro scope attribute`);
 }
+assert.ok(document.querySelector('#onboarding'), 'The dashboard must include the onboarding wizard');
+for (const id of ['onboarding-workflow-choices', 'onboarding-preview', 'onboarding-apply', 'onboarding-playground', 'onboarding-commands', 'onboarding-copy', 'overview-start-link']) {
+  assert.ok(document.getElementById(id), `The onboarding wizard must render #${id}`);
+}
+assert.match(css, /\.dashboard \.workflow-choice(?:[,{:.#\[])/, 'Runtime .workflow-choice elements must be styled beneath .dashboard');
 assert.ok(document.querySelector('#installed-workflows'), 'The dashboard must separate installed workflows');
 assert.ok(document.querySelector('#implementation-workflows'), 'The dashboard must separate primary implementation profiles');
 assert.ok(document.querySelector('#community-workflows'), 'The dashboard must separate community workflows');
