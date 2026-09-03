@@ -1,7 +1,7 @@
 import type { Octokit } from "@octokit/core";
 import type { Change } from "./management";
 
-export const PLAYGROUND_UPSTREAM = { owner: "ai-outfitter", repo: "bash-saver" } as const;
+export const PLAYGROUND_UPSTREAM = { owner: "ai-outfitter", repo: "playground" } as const;
 export const PLAYGROUND_REPOSITORY = "outfitter-playground";
 export const LOCAL_ENGINEER = "local-engineer";
 export const ONBOARDING_WORKFLOWS = ["engineer", "software-factory", "founder"] as const;
@@ -11,25 +11,36 @@ export type Playground = {
   issue: { number: number; url: string; title: string; created: boolean };
 };
 
-const PLAYGROUND_ISSUE_TITLE = "Add a describeConfig helper that summarizes the effective configuration";
+const PLAYGROUND_ISSUE_TITLE = "split loses cents on uneven amounts";
 
 export function playgroundIssueBody(login: string) {
-  return `A contrived first issue for the ${login} playground. It exists so a local engineering agent can take one bounded change from issue to reviewed pull request without touching anything that matters.
+  return `The seeded exhibit bug of the ${login} playground, filed so a local engineering agent can take one bounded change from issue to reviewed pull request without touching anything that matters.
 
-## Change
+Splitting $100.00 among 3 people loses a cent: every share is floored to $33.33, so the shares total $99.99 and nobody pays the last cent.
 
-Export a \`describeConfig(config)\` helper from \`src/core-v2.mjs\` that returns a single-line summary of the effective configuration:
+## Reproduce
+
+\`\`\`sh
+node bin/split.js 100 3
+\`\`\`
+
+Output today:
 
 \`\`\`text
-quickFailureMs=5000 recoveryTimeoutMs=60000 maxRecoveryCommands=6 blockDangerousCommands=true
+person 1: $33.33
+person 2: $33.33
+person 3: $33.33
+total:    $99.99
 \`\`\`
+
+The bug is the \`Math.floor\` share in \`src/split.js\`: the remainder cents after integer division are dropped instead of being distributed.
 
 ## Acceptance criteria
 
-- \`describeConfig(DEFAULT_CONFIG)\` MUST return exactly \`quickFailureMs=5000 recoveryTimeoutMs=60000 maxRecoveryCommands=6 blockDangerousCommands=true\`.
-- The helper MUST list the four keys in that order, separated by single spaces, and MUST ignore \`storePath\`.
-- A test in \`test/core.test.mjs\` MUST cover the default configuration and one overridden value.
-- \`npm test\` and \`npm run check:package\` MUST pass.
+- \`node bin/split.js 100 3\` MUST print shares that total exactly \`$100.00\` (e.g. \`$33.34, $33.33, $33.33\`; how the extra cents are assigned is the implementer's choice, but shares MUST differ by at most one cent).
+- \`split(amount, people)\` MUST return shares whose sum equals the input amount for every valid input, not just this example.
+- A regression test covering an uneven split (such as \`split(100, 3)\`) MUST be added to \`test/split.test.js\` and assert the shares sum to the amount.
+- \`npm test\` MUST pass.
 - No other behavior changes.
 
 ## Delivery

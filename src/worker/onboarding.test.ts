@@ -36,7 +36,7 @@ describe("playground", () => {
     expect(result.repository).toEqual({ fullName: "acme/outfitter-playground", url: "https://github.com/acme/outfitter-playground", defaultBranch: "main", created: true });
     expect(result.issue).toMatchObject({ number: 1, created: true });
     const fork = calls.find((call) => call.route === "POST /repos/{owner}/{repo}/forks")!;
-    expect(fork.params).toEqual({ owner: "ai-outfitter", repo: "bash-saver", name: "outfitter-playground", default_branch_only: true, organization: "acme" });
+    expect(fork.params).toEqual({ owner: "ai-outfitter", repo: "playground", name: "outfitter-playground", default_branch_only: true, organization: "acme" });
     expect(calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}")?.params).toMatchObject({ has_issues: true });
     expect(calls.find((call) => call.route === "PUT /repos/{owner}/{repo}/actions/permissions")?.params).toMatchObject({ enabled: true });
     expect(calls.find((call) => call.route === "POST /repos/{owner}/{repo}/issues")?.params).toMatchObject({ owner: "acme", repo: "outfitter-playground", body: playgroundIssueBody("acme") });
@@ -45,11 +45,11 @@ describe("playground", () => {
   it("reuses an existing fork and issue without forking again", async () => {
     const { client: octokit, calls } = client({
       "GET /repos/{owner}/{repo}": () => ({ full_name: "octo/outfitter-playground", html_url: "https://github.com/octo/outfitter-playground", default_branch: "main", has_issues: true }),
-      "GET /repos/{owner}/{repo}/issues": () => [{ number: 4, title: "Add a describeConfig helper that summarizes the effective configuration", html_url: "https://github.com/octo/outfitter-playground/issues/4" }],
+      "GET /repos/{owner}/{repo}/issues": () => [{ number: 4, title: "split loses cents on uneven amounts", html_url: "https://github.com/octo/outfitter-playground/issues/4" }],
     });
     const result = await createPlayground(octokit, "octo", "User");
     expect(result.repository.created).toBe(false);
-    expect(result.issue).toEqual({ number: 4, url: "https://github.com/octo/outfitter-playground/issues/4", title: "Add a describeConfig helper that summarizes the effective configuration", created: false });
+    expect(result.issue).toEqual({ number: 4, url: "https://github.com/octo/outfitter-playground/issues/4", title: "split loses cents on uneven amounts", created: false });
     expect(calls.map((call) => call.route)).toEqual(["GET /repos/{owner}/{repo}", "GET /repos/{owner}/{repo}/issues"]);
     expect(await findPlayground(octokit, "octo")).toMatchObject({ repository: { created: false }, issue: { number: 4 } });
   });
