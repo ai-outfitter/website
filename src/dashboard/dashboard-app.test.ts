@@ -141,7 +141,7 @@ describe("dashboard client", () => {
 
     document.querySelector<HTMLButtonElement>("#onboarding-playground")!.click();
     await vi.waitFor(() => expect(document.querySelector("#onboarding-playground-state")?.textContent).toBe("done"));
-    expect(document.querySelector("#onboarding-commands")?.textContent).toContain("acme/outfitter-playground#1");
+    expect(document.querySelector("#onboarding-commands")?.textContent).toContain("first message: Take acme/outfitter-playground#1 to a merged pull request.");
     expect(document.querySelector("#onboarding-local-state")?.textContent).toBe("ready to run");
   });
 

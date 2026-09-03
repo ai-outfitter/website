@@ -690,7 +690,8 @@ export class DashboardController {
       "outfitter sync",
       `gh repo clone ${repo} ~/${PLAYGROUND_REPOSITORY}`,
       `cd ~/${PLAYGROUND_REPOSITORY}`,
-      `outfitter run ${agent} -- "Take ${issue} to a merged pull request."`,
+      `outfitter run ${agent}`,
+      `# first message: Take ${issue} to a merged pull request.`,
     ].join("\n");
   }
 
