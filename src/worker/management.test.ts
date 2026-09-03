@@ -23,6 +23,37 @@ describe("workflow enablement plans", () => {
     expect(result.changes.some((change) => change.path.startsWith(".outfitter/") || change.path.startsWith("workflows/"))).toBe(false);
   });
 
+  it("creates the local engineering composition for engineer onboarding", async () => {
+    const workflow: WorkflowBundle = { id: "engineer", sourceRepository: "ai-outfitter/community-profiles", sourceRef: "v-test", sourceSha: "a".repeat(40), files: [] };
+    const result = await buildPlan({} as never, { repository: "acme/.agents", catalog: catalogFrom([workflow]), request: { target: "onboarding", workflow: "engineer", accountType: "Organization" }, repositoryExists: false });
+    expect(result.intent).toEqual({ target: "onboarding", id: "engineer", action: "enable" });
+    expect(result.create).toEqual({ private: false, accountType: "Organization" });
+    expect(result.changes.map((change) => change.path)).toEqual([
+      "settings.yml",
+      "agents/local-engineer/agent.md",
+      "agents/implementer/agent.md",
+      "agents/reviewer/agent.md",
+      "prompts/practice.local-delegation.md",
+      "prompts/grant.review-verdict.md",
+    ]);
+    expect(result.changes.every((change) => change.action === "add")).toBe(true);
+    const settings = summarizeSettings(result.changes[0].after!);
+    expect(settings.workflows).toEqual(["engineer"]);
+    expect(settings.defaults.agent).toBe("local-engineer");
+    expect(result.changes[0].after).toContain("ref: v-test");
+    expect(result.changes[2].after).toContain("git worktree add");
+    expect(result.changes[3].after).toContain("inherits: [code-review]");
+    expect(result.changes[5].after).toContain("REQUEST_CHANGES");
+  });
+
+  it("keeps non-engineer onboarding to settings.yml and rejects unknown workflows", async () => {
+    const workflows: WorkflowBundle[] = ["founder", "triage"].map((id) => ({ id, sourceRepository: "ai-outfitter/community-profiles", sourceRef: "v-test", sourceSha: "a".repeat(40), files: [] }));
+    const result = await buildPlan({} as never, { repository: "acme/.agents", catalog: catalogFrom(workflows), request: { target: "onboarding", workflow: "founder" }, repositoryExists: false });
+    expect(result.changes.map((change) => change.path)).toEqual(["settings.yml"]);
+    expect(summarizeSettings(result.changes[0].after!).defaults.agent).toBeUndefined();
+    await expect(buildPlan({} as never, { repository: "acme/.agents", catalog: catalogFrom(workflows), request: { target: "onboarding", workflow: "triage" }, repositoryExists: false })).rejects.toThrow("Invalid workflow selection");
+  });
+
   it("round trips exact signed previews and rejects tampering or expiry", async () => {
     const token = await signPlan(plan(), "test-plan-secret");
     expect(await verifyPlan(token, "test-plan-secret")).toMatchObject({ repository: "octo/.agents", baseSha: "base" });

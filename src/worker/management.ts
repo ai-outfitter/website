@@ -1,7 +1,8 @@
 import type { Octokit } from "@octokit/core";
 import { base64url, secureEqual } from "./crypto";
 import { sourceFreshness, textBlob, tree } from "./github";
-import { pinGitHubSource, removeSource, setSourceRef, setWorkflowEnablement, summarizeSettings } from "./settings";
+import { LOCAL_ENGINEER, ONBOARDING_WORKFLOWS, localEngineeringFiles } from "./onboarding";
+import { pinGitHubSource, removeSource, setDefaultAgent, setSourceRef, setWorkflowEnablement, summarizeSettings } from "./settings";
 
 export type WorkflowState = "available" | "enabled" | "customized" | "needs-attention";
 export type WorkflowAction = "enable" | "remove";
@@ -13,7 +14,7 @@ export type Plan = {
   repository: string;
   baseSha: string | null;
   sourceSha: string;
-  intent: { target: "workflow"; id: string; action: WorkflowAction } | { target: "source"; id: string; action: SourceAction };
+  intent: { target: "workflow"; id: string; action: WorkflowAction } | { target: "source"; id: string; action: SourceAction } | { target: "onboarding"; id: string; action: "enable" };
   create?: { private: boolean; accountType: "User" | "Organization" };
   changes: Change[];
   warnings: string[];
@@ -25,6 +26,7 @@ export type Catalog = { sourceRepository: string; sourceSha: string; sourceRef: 
 export type RepositorySnapshot = { sha: string; files: Record<string, { mode: string; blobSha: string }> };
 export type PlanRequest =
   | { target: "workflow"; workflow: string; action: WorkflowAction; private?: boolean; accountType?: "User" | "Organization" }
+  | { target: "onboarding"; workflow: string; private?: boolean; accountType?: "User" | "Organization" }
   | { target: "source"; source: string; action: SourceAction };
 
 export function catalogFrom(workflows: WorkflowBundle[]): Catalog {
@@ -55,7 +57,24 @@ export async function buildPlan(client: Octokit, input: { repository: string; ca
   if (raw !== null && !summarizeSettings(raw).valid) throw new Error("settings.yml is invalid");
   let after: string;
   let intent: Plan["intent"];
-  if (input.request.target === "workflow") {
+  const additions: Change[] = [];
+  if (input.request.target === "onboarding") {
+    const request = input.request;
+    if (!(ONBOARDING_WORKFLOWS as readonly string[]).includes(request.workflow)) throw new Error("Invalid workflow selection");
+    const selected = input.catalog.workflows.find((workflow) => workflow.id === request.workflow);
+    if (!selected) throw new Error("Invalid workflow selection");
+    after = setWorkflowEnablement(raw ?? undefined, selected.id, true);
+    after = pinGitHubSource(after, input.catalog.sourceRepository, input.catalog.sourceRef);
+    if (selected.id === "engineer") {
+      after = setDefaultAgent(after, LOCAL_ENGINEER);
+      for (const file of localEngineeringFiles(owner)) {
+        const existing = input.repositoryExists ? await currentText(client, owner, current, file.path) : null;
+        if (existing === file.after) continue;
+        additions.push(existing === null ? file : { ...file, action: "update", before: existing });
+      }
+    }
+    intent = { target: "onboarding", id: selected.id, action: "enable" };
+  } else if (input.request.target === "workflow") {
     const request = input.request;
     const selected = input.catalog.workflows.find((workflow) => workflow.id === request.workflow);
     if (!selected) throw new Error("Invalid workflow selection");
@@ -75,15 +94,18 @@ export async function buildPlan(client: Octokit, input: { repository: string; ca
     after = request.action === "remove" ? removeSource(raw, source.id) : setSourceRef(raw, source.id, latestRef!);
     intent = { target: "source", id: source.id, action: request.action };
   }
-  if (after === raw) throw new Error("No repository changes are required");
-  const changes: Change[] = [{ path: "settings.yml", action: raw === null ? "add" : "update", before: raw, after, mode: "100644" }];
+  if (after === raw && !additions.length) throw new Error("No repository changes are required");
+  const changes: Change[] = [
+    ...(after === raw ? [] : [{ path: "settings.yml", action: raw === null ? "add" : "update", before: raw, after, mode: "100644" } satisfies Change]),
+    ...additions,
+  ];
   return {
     version: 1,
     repository: input.repository,
     baseSha: input.repositoryExists ? current.sha : null,
     sourceSha: input.catalog.sourceSha,
     intent,
-    ...(!input.repositoryExists && input.request.target === "workflow" ? { create: { private: input.request.private === true, accountType: input.request.accountType ?? "Organization" } } : {}),
+    ...(!input.repositoryExists && input.request.target !== "source" ? { create: { private: input.request.private === true, accountType: input.request.accountType ?? "Organization" } } : {}),
     changes,
     warnings: [],
     expiresAt: Date.now() + 10 * 60_000,
@@ -113,7 +135,7 @@ async function createRepositoryFromPlan(client: Octokit, plan: Plan) {
   const createdTree = await client.request("POST /repos/{owner}/{repo}/git/trees", { owner, repo: ".agents", tree: blobs.map((file) => ({ path: file.path, mode: file.mode, type: "blob" as const, sha: file.sha })) });
   const commit = await client.request("POST /repos/{owner}/{repo}/git/commits", { owner, repo: ".agents", message: "chore: manage agents with AI Outfitter", tree: createdTree.data.sha, parents: [] });
   await client.request("POST /repos/{owner}/{repo}/git/refs", { owner, repo: ".agents", ref: "refs/heads/main", sha: commit.data.sha });
-  return { mode: "direct" as const, commitUrl: commit.data.html_url };
+  return { mode: "direct" as const, commitUrl: commit.data.html_url, commitSha: commit.data.sha };
 }
 
 export async function applyPlan(client: Octokit, plan: Plan, mode: "pull-request" | "direct") {
@@ -129,7 +151,7 @@ export async function applyPlan(client: Octokit, plan: Plan, mode: "pull-request
   const commit = await client.request("POST /repos/{owner}/{repo}/git/commits", { owner, repo, message: "chore: manage agents with AI Outfitter", tree: createdTree.data.sha, parents: [plan.baseSha] });
   if (mode === "direct") {
     await client.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", { owner, repo, ref: `heads/${branch}`, sha: commit.data.sha, force: false });
-    return { mode, commitUrl: commit.data.html_url };
+    return { mode, commitUrl: commit.data.html_url, commitSha: commit.data.sha };
   }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(plan.changes)));
   const feature = `outfitter/manage-${base64url(digest).slice(0, 10).toLowerCase()}`;

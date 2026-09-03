@@ -24,6 +24,23 @@ describe("dashboard routes", () => {
     expect(await response.json()).toEqual({ error: "Sign in required" });
   });
 
+  it("serves the onboarding start page from the dashboard asset", async () => {
+    const response = await worker.fetch(new Request("https://example.com/dashboard/acme/start/"), env);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Dashboard");
+  });
+
+  it("requires a session for playground lookups", async () => {
+    const response = await worker.fetch(new Request("https://example.com/api/accounts/acme/playground", { method: "POST" }), {
+      ...env,
+      BETTER_AUTH_SECRET: "test-auth-secret-at-least-thirty-two-characters",
+      BETTER_AUTH_URL: "https://example.com",
+      GITHUB_CLIENT_ID: "client",
+      GITHUB_CLIENT_SECRET: "secret",
+    } as unknown as Env);
+    expect(response.status).toBe(401);
+  });
+
   it("serves the one static dashboard route", async () => {
     const response = await worker.fetch(new Request("https://example.com/dashboard/"), env);
     expect(response.status).toBe(200);

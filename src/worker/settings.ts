@@ -135,3 +135,10 @@ export function unpinGitHubSource(source: string, github: string) {
   if (index >= 0) sequence.items.splice(index, 1);
   return String(parsed);
 }
+
+export function setDefaultAgent(source: string | undefined, agent: string) {
+  const parsed = document(source ?? "{}\n");
+  if (parsed.errors.length || !isMap(parsed.contents)) throw new Error("settings.yml is invalid");
+  parsed.set("default_agent", agent);
+  return String(parsed);
+}

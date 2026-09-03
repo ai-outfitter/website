@@ -12,6 +12,7 @@ import {
   type PlanRequest,
   type WorkflowBundle,
 } from "./worker/management";
+import { createPlayground, findPlayground } from "./worker/onboarding";
 import { activeAccountCookie, readActiveAccount } from "./worker/scope";
 
 export { GitHubUserGrant } from "./worker/grant";
@@ -60,6 +61,10 @@ function planRequest(body: Record<string, unknown>, account: Account): PlanReque
       private: body.private === true,
       accountType: account.type,
     };
+  }
+  if (body.target === "onboarding") {
+    if (typeof body.workflow !== "string") throw new Error("Invalid onboarding plan request");
+    return { target: "onboarding", workflow: body.workflow, private: body.private === true, accountType: account.type };
   }
   if (body.target === "source") {
     if (typeof body.source !== "string" || (body.action !== "update" && body.action !== "remove")) throw new Error("Invalid source plan request");
@@ -115,6 +120,17 @@ async function accountSourceFreshness(env: Env, request: Request, login: string)
   if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
   const configuration = await repositoryConfiguration(state.client, login, account.repository, catalog);
   return json({ sources: await configurationFreshness(state.client, configuration.settings.sources) });
+}
+
+async function accountPlayground(env: Env, request: Request, login: string) {
+  const state = await authenticatedState(env, request);
+  const account = allowedAccount(state.accounts, login);
+  if (request.method === "GET") {
+    const playground = await findPlayground(state.client, login);
+    if (!playground) throw httpError({ error: "No playground repository exists" }, 404);
+    return json(playground);
+  }
+  return json(await createPlayground(state.client, login, account.type));
 }
 
 async function createPlan(env: Env, request: Request, login: string) {
@@ -173,6 +189,8 @@ export default {
       if (freshnessLogin && request.method === "GET") return await accountSourceFreshness(env, request, freshnessLogin);
       const plansLogin = accountRoute(url.pathname, "plans");
       if (plansLogin && request.method === "POST") return await createPlan(env, request, plansLogin);
+      const playgroundLogin = accountRoute(url.pathname, "playground");
+      if (playgroundLogin && (request.method === "GET" || request.method === "POST")) return await accountPlayground(env, request, playgroundLogin);
       const applyLogin = accountRoute(url.pathname, "plans/apply");
       if (applyLogin && request.method === "POST") return await applyAccountPlan(env, request, applyLogin);
 

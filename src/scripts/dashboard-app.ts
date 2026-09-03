@@ -1,9 +1,19 @@
-import { dashboardPath, dashboardRoute, workflowManagerPath, type DashboardRoute } from "../dashboard/routes";
+import { dashboardPath, dashboardRoute, startPath, workflowManagerPath, type DashboardRoute } from "../dashboard/routes";
 import { cachedAuthState, clearCachedAuthState, resolveAuthState, updateCachedAccountIndex, type AccountIndex } from "./auth-state";
 import { publishAuthState } from "./site-auth";
 import { renderWorkflowDiagram, type WorkflowDiagramNode } from "./workflow-diagram";
 
-type Repository = { fullName: string; defaultBranch: string; private: boolean; canPush: boolean };
+type Repository = { fullName: string; defaultBranch: string; private: boolean; canPush: boolean; headSha?: string };
+type Playground = {
+  repository: { fullName: string; url: string; defaultBranch: string; created: boolean };
+  issue: { number: number; url: string; title: string; created: boolean };
+};
+const ONBOARDING_CHOICES: Array<{ id: string; note: string; recommended?: boolean }> = [
+  { id: "engineer", note: "Local agent, implementer subagent in a worktree, draft pull request, CI, formal adversarial review.", recommended: true },
+  { id: "software-factory", note: "Resident agents implement typed issues, review, and merge without a workstation." },
+  { id: "founder", note: "Plan and scope work into typed issues before any implementation." },
+];
+const PLAYGROUND_REPOSITORY = "outfitter-playground";
 type Account = { login: string; type: "User" | "Organization"; installationId: number | null; repository: Repository | null };
 type Workflow = {
   id: string;
@@ -86,6 +96,7 @@ export class DashboardController {
   private planToken: string | null = null;
   private planScope: "workflow" | "source" | null = null;
   private freshness = new Map<string, Freshness>();
+  private onboarding: { workflow: string; planToken: string | null; headSha: string | null; playground: Playground | null } = { workflow: "engineer", planToken: null, headSha: null, playground: null };
   private readonly abort = new AbortController();
 
   constructor(private readonly document: Document, private readonly fetcher: Fetcher, private readonly location: Location, private readonly history: History) {}
@@ -94,7 +105,7 @@ export class DashboardController {
     this.bind();
     const currentUrl = new URL(this.location.href);
     this.route = dashboardRoute(currentUrl.pathname);
-    const routeAccount = this.route?.page === "overview" || this.route?.page === "workflow" ? this.route.account : null;
+    const routeAccount = this.route?.page === "overview" || this.route?.page === "workflow" || this.route?.page === "start" ? this.route.account : null;
     const prefetched: Promise<Configuration | Error> | null = routeAccount
       ? this.request<Configuration>(`/api/accounts/${encodeURIComponent(routeAccount)}/configuration`).catch((error: unknown) => error instanceof Error ? error : new Error("Configuration request failed"))
       : null;
@@ -154,6 +165,10 @@ export class DashboardController {
   private bind() {
     required<HTMLButtonElement>(this.document, "sign-in").onclick = () => void this.signIn();
     for (const button of this.document.querySelectorAll<HTMLButtonElement>("[data-apply]")) button.onclick = () => void this.apply(button.dataset.apply as "pull-request" | "direct");
+    required<HTMLButtonElement>(this.document, "onboarding-preview").onclick = () => void this.onboardingPreview();
+    required<HTMLButtonElement>(this.document, "onboarding-apply").onclick = () => void this.onboardingApply();
+    required<HTMLButtonElement>(this.document, "onboarding-playground").onclick = () => void this.onboardingPlayground();
+    required<HTMLButtonElement>(this.document, "onboarding-copy").onclick = () => void this.copyCommands();
   }
 
   private async signIn() {
@@ -181,6 +196,7 @@ export class DashboardController {
     const route = this.route;
     let path = dashboardPath(login);
     if (route?.page === "install" || route?.page === "workflow") path = workflowManagerPath(login, route.workflow);
+    if (route?.page === "start") path = startPath(login);
     this.route = dashboardRoute(path);
     const hash = new URL(this.location.href).hash;
     this.history.replaceState(null, "", `${path}${hash}`);
@@ -200,7 +216,13 @@ export class DashboardController {
       if (!this.active()) return;
       this.configuration = loaded;
       const workflowId = this.route?.page === "workflow" ? this.route.workflow : null;
-      if (workflowId) this.renderManager(workflowId); else this.renderOverview();
+      if (!loaded.repository && (this.route?.page === "overview" || this.route?.page === "entry")) {
+        this.route = dashboardRoute(startPath(login));
+        this.history.replaceState(null, "", startPath(login));
+      }
+      if (workflowId) this.renderManager(workflowId);
+      else if (this.route?.page === "start") await this.renderOnboarding();
+      else this.renderOverview();
       required(this.document, "signed-in").hidden = false;
       this.status("");
     } catch (error) {
@@ -214,6 +236,9 @@ export class DashboardController {
     const data = this.configuration!;
     required(this.document, "dashboard-overview").hidden = false;
     required(this.document, "workflow-manager").hidden = true;
+    required(this.document, "onboarding").hidden = true;
+    required(this.document, "overview-start").hidden = Boolean(data.repository);
+    required<HTMLAnchorElement>(this.document, "overview-start-link").href = startPath(this.login!);
     required(this.document, "configuration-title").textContent = `${data.login}/.agents`;
     const repositoryLink = required<HTMLAnchorElement>(this.document, "repository-link");
     repositoryLink.href = data.repositoryUrl;
@@ -360,6 +385,7 @@ export class DashboardController {
     const workflow = this.configuration!.workflows.find((candidate) => candidate.id === workflowId);
     if (!workflow) { this.status("This workflow is not in the current community catalog."); this.renderOverview(); return; }
     required(this.document, "dashboard-overview").hidden = true;
+    required(this.document, "onboarding").hidden = true;
     required(this.document, "workflow-manager").hidden = false;
     required<HTMLAnchorElement>(this.document, "manager-back").href = dashboardPath(this.login!);
     required(this.document, "manager-title").textContent = workflow.title ?? workflow.id;
@@ -487,6 +513,203 @@ export class DashboardController {
       if (this.active()) restore();
       if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
     }
+  }
+
+  private async renderOnboarding() {
+    const data = this.configuration!;
+    required(this.document, "dashboard-overview").hidden = true;
+    required(this.document, "workflow-manager").hidden = true;
+    required(this.document, "onboarding").hidden = false;
+    required<HTMLAnchorElement>(this.document, "onboarding-overview-link").href = dashboardPath(this.login!);
+    required(this.document, "onboarding-title").textContent = `Set up ${data.login}'s first workflow`;
+    if (data.repository && !data.settings.workflows.includes(this.onboarding.workflow)) {
+      const enabled = ONBOARDING_CHOICES.find((choice) => data.settings.workflows.includes(choice.id));
+      if (enabled) this.onboarding.workflow = enabled.id;
+    }
+    this.renderOnboardingChoices();
+    this.renderOnboardingRepository();
+    this.renderOnboardingCommands();
+    if (!this.onboarding.playground) await this.loadPlayground();
+    this.renderOnboardingPlayground();
+  }
+
+  private renderOnboardingChoices() {
+    const data = this.configuration!;
+    const root = required(this.document, "onboarding-workflow-choices");
+    const locked = Boolean(data.repository);
+    root.replaceChildren(...ONBOARDING_CHOICES.flatMap((choice) => {
+      const workflow = data.workflows.find((candidate) => candidate.id === choice.id);
+      if (!workflow) return [];
+      const button = element(this.document, "button", "workflow-choice") as HTMLButtonElement;
+      button.type = "button"; button.setAttribute("role", "radio"); button.dataset.workflow = choice.id;
+      button.setAttribute("aria-checked", String(this.onboarding.workflow === choice.id));
+      button.disabled = locked && this.onboarding.workflow !== choice.id;
+      const label = badge(this.document, choice.recommended ? "recommended" : workflow.state === "available" ? "available" : workflow.state);
+      const title = element(this.document, "h4"); title.textContent = workflow.title ?? workflow.id;
+      const summary = element(this.document, "p"); summary.textContent = choice.note;
+      button.appendChild(label); button.appendChild(title); button.appendChild(summary);
+      button.onclick = () => { if (locked) return; this.onboarding.workflow = choice.id; this.onboarding.planToken = null; this.renderOnboardingChoices(); this.renderOnboardingRepository(); this.renderOnboardingCommands(); };
+      return [button];
+    }));
+    const state = required(this.document, "onboarding-workflow-state");
+    state.className = "badge selected"; state.textContent = this.onboarding.workflow;
+  }
+
+  private setStep(id: string, state: "done" | "pending" | "ready", label: string) {
+    const target = required(this.document, id); target.className = `badge ${state}`; target.textContent = label;
+  }
+
+  private renderOnboardingRepository() {
+    const data = this.configuration!;
+    const exists = Boolean(data.repository);
+    required(this.document, "onboarding-repository-title").textContent = `Create ${data.login}/.agents`;
+    const summary = required(this.document, "onboarding-repository-summary");
+    summary.replaceChildren();
+    if (exists) {
+      const link = element(this.document, "a"); link.href = data.repositoryUrl; link.textContent = data.repository!.fullName;
+      summary.appendChild(link); summary.append(` exists${data.settings.workflows.includes(this.onboarding.workflow) ? ` with ${this.onboarding.workflow} enabled` : ""}. `);
+      if (!data.settings.workflows.includes(this.onboarding.workflow)) summary.append("Preview the change to enable the selected workflow.");
+    } else summary.textContent = this.onboarding.workflow === "engineer"
+      ? "Creates settings.yml pinned to the community catalog with the engineer workflow enabled, plus a local-engineer lead, an implementer, and a reviewer agent so the loop runs from a workstation."
+      : `Creates settings.yml pinned to the community catalog with the ${this.onboarding.workflow} workflow enabled.`;
+    required(this.document, "onboarding-repository-options").hidden = exists;
+    required(this.document, "onboarding-preview").hidden = exists && data.settings.workflows.includes(this.onboarding.workflow);
+    required<HTMLButtonElement>(this.document, "onboarding-preview").textContent = exists ? "Preview change" : "Preview repository";
+    required<HTMLButtonElement>(this.document, "onboarding-apply").textContent = exists ? "Commit to default branch" : "Create repository";
+    if (!this.onboarding.planToken) { required(this.document, "onboarding-preview-output").replaceChildren(); required(this.document, "onboarding-apply-actions").hidden = true; }
+    const done = exists && data.settings.workflows.includes(this.onboarding.workflow);
+    this.setStep("onboarding-repository-state", done ? "done" : "pending", done ? "done" : exists ? "update needed" : "not created");
+  }
+
+  private async onboardingPreview() {
+    try {
+      this.status("Preparing the repository preview…");
+      const request = { target: "onboarding", workflow: this.onboarding.workflow, private: required<HTMLSelectElement>(this.document, "onboarding-visibility").value === "private" };
+      const result = await this.request<{ token: string; plan: { baseSha: string | null; changes: PlanChange[] } }>(`/api/accounts/${encodeURIComponent(this.login!)}/plans`, { method: "POST", body: JSON.stringify(request) });
+      if (!this.active()) return;
+      this.onboarding.planToken = result.token;
+      const root = required(this.document, "onboarding-preview-output");
+      const summary = element(this.document, "p"); summary.textContent = `Previewing ${result.plan.changes.length} file change${result.plan.changes.length === 1 ? "" : "s"}.`;
+      root.replaceChildren(summary, ...result.plan.changes.map((change) => {
+        const item = element(this.document, "details"); const heading = element(this.document, "summary"); const content = element(this.document, "pre");
+        heading.textContent = `${change.action.toUpperCase()} ${change.path}`; content.textContent = change.after ?? "(deleted)"; item.appendChild(heading); item.appendChild(content); return item;
+      }));
+      required(this.document, "onboarding-apply-actions").hidden = false;
+      this.status("Review the files, then create the repository.");
+    } catch (error) {
+      if (!this.active() || (error as { name?: string }).name === "AbortError") return;
+      this.onboarding.planToken = null; this.showError(error);
+    }
+  }
+
+  private async onboardingApply() {
+    if (!this.onboarding.planToken) return this.status("Preview the repository first.");
+    const button = required<HTMLButtonElement>(this.document, "onboarding-apply");
+    const label = button.textContent ?? "";
+    button.disabled = true; button.classList.add("loading"); button.textContent = "Committing…";
+    this.status("Committing to GitHub…");
+    try {
+      const result = await this.request<{ commitUrl?: string; commitSha?: string }>(`/api/accounts/${encodeURIComponent(this.login!)}/plans/apply`, { method: "POST", body: JSON.stringify({ token: this.onboarding.planToken, mode: "direct" }) });
+      if (!this.active()) return;
+      this.onboarding.planToken = null;
+      this.onboarding.headSha = result.commitSha ?? null;
+      const loaded = await this.request<Configuration>(`/api/accounts/${encodeURIComponent(this.login!)}/configuration`);
+      if (!this.active()) return;
+      this.configuration = loaded;
+      if (this.index?.activeAccount && loaded.repository) { this.index.activeAccount.repository = loaded.repository; publishAuthState(this.document, updateCachedAccountIndex(this.index)); }
+      await this.renderOnboarding();
+      this.status("Repository ready. Continue with the playground.");
+    } catch (error) {
+      if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
+    } finally {
+      if (this.active()) { button.disabled = false; button.classList.remove("loading"); button.textContent = label; }
+    }
+  }
+
+  private async loadPlayground() {
+    try {
+      this.onboarding.playground = await this.request<Playground>(`/api/accounts/${encodeURIComponent(this.login!)}/playground`);
+    } catch (error) {
+      if ((error as { status?: number }).status !== 404 && this.active() && (error as { name?: string }).name !== "AbortError") this.status(error instanceof Error ? `Playground lookup failed: ${error.message}` : "Playground lookup failed.");
+    }
+  }
+
+  private renderOnboardingPlayground() {
+    const playground = this.onboarding.playground;
+    const summary = required(this.document, "onboarding-playground-summary");
+    const button = required<HTMLButtonElement>(this.document, "onboarding-playground");
+    summary.replaceChildren();
+    if (!playground) { this.setStep("onboarding-playground-state", "pending", "not created"); button.hidden = false; button.textContent = "Create playground"; this.renderOnboardingCommands(); return; }
+    const repository = element(this.document, "a"); repository.href = playground.repository.url; repository.textContent = playground.repository.fullName;
+    summary.appendChild(repository);
+    if (playground.issue.number) { const issue = element(this.document, "a"); issue.href = playground.issue.url; issue.textContent = `Issue #${playground.issue.number}: ${playground.issue.title}`; summary.appendChild(issue); }
+    const complete = playground.issue.number > 0;
+    this.setStep("onboarding-playground-state", complete ? "done" : "pending", complete ? "done" : "issue missing");
+    button.hidden = complete; button.textContent = "File the issue";
+    this.renderOnboardingCommands();
+  }
+
+  private async onboardingPlayground() {
+    const button = required<HTMLButtonElement>(this.document, "onboarding-playground");
+    const label = button.textContent ?? "";
+    button.disabled = true; button.classList.add("loading"); button.textContent = "Forking…";
+    this.status("Forking the playground and filing its issue…");
+    try {
+      this.onboarding.playground = await this.request<Playground>(`/api/accounts/${encodeURIComponent(this.login!)}/playground`, { method: "POST", body: "{}" });
+      if (!this.active()) return;
+      this.renderOnboardingPlayground();
+      this.status("Playground ready. Run the commands below from your workstation.");
+    } catch (error) {
+      if (this.active() && (error as { name?: string }).name !== "AbortError") this.showError(error);
+    } finally {
+      if (this.active()) { button.disabled = false; button.classList.remove("loading"); button.textContent = label; }
+    }
+  }
+
+  private onboardingCommands() {
+    const data = this.configuration!;
+    const login = data.login;
+    const ref = this.onboarding.headSha ?? data.repository?.headSha ?? "main";
+    const playground = this.onboarding.playground;
+    const repo = playground?.repository.fullName ?? `${login}/${PLAYGROUND_REPOSITORY}`;
+    const issue = playground?.issue.number ? `${repo}#${playground.issue.number}` : `${repo}#<issue>`;
+    const agent = this.onboarding.workflow === "engineer" ? "local-engineer" : this.onboarding.workflow;
+    return [
+      "npm install -g @ai-outfitter/outfitter",
+      "mkdir -p ~/.agents",
+      "test -e ~/.agents/settings.yml && echo 'merge the entries below into ~/.agents/settings.yml' || cat > ~/.agents/settings.yml <<'EOF'",
+      "default_harness: pi",
+      "remote_settings:",
+      `  - github: ${login}/.agents`,
+      "    path: settings.yml",
+      `    ref: ${ref}`,
+      "sources:",
+      `  - github: ${login}/.agents`,
+      `    ref: ${ref}`,
+      "EOF",
+      "outfitter sync",
+      `gh repo clone ${repo} ~/${PLAYGROUND_REPOSITORY}`,
+      `cd ~/${PLAYGROUND_REPOSITORY}`,
+      `outfitter run ${agent}`,
+      `# first message: Take ${issue} to a merged pull request.`,
+    ].join("\n");
+  }
+
+  private renderOnboardingCommands() {
+    const data = this.configuration!;
+    required(this.document, "onboarding-commands").textContent = this.onboardingCommands();
+    const ready = Boolean(data.repository) && Boolean(this.onboarding.playground?.issue.number);
+    this.setStep("onboarding-local-state", ready ? "ready" : "pending", ready ? "ready to run" : "waiting on steps above");
+    required(this.document, "onboarding-local-note").textContent = ready
+      ? "The pin is the .agents commit this page created; move it deliberately when the catalog changes. The reviewer submits a formal pull request review; GitHub only lets a second identity approve, so a single-identity run delivers the verdict as a comment review that opens with APPROVE."
+      : "The commands fill in the catalog pin and the issue number once the repository and playground exist.";
+  }
+
+  private async copyCommands() {
+    try {
+      await navigator.clipboard.writeText(this.onboardingCommands());
+      this.status("Commands copied.");
+    } catch { this.status("Copy failed; select the commands and copy them manually."); }
   }
 
   private status(message: string) { if (this.active()) required(this.document, "dashboard-status").textContent = message; }

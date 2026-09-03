@@ -10,7 +10,15 @@ vi.mock("../scripts/workflow-diagram", () => ({ renderWorkflowDiagram: vi.fn(asy
 const fixture = `
   <section id="signed-out" hidden><button id="sign-in"></button></section>
   <section id="signed-in" hidden>
+    <section id="onboarding" hidden>
+      <h2 id="onboarding-title"></h2><a id="onboarding-overview-link"></a><span id="onboarding-workflow-state"></span><div id="onboarding-workflow-choices"></div>
+      <h3 id="onboarding-repository-title"></h3><span id="onboarding-repository-state"></span><p id="onboarding-repository-summary"></p><div id="onboarding-repository-options"><select id="onboarding-visibility"><option value="public"></option><option value="private"></option></select></div>
+      <button id="onboarding-preview"></button><div id="onboarding-preview-output"></div><div id="onboarding-apply-actions" hidden><button id="onboarding-apply"></button></div>
+      <span id="onboarding-playground-state"></span><div id="onboarding-playground-summary"></div><button id="onboarding-playground"></button>
+      <span id="onboarding-local-state"></span><pre id="onboarding-commands"></pre><button id="onboarding-copy"></button><p id="onboarding-local-note"></p>
+    </section>
     <section id="dashboard-overview" hidden>
+      <section id="overview-start" hidden><a id="overview-start-link"></a></section>
       <h2 id="configuration-title"></h2><a id="repository-link"></a><div id="configuration-summary"></div>
       <div id="catalog-sources"></div><section id="remote-source-section"><div id="remote-sources"></div></section>
       <div id="installed-workflows"></div><div id="implementation-workflows"></div><div id="community-workflows"></div>
@@ -94,6 +102,61 @@ describe("dashboard client", () => {
     expect(document.querySelector("#source-preview")?.textContent).toContain("UPDATE settings.yml");
     expect(document.querySelector("#dashboard-status")?.textContent).toContain("Review the change below");
     expect(history.replaceState).toHaveBeenCalledWith(null, "", "/dashboard/acme/");
+  });
+
+  it("routes an account without a repository to onboarding and walks the steps", async () => {
+    const bare = { ...account, repository: null };
+    let repository: typeof account.repository | null = null;
+    let playground: unknown = null;
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({ user: { name: "Octo" }, activeAccount: bare, accounts: [bare], githubAppSlug: "ai-outfitter" });
+      if (path === "/api/accounts/acme/configuration") return Response.json({ ...configuration, repository: repository ? { ...repository, headSha: "c".repeat(40) } : null, settings: { ...configuration.settings, exists: Boolean(repository), workflows: repository ? ["engineer"] : [] } });
+      if (path === "/api/accounts/acme/playground" && (!init || init.method !== "POST")) return playground ? Response.json(playground) : Response.json({ error: "No playground repository exists" }, { status: 404 });
+      if (path === "/api/accounts/acme/playground") { playground = { repository: { fullName: "acme/outfitter-playground", url: "https://github.com/acme/outfitter-playground", defaultBranch: "main", created: true }, issue: { number: 1, url: "https://github.com/acme/outfitter-playground/issues/1", title: "split loses cents on uneven amounts", created: true } }; return Response.json(playground); }
+      if (path === "/api/accounts/acme/plans") { expect(JSON.parse(String(init?.body))).toMatchObject({ target: "onboarding", workflow: "engineer", private: false }); return Response.json({ token: "signed", plan: { baseSha: null, changes: [{ path: "settings.yml", action: "add", before: null, after: "workflows:\n  - engineer\n" }, { path: "agents/local-engineer/agent.md", action: "add", before: null, after: "---\nname: local-engineer\n---\n" }] } }); }
+      if (path === "/api/accounts/acme/plans/apply") { expect(JSON.parse(String(init?.body))).toEqual({ token: "signed", mode: "direct" }); repository = account.repository; return Response.json({ mode: "direct", commitUrl: "https://github.com/acme/.agents/commit/c", commitSha: "c".repeat(40) }); }
+      if (path.endsWith("/configuration/freshness")) return Response.json({ sources: [] });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const history = historyAt();
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/"), history);
+    expect(history.replaceState).toHaveBeenLastCalledWith(null, "", "/dashboard/acme/start/");
+    expect(document.querySelector<HTMLElement>("#onboarding")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>("#dashboard-overview")?.hidden).toBe(true);
+    const choices = [...document.querySelectorAll<HTMLButtonElement>("#onboarding-workflow-choices [data-workflow]")].map((button) => button.dataset.workflow);
+    expect(choices).toEqual(["engineer", "software-factory", "founder"]);
+    expect(document.querySelector('[data-workflow="engineer"]')?.getAttribute("aria-checked")).toBe("true");
+    expect(document.querySelector("#onboarding-repository-state")?.textContent).toBe("not created");
+    expect(document.querySelector("#onboarding-commands")?.textContent).toContain("github: acme/.agents");
+    expect(document.querySelector("#onboarding-commands")?.textContent).toContain("outfitter run local-engineer");
+
+    document.querySelector<HTMLButtonElement>("#onboarding-preview")!.click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>("#onboarding-apply-actions")?.hidden).toBe(false));
+    expect(document.querySelectorAll("#onboarding-preview-output details")).toHaveLength(2);
+    document.querySelector<HTMLButtonElement>("#onboarding-apply")!.click();
+    await vi.waitFor(() => expect(document.querySelector("#onboarding-repository-state")?.textContent).toBe("done"));
+    expect(document.querySelector("#onboarding-commands")?.textContent).toContain(`ref: ${"c".repeat(40)}`);
+    expect(document.querySelector<HTMLButtonElement>('[data-workflow="founder"]')?.disabled).toBe(true);
+
+    document.querySelector<HTMLButtonElement>("#onboarding-playground")!.click();
+    await vi.waitFor(() => expect(document.querySelector("#onboarding-playground-state")?.textContent).toBe("done"));
+    expect(document.querySelector("#onboarding-commands")?.textContent).toContain("first message: Take acme/outfitter-playground#1 to a merged pull request.");
+    expect(document.querySelector("#onboarding-local-state")?.textContent).toBe("ready to run");
+  });
+
+  it("shows the get-started callout on an overview without a repository", async () => {
+    const bare = { ...account, repository: null };
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/accounts") return Response.json({ user: { name: "Octo" }, activeAccount: bare, accounts: [bare], githubAppSlug: "ai-outfitter" });
+      if (path === "/api/accounts/acme/configuration") return Response.json({ ...configuration, repository: null, settings: { ...configuration.settings, exists: false, workflows: [] } });
+      if (path === "/api/accounts/acme/playground") return Response.json({ error: "No playground repository exists" }, { status: 404 });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    await startDashboard(document, fetcher as typeof fetch, locationAt("https://example.com/dashboard/acme/start/"), historyAt());
+    expect(document.querySelector<HTMLElement>("#onboarding")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLAnchorElement>("#onboarding-overview-link")?.getAttribute("href")).toBe("/dashboard/acme/");
   });
 
   it("canonicalizes accountless installs and previews an explicit install action", async () => {
