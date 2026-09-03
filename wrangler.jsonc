@@ -16,11 +16,12 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/dashboard/*"]
+    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/api/webhooks/*", "/dashboard/*"]
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
     "GITHUB_APP_SLUG": "ai-outfitter",
+    "GITHUB_APP_ID": "4253427",
     "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
   },
   "durable_objects": {
@@ -43,6 +44,7 @@
       "vars": {
         "BETTER_AUTH_URL": "https://ai-outfitter.com",
         "GITHUB_APP_SLUG": "ai-outfitter",
+        "GITHUB_APP_ID": "4253427",
         "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
       },
       "durable_objects": {

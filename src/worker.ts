@@ -14,6 +14,7 @@ import {
 } from "./worker/management";
 import { createPlayground, findPlayground } from "./worker/onboarding";
 import { activeAccountCookie, readActiveAccount } from "./worker/scope";
+import { handleGitHubWebhook, webhookDeps } from "./worker/webhooks";
 
 export { GitHubUserGrant } from "./worker/grant";
 
@@ -172,6 +173,7 @@ export default {
         return auth.handler(request);
       }
 
+      if (url.pathname === "/api/webhooks/github" && request.method === "POST") return await handleGitHubWebhook(request, webhookDeps(env));
       if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
         const state = await authenticatedState(env, request);

@@ -27,11 +27,18 @@ Preview the exact files that the workflow adds, updates, or deletes. Apply an
 initial commit when creating the repository, or open a pull request against an
 existing repository's default branch.
 
+## Or let the cloud do it
+
+Once the App is installed you can skip the local setup for one issue: add the
+`ai-outfitter` label or mention `@ai-outfitter` and a hosted run opens a
+reviewed pull request on our compute and inference. See
+[complete an issue in the AI Outfitter cloud](/docs/cloud/).
+
 ## What is planned
 
 The dashboard includes noninteractive roadmap cards for GitHub Actions setup,
-resident deployment, hosted inference, bring-your-own-key inference, and
-managed operations. These capabilities are not available yet.
+resident deployment, bring-your-own-key inference, and managed operations.
+These capabilities are not available yet.
 
 ## Understand the workflow
 
