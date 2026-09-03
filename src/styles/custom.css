@@ -141,6 +141,135 @@ body {
   text-transform: uppercase;
 }
 
+.sl-markdown-content .workflow-tour {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(18rem, 0.75fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: center;
+  margin-block: 5rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border: 1px solid var(--sl-color-gray-5);
+  border-top: 3px solid var(--sl-color-accent);
+  background: color-mix(in srgb, var(--sl-color-black) 92%, var(--sl-color-gray-6));
+}
+
+.workflow-tour .eyebrow {
+  margin-top: 0;
+}
+
+.workflow-tour h2 {
+  margin-top: 0.5rem;
+  font-size: clamp(2rem, 4vw, 3.35rem);
+}
+
+.workflow-tour__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.4rem;
+  align-items: center;
+  margin-top: 1.75rem;
+}
+
+.workflow-tour__actions .sl-link-button {
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+
+.workflow-tour pre {
+  margin: 0;
+  border-radius: 0;
+  font-size: 0.76rem;
+}
+
+.sl-markdown-content .availability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-block: 2rem 5rem;
+}
+
+.availability-grid > div {
+  padding: 1.5rem;
+  border: 1px solid var(--sl-color-gray-5);
+  background: var(--sl-color-black);
+}
+
+.availability-grid h3 {
+  margin-top: 1.5rem;
+}
+
+.availability-grid p {
+  color: var(--sl-color-gray-2);
+}
+
+.availability-label,
+.ecosystem-status {
+  display: inline-block;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid currentColor;
+  font-family: var(--sl-font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.availability-label--ready {
+  color: var(--sl-color-accent-high);
+}
+
+.availability-label--planned,
+.ecosystem-status {
+  color: var(--sl-color-gray-2);
+}
+
+.sl-markdown-content .ecosystem-ramp {
+  margin-block: 2.5rem 5rem;
+  padding: 0;
+  border-top: 1px solid var(--sl-color-gray-5);
+  list-style: none;
+}
+
+.ecosystem-ramp li {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  margin: 0;
+  padding-block: 1.2rem;
+  border-bottom: 1px solid var(--sl-color-gray-5);
+}
+
+.ecosystem-ramp li > span:first-child {
+  color: var(--sl-color-accent);
+  font-family: var(--sl-font-mono);
+  font-size: 0.75rem;
+}
+
+.ecosystem-ramp strong {
+  font-size: 1.1rem;
+}
+
+.ecosystem-ramp p {
+  margin: 0.2rem 0 0;
+  color: var(--sl-color-gray-2);
+}
+
+.ecosystem-ramp li > a,
+.ecosystem-ramp .ecosystem-status {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.sl-markdown-content .closing-path {
+  margin-block: 5rem 2rem;
+  padding-top: 2rem;
+  border-top: 3px solid var(--sl-color-accent);
+  font-size: 1.15rem;
+}
+
 @media (min-width: 50rem) and (max-width: 71.999rem) {
   :root[data-has-sidebar] {
     --sl-content-inline-start: 0rem;
@@ -173,7 +302,9 @@ body {
 }
 
 @media (max-width: 52rem) {
-  .sl-markdown-content .signal-grid {
+  .sl-markdown-content .signal-grid,
+  .sl-markdown-content .availability-grid,
+  .sl-markdown-content .workflow-tour {
     grid-template-columns: 1fr;
   }
 
@@ -183,5 +314,15 @@ body {
 
   .signal-grid h3 {
     margin-top: 1.5rem;
+  }
+
+  .ecosystem-ramp li {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
+
+  .ecosystem-ramp li > a,
+  .ecosystem-ramp .ecosystem-status {
+    grid-column: 2;
+    justify-self: start;
   }
 }
