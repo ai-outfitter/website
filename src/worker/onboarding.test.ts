@@ -36,7 +36,7 @@ describe("playground", () => {
     expect(result.repository).toEqual({ fullName: "acme/outfitter-playground", url: "https://github.com/acme/outfitter-playground", defaultBranch: "main", created: true });
     expect(result.issue).toMatchObject({ number: 1, created: true });
     const fork = calls.find((call) => call.route === "POST /repos/{owner}/{repo}/forks")!;
-    expect(fork.params).toEqual({ owner: "ai-outfitter", repo: "playground", name: "outfitter-playground", default_branch_only: true, organization: "acme" });
+    expect(fork.params).toEqual({ owner: "ai-outfitter", repo: "outfitter-playground", name: "outfitter-playground", default_branch_only: true, organization: "acme" });
     expect(calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}")?.params).toMatchObject({ has_issues: true });
     expect(calls.find((call) => call.route === "PUT /repos/{owner}/{repo}/actions/permissions")?.params).toMatchObject({ enabled: true });
     expect(calls.find((call) => call.route === "POST /repos/{owner}/{repo}/issues")?.params).toMatchObject({ owner: "acme", repo: "outfitter-playground", body: playgroundIssueBody("acme") });

@@ -1,7 +1,7 @@
 import type { Octokit } from "@octokit/core";
 import type { Change } from "./management";
 
-export const PLAYGROUND_UPSTREAM = { owner: "ai-outfitter", repo: "playground" } as const;
+export const PLAYGROUND_UPSTREAM = { owner: "ai-outfitter", repo: "outfitter-playground" } as const;
 export const PLAYGROUND_REPOSITORY = "outfitter-playground";
 export const LOCAL_ENGINEER = "local-engineer";
 export const ONBOARDING_WORKFLOWS = ["engineer", "software-factory", "founder"] as const;
