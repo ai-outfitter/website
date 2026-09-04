@@ -89,7 +89,8 @@ workflows:
 
   - id: software-factory
     title: Software factory
-    description: Delegate typed issues to resident agents for CI-gated implementation, adversarial review, and automatic merge.
+    description: Target-state workflow for resident-agent implementation, independent review, and policy-gated merge.
+    status: target-state
     nodes:
       - {id: prepare_issue, action: receive-issue-and-categorize-only-if-untyped, description: "Accept the issue and add a type only if missing.", actor: resident-agent, environment: delegated-runtime, uses: [channels-github, github]}
       - {id: assign, action: assign-or-confirm-coding-work-to-resident, description: "Confirm a resident agent owns the coding work.", actor: resident-agent, environment: delegated-runtime, needs: [prepare_issue], rule: "a configured resident owns the task", uses: [github]}

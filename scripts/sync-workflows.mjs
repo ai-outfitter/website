@@ -34,10 +34,11 @@ const workflowTags = (workflow) => {
   return [...environments, ...actors];
 };
 const card = async (workflow) => {
+  const guide = await runGuide(workflow);
   const metadata = [
     workflow.triggers?.length ? `Triggered by ${workflow.triggers.map((trigger) => trigger.event ? eventName(trigger.event) : title(trigger.integration)).join(', ')}` : null,
     workflow.status === 'target-state' ? 'Target state' : null,
-    (await runGuide(workflow)) ? 'Runnable' : null,
+    guide && workflow.status !== 'target-state' ? 'Runnable' : null,
   ].filter(Boolean).join(' · ');
   const summary = workflow.description;
   const tags = workflowTags(workflow).map(({ label, value }) => `<li><span>${label}</span>${value}</li>`).join('\n    ');
@@ -95,6 +96,7 @@ const installSection = (workflow) => {
 };
 
 for (const workflow of items) {
+  const guide = await runGuide(workflow);
   const triggers = workflow.triggers?.length
     ? workflow.triggers.map((trigger) => `- **${trigger.event ? eventName(trigger.event) : title(trigger.integration)}** via ${factory.integrations[trigger.integration].label ?? trigger.integration}${trigger.rule ? ` when \`${trigger.rule}\`` : ''}${trigger.environment ? ` in ${environmentName(factory, trigger.environment)}` : ''}`).join('\n')
     : null;
@@ -110,7 +112,7 @@ import WorkflowDiagram from '${component}';
 <WorkflowDiagram title={${JSON.stringify(workflow.title)}} source={${JSON.stringify(workflow.mermaid)}} nodes={${JSON.stringify(workflowNodeDetails(factory, workflow))}} />
 ${(await afterDiagram(workflow)) ? `\n${await afterDiagram(workflow)}` : ''}
 ${triggers ? `\n## Starts when\n\n${triggers}\n` : ''}
-${installSection(workflow)}${(await runGuide(workflow)) ? `\n## Run it\n\n${await runGuide(workflow)}` : ''}`);
+${installSection(workflow)}${guide ? `\n## ${workflow.status === 'target-state' ? 'Current implementation boundary' : 'Run it'}\n\n${guide}` : ''}`);
 }
 
 console.log(`Generated ${items.length} workflow pages from ${source}.`);
