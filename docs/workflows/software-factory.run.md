@@ -1,4 +1,6 @@
-This delivery workflow begins with an issue created by a human or agent. Coding work is assigned to a resident agent running on infrastructure you operate. Managed resident deployment is planned, not available today.
+This is the target operating model for a resident agent, not a public
+quick-start. Its individual building blocks are being exercised, but the full
+path below is not yet packaged for onboarding.
 
 How the declaration maps to what actually runs:
 
@@ -10,12 +12,13 @@ How the declaration maps to what actually runs:
 | `review`, `revise` | CODEOWNERS requests an adversarial-review agent with a GitHub identity distinct from the implementer. Requested changes return to implementation, CI, and review until approval. | distinct review agent |
 | `merge` | GitHub auto-merges only after required CI and the required agent approval. | GitHub |
 
-### Run
+### Evaluate the current pieces
 
-1. Open an issue with acceptance criteria a reviewer can check.
-2. Assign a resident agent running through your current harness or infrastructure.
-3. A draft pull request appears and stays draft until required CI passes.
-4. CODEOWNERS requests the distinct adversarial reviewer. Requested changes repeat revision, CI, and review; approval lets GitHub auto-merge.
+| Available path | What it demonstrates | What it does not demonstrate |
+| --- | --- | --- |
+| [Local engineer workflow](/workflows/engineer/) | Shared configuration, issue scoping, implementation, CI, self-started review, and human merge. | Resident intake, a distinct forge identity, or automatic merge. |
+| [Hosted issue quickstart](/docs/cloud/) | A one-shot implementer and independent reviewer on AI Outfitter compute and inference. | Your `.agents` configuration, a resident session, CODEOWNERS routing, or automatic merge. |
+| [Actions](/docs/actions/) | Your profile running headlessly from a GitHub event or schedule. | A long-running resident process or the complete graph on this page. |
 
 ### Repository controls drive the process
 
@@ -25,9 +28,12 @@ How the declaration maps to what actually runs:
 | **CODEOWNERS** | Requests the right agent or human reviewers when a pull request becomes ready, starting adversarial review without another handoff. |
 | **Branch protection and auto-merge** | Hold the branch until required reviews and checks pass, then merge it without another manual step. |
 
-### See it on a real repository
+### Inspect hosted-run evidence
 
-The reference run lives in [`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target), a deliberately tiny project with no agent configuration:
+The hosted path has public evidence in
+[`ai-outfitter/factory-demo-target`](https://github.com/ai-outfitter/factory-demo-target),
+a deliberately tiny project with no agent configuration. It demonstrates the
+hosted row above, not the complete resident workflow:
 
-- the task: [issue #1](https://github.com/ai-outfitter/factory-demo-target/issues/1);
-- the runs: the pull request and review are public on the target repository.
+- the task: [issue #7](https://github.com/ai-outfitter/factory-demo-target/issues/7);
+- the output: [pull request #8](https://github.com/ai-outfitter/factory-demo-target/pull/8), including its independent review.

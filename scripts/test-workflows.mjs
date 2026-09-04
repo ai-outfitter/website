@@ -120,6 +120,7 @@ assert.match(triage.mermaid, /Research triage/);
 assert.deepEqual(triage.invokes.map(({ id }) => id), ['software-factory', 'bug-issue', 'research-triage']);
 
 const softwareFactory = items.find((workflow) => workflow.id === 'software-factory');
+assert.equal(softwareFactory.status, 'target-state');
 assert.deepEqual(softwareFactory.nodes.map(({ id }) => id), [
   'prepare_issue',
   'assign',
@@ -143,6 +144,17 @@ assert.equal(softwareFactory.nodes.find(({ id }) => id === 'review').workflow, '
 assert.equal(softwareFactory.nodes.find(({ id }) => id === 'review').mode, 'github-codeowners');
 assert.equal(softwareFactory.nodes.find(({ id }) => id === 'merge').actor, 'github-platform');
 assert.match(softwareFactory.mermaid, /revise -\. rerun CI and CODEOWNERS review \.-> ci/);
+
+const workflowIndex = await readFile('src/pages/workflows/index.md', 'utf8');
+const softwareFactoryCard = workflowIndex.slice(
+  workflowIndex.indexOf('data-workflow-id="software-factory"'),
+  workflowIndex.indexOf('</a>', workflowIndex.indexOf('data-workflow-id="software-factory"')),
+);
+assert.match(softwareFactoryCard, /Target state/);
+assert.doesNotMatch(softwareFactoryCard, /Runnable/);
+const softwareFactoryPage = await readFile('src/pages/workflows/software-factory.mdx', 'utf8');
+assert.match(softwareFactoryPage, /## Current implementation boundary/);
+assert.match(softwareFactoryPage, /not the complete resident workflow/);
 
 const founder = items.find((workflow) => workflow.id === 'founder');
 assert.ok(founder.nodes.filter(({ workflow }) => !workflow).every(({ actor, environment }) => actor === 'founder-agent' && environment === 'workstation'));
@@ -195,5 +207,14 @@ const publicPaths = [
 const staleDeliveryReference = /\bid:\s*factory\b|\/docs\/workflows\/factory\/|merge-bot|human_decision|same identity|revises once|one fresh second review/i;
 for (const path of publicPaths) assert.doesNotMatch(await readFile(path, 'utf8'), staleDeliveryReference, path);
 await assert.rejects(access('src/content/docs/docs/workflows/index.md'));
+
+const homepage = await readFile('src/content/docs/index.mdx', 'utf8');
+assert.match(homepage, /workflows:\s*\n\s*- engineer/);
+assert.doesNotMatch(homepage, /workflows:\s*\n\s*- software-factory/);
+
+const projectIndex = await readFile('src/content/docs/docs/projects/index.md', 'utf8');
+assert.match(projectIndex, /## Current operating boundaries/);
+assert.match(projectIndex, /Agent Operator \| Design stage; not a public onboarding path/);
+assert.match(projectIndex, /Pensieve \| Design stage/);
 
 console.log(`Validated ${items.length} workflow declarations and generated source pages.`);

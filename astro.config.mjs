@@ -66,13 +66,13 @@ export default defineConfig({
         {
           label: 'Start here',
           items: [
-            { label: 'Start your first software factory', link: '/docs/start/' },
-            { label: 'Complete an issue in the cloud', link: '/docs/cloud/' },
+            { label: 'Set up shared configuration', link: '/docs/start/' },
+            { label: 'Try one hosted issue', link: '/docs/cloud/' },
             { label: 'Documentation', link: '/docs/' },
             { label: 'Repository documentation', link: '/docs/projects/' },
             { label: 'The adoption ramp', link: '/docs/adoption-ramp/' },
             { label: 'Workflow atlas', link: '/workflows/' },
-            { label: 'Manage your agents', link: '/dashboard/' },
+            { label: 'Manage .agents configuration', link: '/dashboard/' },
           ],
         },
         ...repositorySidebar,

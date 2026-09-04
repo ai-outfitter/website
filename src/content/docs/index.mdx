@@ -6,15 +6,15 @@ hero:
   title: Outfit your team.
   tagline: Open, vendor-neutral tooling for configuring and operating software-development agents across a team.
   actions:
-    - text: Set up with GitHub
+    - text: Set up shared configuration
       link: /dashboard/
       icon: rocket
       variant: primary
-    - text: Explore the software factory
-      link: /workflows/software-factory/
+    - text: Try one hosted issue
+      link: /docs/cloud/
       icon: right-arrow
       variant: minimal
-    - text: Configure it yourself
+    - text: Run it locally
       link: /docs/outfitter/documentation/getting-started/
       icon: right-arrow
       variant: minimal
@@ -36,8 +36,8 @@ configuration as your agents earn more responsibility.
   </div>
   <div>
     <span class="number">02 / ADOPT</span>
-    <h3>Accept a workflow</h3>
-    <p>Start with the software factory or choose another workflow from the community catalog.</p>
+    <h3>Choose a workflow</h3>
+    <p>Start with the runnable local engineer workflow, or inspect the resident software factory as a target state.</p>
   </div>
   <div>
     <span class="number">03 / RUN</span>
@@ -51,16 +51,16 @@ configuration as your agents earn more responsibility.
     <p class="eyebrow">A concrete place to start</p>
     <h2 id="workflow-tour-title">See one complete workflow</h2>
     <p>Follow an issue from intake through implementation, review, and delivery. Inspect every agent, skill, and instruction involved before your team adopts it.</p>
-    <p class="workflow-tour__actions"><a class="sl-link-button primary" href="/workflows/software-factory/">Explore the software factory</a><a href="/docs/start/">Start the guided setup →</a></p>
+    <p class="workflow-tour__actions"><a class="sl-link-button primary" href="/workflows/engineer/">Run the local workflow</a><a href="/workflows/software-factory/">Inspect the resident target state →</a></p>
   </div>
   <pre aria-label="Example AI Outfitter settings"><code>{`default_harness: pi
 
 sources:
   - github: ai-outfitter/community-profiles
-    ref: v1.5.0
+    ref: v1.7.0
 
 workflows:
-  - software-factory`}</code></pre>
+  - engineer`}</code></pre>
 </section>
 
 <p class="eyebrow">Product status</p>
@@ -70,18 +70,18 @@ workflows:
 <div class="availability-grid">
   <div>
     <span class="availability-label availability-label--ready">Available now</span>
-    <h3>Configure and adopt</h3>
-    <p>Shared `.agents` repositories, catalog sources, workflow acceptance, validation, and supported harnesses.</p>
+    <h3>Manage shared configuration</h3>
+    <p>The dashboard creates or updates an account's `.agents` repository. Run that configuration locally with Outfitter and your supported harness.</p>
   </div>
   <div>
     <span class="availability-label availability-label--ready">Available now</span>
-    <h3>Complete an issue in the cloud</h3>
-    <p>Install the App, label an issue <code>ai-outfitter</code>, and get a reviewed pull request from our compute and inference. <a href="/docs/cloud/">How it works →</a></p>
+    <h3>Delegate one hosted issue</h3>
+    <p>Install the App, label an issue <code>ai-outfitter</code>, and get a reviewed pull request from our compute and inference. This path does not use your `.agents` repository. <a href="/docs/cloud/">How it works →</a></p>
   </div>
   <div>
     <span class="availability-label availability-label--planned">In development</span>
-    <h3>Deploy and operate</h3>
-    <p>Managed resident deployment and bring-your-own-key execution. The documentation marks these capabilities as planned.</p>
+    <h3>Operate resident agents</h3>
+    <p>The public resident-agent workflow is a target state, not an onboarding path. The operator is still at the design stage; managed deployment and bring-your-own-key execution are also unavailable.</p>
   </div>
 </div>
 
@@ -96,7 +96,7 @@ keeps the inspectable configuration and evidence from the last.
   <li><span>01</span><div><strong>Configure</strong><p>Describe agents and their shared context with `.agents` and the Outfitter CLI.</p></div><a href="/docs/outfitter/documentation/getting-started/">Get started →</a></li>
   <li><span>02</span><div><strong>Adopt</strong><p>Choose inspectable profiles and workflows from community catalogs.</p></div><a href="/workflows/">Browse workflows →</a></li>
   <li><span>03</span><div><strong>Delegate</strong><p>Run the same operating model from the coding harnesses your team already uses.</p></div><a href="/docs/adoption-ramp/">See the adoption ramp →</a></li>
-  <li><span>04</span><div><strong>Automate</strong><p>Move bounded work into CI and resident agents on infrastructure you control.</p></div><span class="ecosystem-status">Developing</span></li>
+  <li><span>04</span><div><strong>Automate</strong><p>Move bounded work into CI today. Resident execution is still being prepared for public onboarding.</p></div><a href="/docs/actions/">Run in Actions →</a></li>
   <li><span>05</span><div><strong>Govern</strong><p>Add validation, permissions, and durable evidence as agents earn authority.</p></div><a href="/docs/projects/">Explore the projects →</a></li>
 </ol>
 

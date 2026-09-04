@@ -7,6 +7,11 @@ The AI Outfitter cloud turns one issue into one reviewed pull request. It runs
 on our compute and our inference. Your repository needs no workflow file, no
 secret, and no agent configuration.
 
+This is a one-shot hosted path. It does not read your account's `.agents`
+repository, install a resident agent, or configure GitHub Actions. To evaluate
+portable team-owned configuration, use the [dashboard setup](/docs/start/)
+and run the selected workflow locally.
+
 ## 1. Install the App
 
 [Open the dashboard](/dashboard/) and sign in with GitHub. Install the AI
@@ -54,4 +59,6 @@ and issues. It cannot reach any other repository the App is installed on.
 - Assigning the App does not start a run. GitHub does not allow App identities
   as assignees.
 - Runs use AI Outfitter's inference. Bring-your-own-key inference and
-  self-hosted execution follow the [adoption ramp](/docs/adoption-ramp/).
+  dashboard-managed self-hosted execution are still in development. The
+  [adoption ramp](/docs/adoption-ramp/) separates the available Actions path
+  from the resident-agent target state.

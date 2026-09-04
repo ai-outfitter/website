@@ -284,6 +284,18 @@ async function writeProjectIndex(results) {
     'These pages are built from each repository’s `README.md` and complete `docs/` tree.',
     'Use the source link on any page to inspect the exact commit that was published.',
     '',
+    '## Current operating boundaries',
+    '',
+    '| Surface | Public status |',
+    '| --- | --- |',
+    '| Outfitter CLI and dashboard-managed `.agents` repositories | Available |',
+    '| Headless execution with Actions | Available |',
+    '| Long-running event intake with Channels | Alpha |',
+    '| Resident execution with Agent Operator | Design stage; not a public onboarding path |',
+    '| Durable evidence storage with Pensieve | Design stage |',
+    '',
+    'These statuses describe public adoption readiness. A repository may publish working code or a versioned artifact before its onboarding path is stable.',
+    '',
   ];
 
   for (const group of repositoryGroups) {

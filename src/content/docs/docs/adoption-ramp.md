@@ -94,10 +94,15 @@ runs unattended, define:
 - the checks that must pass; and
 - the person or policy that approves the result.
 
-Use [Actions](/docs/actions/) for GitHub events and schedules. Use
-[Agent Operator](/docs/agent-operator/) when the workflow needs a resident agent
-in Kubernetes. [Channels](/docs/channels/) can wake a resident session from an
-external event without putting the whole task into the wake signal.
+Use [Actions](/docs/actions/) for GitHub events and schedules today. The
+[hosted issue path](/docs/cloud/) is a separate one-shot evaluation on AI
+Outfitter's compute and inference; it does not deploy your configuration.
+
+[Channels](/docs/channels/) is alpha software for waking a long-running Pi
+session. [Agent Operator](/docs/agent-operator/) specifies the Kubernetes
+resident path, but it is still at the design stage and is not a public
+onboarding path. Treat resident execution as a target state rather than the
+next quick-start step.
 
 ## 4. Governed: make the workflow a team-owned system
 
@@ -113,11 +118,11 @@ At this rung, the organization should be able to answer:
 - What files, commands, and external systems did it touch?
 - Which checks and reviews allowed the work to continue?
 
-Store shared configurations in a catalog, pin versions, and retain the run
-record. Start with the [Outfitter catalog documentation](/docs/outfitter/documentation/catalogs/)
+Store shared configurations in a catalog and pin versions. Start with the
+[Outfitter catalog documentation](/docs/outfitter/documentation/catalogs/)
 and the [.agents catalog](/docs/agents/). Use [Link](/docs/link/) to inspect
-software-delivery signals and [Pensieve](/docs/pensieve/) when evaluating how to
-retain durable run evidence.
+software-delivery signals. [Pensieve](/docs/pensieve/) is a design-stage
+project for retaining durable run evidence, not an available control today.
 
 ## 5. Self-improving: learn from recorded outcomes
 
