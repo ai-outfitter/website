@@ -14,7 +14,7 @@ actors:
   outfitter: {kind: tool}
   resident-agent: {kind: agent, profile: engineer, can: [contents:write, pull-requests:write]}
   luce: {kind: agent, harness: pi, profile: luce, can: [contents:write, pull-requests:write]}
-  review-bot: {kind: agent, harness: pi, profile: code-review, can: [reviews:approve]}
+  review-bot: {kind: agent, harness: pi, profile: engineer, skills: [code-review], can: [reviews:approve]}
   github-platform: {kind: system, can: [pull-requests:merge]}
   incident-bot: {kind: agent, harness: pi, profile: incident-investigation, can: [issues:write]}
   outfitter-bot: {kind: agent, harness: pi, profile: actions-agent, can: [issues:write]}
@@ -74,18 +74,18 @@ workflows:
 
   - id: engineer
     title: Engineer
-    description: Research, implement, review, and merge changes locally through a human-authenticated engineering agent.
+    description: Turn a bare bug report into a scoped issue, a CI-gated pull request, a self-started adversarial review, and a human merge.
     nodes:
-      - {id: research, action: research-locally, description: "Investigate the problem and possible approaches.", actor: engineer-agent, environment: workstation, uses: [gh]}
-      - {id: develop, action: develop-implement-and-iterate-locally, description: "Implement and refine the change locally.", actor: engineer-agent, environment: workstation, needs: [research], uses: [git-https]}
-      - {id: draft, action: push-draft-pr-as-human, description: "Open a draft pull request as the human.", actor: engineer-agent, environment: workstation, needs: [develop], uses: [gh, git-https]}
+      - {id: issue, action: file-scoped-issue, description: "Reproduce the report and file one scoped issue with checkable acceptance criteria.", actor: engineer-agent, environment: workstation, skill: scoped-issues, uses: [github]}
+      - {id: develop, action: implement-on-semantic-branch, description: "Fix on a semantic branch with the regression test the issue demands.", actor: engineer-agent, environment: workstation, needs: [issue], uses: [git-https]}
+      - {id: draft, action: push-draft-pr-as-human, description: "Open a draft pull request referencing the issue.", actor: engineer-agent, environment: workstation, needs: [develop], uses: [gh, git-https]}
       - {id: ci, action: wait-for-required-ci, description: "Wait for every required check to pass.", actor: engineer-agent, environment: workstation, needs: [draft], checks: [verify], shape: gate, uses: [gh]}
       - {id: ready, action: undraft-pr, description: "Mark the pull request ready for review.", actor: engineer-agent, environment: workstation, needs: [ci], uses: [gh]}
-      - {id: review, workflow: adversarial-review, description: "Request an independent CODEOWNERS review.", mode: github-codeowners, needs: [ready]}
-      - {id: revise, action: revise-locally, description: "Address the reviewer's requested changes.", actor: engineer-agent, environment: workstation, needs: [review], if: "review.outcome == 'request-changes'", uses: [gh, git-https]}
-      - {id: merge, action: merge-through-local-agent-as-human, description: "Merge the approved pull request as the human.", actor: engineer-agent, environment: workstation, needs: [review], if: "review.outcome == 'approve'", checks: [verify], uses: [gh]}
+      - {id: review, workflow: adversarial-review, description: "Start the adversarial review of your own pull request.", mode: self-started, needs: [ready]}
+      - {id: revise, action: fix-blocking-findings, description: "Fix each blocking finding, push, and review the new revision.", actor: engineer-agent, environment: workstation, needs: [review], if: "review.outcome == 'request-changes'", uses: [gh, git-https]}
+      - {id: merge, action: verify-and-merge-as-human, description: "The human verifies the acceptance criteria and merges.", actor: employee, environment: workstation, needs: [review], if: "review.outcome == 'approve'", checks: [verify], uses: [gh]}
     feedback:
-      - {from: revise, to: ci, label: rerun CI and CODEOWNERS review}
+      - {from: revise, to: ci, label: rerun CI and re-review the new revision}
 
   - id: software-factory
     title: Software factory
@@ -108,15 +108,15 @@ workflows:
 
   - id: adversarial-review
     title: Adversarial review
-    description: Assign a distinct review agent to inspect a change and return an approval or actionable findings.
-    modes: [local, github-codeowners]
+    description: Fan out one review subagent per lens over a change and submit one merged review envelope.
+    modes: [local, self-started, github-codeowners]
     triggers:
       - {integration: channels-github, event: pull_request.review_requested, description: "Start when CODEOWNERS requests a pull request review.", rule: CODEOWNERS, environment: kubernetes}
     outputs: [outcome]
     nodes:
-      - {id: inspect, action: inspect-requested-change, description: "Examine the change for defects and regressions.", actor: review-bot, environment: delegated-runtime, uses: [github, git-worktree]}
-      - {id: decide, action: decide-review, description: "Choose approval or request actionable changes.", actor: review-bot, environment: delegated-runtime, needs: [inspect], outputs: [outcome], shape: decision}
-      - {id: deliver, action: return-local-verdict-or-submit-github-review-in-caller-mode, description: "Return the verdict through the caller's review channel.", actor: review-bot, environment: delegated-runtime, needs: [decide], uses: [github, git-worktree]}
+      - {id: lenses, action: spawn-lens-subagents, description: "One subagent per lens — criteria, correctness, checks, simplify — each returning a review envelope.", actor: review-bot, environment: delegated-runtime, skill: code-review, uses: [github]}
+      - {id: merge_envelopes, action: merge-review-envelopes, description: "Pool the findings, drop what prior reviews raised, recompute the verdict.", actor: review-bot, environment: delegated-runtime, needs: [lenses], outputs: [outcome], shape: decision}
+      - {id: deliver, action: submit-review-envelope, description: "Submit one formal review through the GitHub MCP — a self-review's clean verdict lands as a COMMENT review — or return the envelope to the caller.", actor: review-bot, environment: delegated-runtime, needs: [merge_envelopes], uses: [github]}
 
   - id: bug-issue
     title: Bug issue

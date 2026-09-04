@@ -159,22 +159,20 @@ assert.match(founder.mermaid, /review -->\|Approved\| push/);
 assert.deepEqual(founder.invokes.map(({ id }) => id), ['adversarial-review']);
 
 const engineer = items.find((workflow) => workflow.id === 'engineer');
-assert.ok(engineer.nodes.filter(({ workflow }) => !workflow).every(({ actor, environment }) => actor === 'engineer-agent' && environment === 'workstation'));
+const adversarial = items.find((workflow) => workflow.id === 'adversarial-review');
+// Invariants, not the YAML restated: every engineer step is the human-identity
+// local agent except the merge, which a human owns; the review invokes
+// adversarial-review in a mode that workflow declares; some review node emits
+// the outcome the branch conditions read; both verdict branches render.
 assert.equal(declaration.actors['engineer-agent'].identity, 'human');
+assert.ok(engineer.nodes.filter(({ workflow, id }) => !workflow && id !== 'merge').every(({ actor, environment }) => actor === 'engineer-agent' && environment === 'workstation'));
+assert.equal(declaration.actors[engineer.nodes.find(({ id }) => id === 'merge').actor].kind, 'human');
 assert.equal(engineer.nodes.find(({ id }) => id === 'ready').needs[0], 'ci');
-assert.equal(engineer.nodes.find(({ id }) => id === 'review').workflow, 'adversarial-review');
-assert.equal(engineer.nodes.find(({ id }) => id === 'review').mode, 'github-codeowners');
-assert.match(engineer.nodes.find(({ id }) => id === 'merge').action, /local-agent-as-human/);
-assert.match(engineer.mermaid, /revise -\. rerun CI and CODEOWNERS review \.-> ci/);
+assert.deepEqual(engineer.invokes.map(({ id }) => id), ['adversarial-review']);
+assert.ok(adversarial.modes.includes(engineer.nodes.find(({ id }) => id === 'review').mode));
+assert.ok(adversarial.nodes.some(({ outputs }) => outputs?.includes('outcome')));
 assert.match(engineer.mermaid, /review -->\|Changes requested\| revise/);
 assert.match(engineer.mermaid, /review -->\|Approved\| merge/);
-assert.deepEqual(engineer.invokes.map(({ id }) => id), ['adversarial-review']);
-
-const adversarial = items.find((workflow) => workflow.id === 'adversarial-review');
-assert.equal(adversarial.triggers[0].rule, 'CODEOWNERS');
-assert.deepEqual(adversarial.modes, ['local', 'github-codeowners']);
-assert.deepEqual(adversarial.nodes.find(({ id }) => id === 'decide').outputs, ['outcome']);
-assert.match(adversarial.nodes.find(({ id }) => id === 'deliver').action, /in-caller-mode/);
 assert.notEqual(adversarial.nodes[0].actor, 'resident-agent');
 assert.notEqual(adversarial.nodes[0].actor, 'engineer-agent');
 
