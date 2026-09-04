@@ -159,22 +159,25 @@ assert.match(founder.mermaid, /review -->\|Approved\| push/);
 assert.deepEqual(founder.invokes.map(({ id }) => id), ['adversarial-review']);
 
 const engineer = items.find((workflow) => workflow.id === 'engineer');
-assert.ok(engineer.nodes.filter(({ workflow }) => !workflow).every(({ actor, environment }) => actor === 'engineer-agent' && environment === 'workstation'));
+assert.ok(engineer.nodes.filter(({ workflow, id }) => !workflow && id !== 'merge').every(({ actor, environment }) => actor === 'engineer-agent' && environment === 'workstation'));
 assert.equal(declaration.actors['engineer-agent'].identity, 'human');
+assert.equal(engineer.nodes.find(({ id }) => id === 'issue').skill, 'scoped-issues');
 assert.equal(engineer.nodes.find(({ id }) => id === 'ready').needs[0], 'ci');
 assert.equal(engineer.nodes.find(({ id }) => id === 'review').workflow, 'adversarial-review');
-assert.equal(engineer.nodes.find(({ id }) => id === 'review').mode, 'github-codeowners');
-assert.match(engineer.nodes.find(({ id }) => id === 'merge').action, /local-agent-as-human/);
-assert.match(engineer.mermaid, /revise -\. rerun CI and CODEOWNERS review \.-> ci/);
+assert.equal(engineer.nodes.find(({ id }) => id === 'review').mode, 'self-started');
+assert.equal(engineer.nodes.find(({ id }) => id === 'merge').actor, 'employee');
+assert.match(engineer.nodes.find(({ id }) => id === 'merge').action, /as-human/);
+assert.match(engineer.mermaid, /revise -\. rerun CI and re-review the new revision \.-> ci/);
 assert.match(engineer.mermaid, /review -->\|Changes requested\| revise/);
 assert.match(engineer.mermaid, /review -->\|Approved\| merge/);
 assert.deepEqual(engineer.invokes.map(({ id }) => id), ['adversarial-review']);
 
 const adversarial = items.find((workflow) => workflow.id === 'adversarial-review');
 assert.equal(adversarial.triggers[0].rule, 'CODEOWNERS');
-assert.deepEqual(adversarial.modes, ['local', 'github-codeowners']);
-assert.deepEqual(adversarial.nodes.find(({ id }) => id === 'decide').outputs, ['outcome']);
-assert.match(adversarial.nodes.find(({ id }) => id === 'deliver').action, /in-caller-mode/);
+assert.deepEqual(adversarial.modes, ['local', 'self-started', 'github-codeowners']);
+assert.equal(adversarial.nodes.find(({ id }) => id === 'lenses').skill, 'code-review');
+assert.deepEqual(adversarial.nodes.find(({ id }) => id === 'merge_envelopes').outputs, ['outcome']);
+assert.match(adversarial.nodes.find(({ id }) => id === 'deliver').action, /submit-review-envelope/);
 assert.notEqual(adversarial.nodes[0].actor, 'resident-agent');
 assert.notEqual(adversarial.nodes[0].actor, 'engineer-agent');
 
