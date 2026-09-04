@@ -116,7 +116,7 @@ workflows:
     nodes:
       - {id: lenses, action: spawn-lens-subagents, description: "One subagent per lens — criteria, correctness, checks, simplify — each returning a review envelope.", actor: review-bot, environment: delegated-runtime, skill: code-review, uses: [github]}
       - {id: merge_envelopes, action: merge-review-envelopes, description: "Pool the findings, drop what prior reviews raised, recompute the verdict.", actor: review-bot, environment: delegated-runtime, needs: [lenses], outputs: [outcome], shape: decision}
-      - {id: deliver, action: submit-review-envelope, description: "Submit one formal review through the GitHub MCP, or return the envelope to the caller.", actor: review-bot, environment: delegated-runtime, needs: [merge_envelopes], uses: [github]}
+      - {id: deliver, action: submit-review-envelope, description: "Submit one formal review through the GitHub MCP — a self-review's clean verdict lands as a COMMENT review — or return the envelope to the caller.", actor: review-bot, environment: delegated-runtime, needs: [merge_envelopes], uses: [github]}
 
   - id: bug-issue
     title: Bug issue
