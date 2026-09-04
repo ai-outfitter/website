@@ -35,6 +35,10 @@ One hosted run does the whole loop:
 A maintainer merges. The reviewer shares the author's identity, so GitHub does
 not let it submit a formal approval; the verdict is in the review body.
 
+Every comment, pull request, and review the run leaves ends with the model
+and agent that produced it, for example
+`AI Outfitter cloud · model dgx-spark/GLM-5.3-Flash-EXL3 · agent factory-reviewer`.
+
 ## What the cloud can do in your repository
 
 The run holds a token minted for that one repository and nothing else. The
