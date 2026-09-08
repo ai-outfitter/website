@@ -3,11 +3,12 @@ import { handleGitHubWebhook, type WebhookDeps } from "./webhooks";
 
 type Call = { route: string; params: Record<string, unknown> };
 
-function deps(overrides: Partial<WebhookDeps> & { pulls?: Array<{ number: number }>; dispatchError?: Error } = {}) {
+function deps(overrides: Partial<WebhookDeps> & { comments?: Array<{ body: string; user: { login: string } }>; pulls?: Array<{ number: number }>; dispatchError?: Error } = {}) {
   const calls: Call[] = [];
   const request = async (route: string, params: Record<string, unknown>) => {
     calls.push({ route, params });
     if (route.startsWith("GET /repos/{owner}/{repo}/pulls")) return { data: overrides.pulls ?? [] };
+    if (route.startsWith("GET /repos/{owner}/{repo}/issues/{issue_number}/comments")) return { data: overrides.comments ?? [] };
     if (route.includes("dispatches") && overrides.dispatchError) throw overrides.dispatchError;
     return { data: {} };
   };
@@ -76,9 +77,19 @@ describe("handleGitHubWebhook", () => {
     expect(await response.json()).toEqual({ outcome: "resident-triage-requested", repository: "ai-outfitter/app", issue: 9, triager: "luce-unsup" });
     expect(scopedToken).not.toHaveBeenCalled();
     expect(calls.some((call) => call.route.includes("dispatches"))).toBe(false);
-    const note = calls.find((call) => call.route.includes("comments"));
+    const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));
     expect(note?.params.body).toContain("@luce-unsup");
     expect(note?.params.body).toContain("Luce or Vega");
+  });
+
+  it("does not post a second resident wake when GitHub redelivers an opened issue", async () => {
+    const { deps: d, calls } = deps({
+      comments: [{ body: "<!-- ai-outfitter:resident-triage -->\n@luce-unsup triage this issue", user: { login: "ai-outfitter[bot]" } }],
+    });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ outcome: "resident-triage-already-requested", issue: 9 });
+    expect(calls.filter((call) => call.route.startsWith("POST "))).toHaveLength(0);
   });
 
   it("does not auto-triage an issue outside the AI Outfitter organization", async () => {
