@@ -5,6 +5,7 @@ const JWKS_URL = `${ISSUER}/.well-known/jwks`;
 const RUNNER_REPOSITORY = "ai-outfitter/factory-runner";
 const RUNNER_REPOSITORY_ID = "1349964613";
 const RUNNER_OWNER_ID = "294932028";
+const RUNNER_ACTOR_ID = "301601005";
 const RUNNER_WORKFLOW_REF = `${RUNNER_REPOSITORY}/.github/workflows/outfitter-agent.yml@refs/heads/main`;
 const CLOCK_SKEW_SECONDS = 30;
 const MAX_TOKEN_LIFETIME_SECONDS = 10 * 60;
@@ -115,6 +116,7 @@ export async function verifyActionsIdentity(
   if (stringClaim(claims, "repository") !== RUNNER_REPOSITORY) throw new Error("OIDC repository is not trusted");
   if (stringClaim(claims, "repository_id") !== RUNNER_REPOSITORY_ID) throw new Error("OIDC repository identity is not trusted");
   if (stringClaim(claims, "repository_owner_id") !== RUNNER_OWNER_ID) throw new Error("OIDC repository owner is not trusted");
+  if (stringClaim(claims, "actor_id") !== RUNNER_ACTOR_ID) throw new Error("OIDC dispatcher is not trusted");
   if (stringClaim(claims, "workflow_ref") !== RUNNER_WORKFLOW_REF) throw new Error("OIDC workflow is not trusted");
   if (stringClaim(claims, "ref") !== "refs/heads/main" || stringClaim(claims, "event_name") !== "workflow_dispatch") {
     throw new Error("OIDC workflow context is not trusted");

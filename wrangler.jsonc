@@ -22,7 +22,8 @@
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
     "GITHUB_APP_SLUG": "ai-outfitter",
     "GITHUB_APP_ID": "4253427",
-    "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
+    "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
+    "FACTORY_AUTO_START_ACTOR_IDS": "8276365"
   },
   "durable_objects": {
     "bindings": [
@@ -45,7 +46,8 @@
         "BETTER_AUTH_URL": "https://ai-outfitter.com",
         "GITHUB_APP_SLUG": "ai-outfitter",
         "GITHUB_APP_ID": "4253427",
-        "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX"
+        "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
+        "FACTORY_AUTO_START_ACTOR_IDS": "8276365"
       },
       "durable_objects": {
         "bindings": [

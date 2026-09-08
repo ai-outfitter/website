@@ -50,7 +50,7 @@ export async function scopedInstallationToken(env: Env, installationId: number, 
     type: "installation",
     installationId,
     repositoryNames: [repositoryName],
-    permissions: { checks: "write", contents: "write", pull_requests: "write", issues: "write", metadata: "read", workflows: "write" },
+    permissions: { contents: "write", pull_requests: "write", issues: "write", metadata: "read", workflows: "write" },
   });
   return token;
 }

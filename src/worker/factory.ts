@@ -18,7 +18,7 @@ export const TRIGGER_LABEL = "ai-outfitter";
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 export type Trigger =
-  | { kind: "opened"; authorType: string }
+  | { kind: "opened"; authorId: number; authorType: string }
   | { kind: "labeled"; label: string }
   | { kind: "mentioned"; body: string; authorAssociation: string; authorType: string }
   | { kind: "assigned"; assignee: string };
@@ -33,7 +33,7 @@ type Payload = {
   action?: string;
   installation?: { id?: number } | null;
   repository?: { full_name?: string; name?: string; owner?: { login?: string } };
-  issue?: { number?: number; pull_request?: unknown; user?: { type?: string } | null };
+  issue?: { number?: number; pull_request?: unknown; user?: { id?: number; type?: string } | null };
   label?: { name?: string } | null;
   assignee?: { login?: string } | null;
   comment?: { body?: string; author_association?: string; user?: { login?: string; type?: string } | null };
@@ -44,7 +44,7 @@ type Payload = {
 export function triggerFromWebhook(event: string, raw: unknown): Trigger | undefined {
   const payload = raw as Payload;
   if (event === "issues" && payload.action === "opened") {
-    return { kind: "opened", authorType: payload.issue?.user?.type ?? "" };
+    return { kind: "opened", authorId: payload.issue?.user?.id ?? 0, authorType: payload.issue?.user?.type ?? "" };
   }
   if (event === "issues" && payload.action === "labeled") {
     return { kind: "labeled", label: payload.label?.name ?? "" };
@@ -93,11 +93,11 @@ function mentionPattern(botLogin: string) {
  * person who owns, belongs to, or collaborates on the repository. */
 export function startsRun(
   trigger: Trigger,
-  options: { botLogin: string; triggerLabel?: string; assignee?: string },
+  options: { autoStartActorIds?: ReadonlySet<number>; botLogin: string; triggerLabel?: string; assignee?: string },
 ) {
   switch (trigger.kind) {
     case "opened":
-      return trigger.authorType === "User";
+      return trigger.authorType === "User" && Boolean(options.autoStartActorIds?.has(trigger.authorId));
     case "labeled":
       return trigger.label === (options.triggerLabel ?? TRIGGER_LABEL);
     case "assigned":

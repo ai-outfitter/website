@@ -29,6 +29,7 @@ async function signedToken(overrides: Record<string, unknown> = {}) {
     repository: "ai-outfitter/factory-runner",
     repository_id: "1349964613",
     repository_owner_id: "294932028",
+    actor_id: "301601005",
     workflow_ref: "ai-outfitter/factory-runner/.github/workflows/outfitter-agent.yml@refs/heads/main",
     ref: "refs/heads/main",
     event_name: "workflow_dispatch",
@@ -86,11 +87,12 @@ describe("verifyActionsIdentity", () => {
     await expect(verifyActionsIdentity(await signedToken(), audience, keys, now)).resolves.toEqual(identity);
   });
 
-  it("rejects a token for another audience, workflow, repository id, or time window", async () => {
+  it("rejects a token for another audience, workflow, repository id, dispatcher, or time window", async () => {
     const valid = await signedToken();
     await expect(verifyActionsIdentity(valid, `${audience}:other`, keys, now)).rejects.toThrow("audience");
     await expect(verifyActionsIdentity(await signedToken({ workflow_ref: "ai-outfitter/factory-runner/.github/workflows/other.yml@refs/heads/main" }), audience, keys, now)).rejects.toThrow("workflow");
     await expect(verifyActionsIdentity(await signedToken({ repository_id: "999" }), audience, keys, now)).rejects.toThrow("repository identity");
+    await expect(verifyActionsIdentity(await signedToken({ actor_id: "8276365" }), audience, keys, now)).rejects.toThrow("dispatcher");
     await expect(verifyActionsIdentity(await signedToken({ exp: now - 60 }), audience, keys, now)).rejects.toThrow("Expired");
   });
 

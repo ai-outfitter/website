@@ -12,6 +12,7 @@ export type WebhookDeps = {
   runnerClient(): Pick<Octokit, "request">;
   botLogin: string;
   targetOwner: string;
+  autoStartActorIds?: ReadonlySet<number>;
   triggerLabel?: string;
   assignee?: string;
 };
@@ -26,6 +27,7 @@ export function webhookDeps(env: Env): WebhookDeps | null {
     runnerClient: () => installationOctokit(env, runnerInstallation),
     botLogin: `${env.GITHUB_APP_SLUG}[bot]`,
     targetOwner: env.FACTORY_TARGET_OWNER?.trim() || "ai-outfitter",
+    autoStartActorIds: new Set((env.FACTORY_AUTO_START_ACTOR_IDS ?? "").split(",").map(Number).filter(Number.isSafeInteger)),
     triggerLabel: env.TRIGGER_LABEL,
     assignee: env.TRIGGER_ASSIGNEE,
   };
@@ -76,7 +78,7 @@ export async function handleGitHubWebhook(request: Request, deps: WebhookDeps | 
   if (!startsRun(trigger, deps)) return result(200, "ignored");
   const subject = subjectFromWebhook(payload);
   if (!subject) return result(200, "ignored");
-  if (trigger.kind === "opened" && subject.repository.owner.login.toLowerCase() !== deps.targetOwner.toLowerCase()) {
+  if (subject.repository.owner.login.toLowerCase() !== deps.targetOwner.toLowerCase()) {
     return result(200, "ignored");
   }
   const repository = subject.repository.full_name;

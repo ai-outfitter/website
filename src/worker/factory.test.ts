@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { agentBranch, mentionName, runnerInputs, startsRun, subjectFromWebhook, triggerFromWebhook } from "./factory";
 
-const bot = { botLogin: "ai-outfitter[bot]" };
+const bot = { botLogin: "ai-outfitter[bot]", autoStartActorIds: new Set([8276365]) };
 
 describe("triggerFromWebhook", () => {
   it("reads an opened issue, a label, an assignment, and a comment", () => {
-    expect(triggerFromWebhook("issues", { action: "opened", issue: { user: { type: "User" } } })).toEqual({ kind: "opened", authorType: "User" });
+    expect(triggerFromWebhook("issues", { action: "opened", issue: { user: { id: 8276365, type: "User" } } })).toEqual({ kind: "opened", authorId: 8276365, authorType: "User" });
     expect(triggerFromWebhook("issues", { action: "labeled", label: { name: "ai-outfitter" } })).toEqual({ kind: "labeled", label: "ai-outfitter" });
     expect(triggerFromWebhook("issues", { action: "assigned", assignee: { login: "luce" } })).toEqual({ kind: "assigned", assignee: "luce" });
     expect(
@@ -21,10 +21,11 @@ describe("triggerFromWebhook", () => {
 });
 
 describe("startsRun", () => {
-  it("automatically accepts human-opened issues but not bot-created issues", () => {
-    expect(startsRun({ kind: "opened", authorType: "User" }, bot)).toBe(true);
-    expect(startsRun({ kind: "opened", authorType: "Bot" }, bot)).toBe(false);
-    expect(startsRun({ kind: "opened", authorType: "" }, bot)).toBe(false);
+  it("automatically accepts allowlisted human-opened issues only", () => {
+    expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "User" }, bot)).toBe(true);
+    expect(startsRun({ kind: "opened", authorId: 99, authorType: "User" }, bot)).toBe(false);
+    expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "Bot" }, bot)).toBe(false);
+    expect(startsRun({ kind: "opened", authorId: 0, authorType: "" }, bot)).toBe(false);
   });
 
   it("accepts the trigger label only", () => {
