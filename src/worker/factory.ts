@@ -3,8 +3,8 @@
 // here talks to GitHub; webhooks.ts does the I/O.
 
 /** Our private runner repository. The App dispatches this workflow with a
- * target repository, issue, and installation identifiers. The workflow
- * exchanges its GitHub OIDC identity for a scoped token after it starts. */
+ * customer repository and issue plus a one-hour token scoped to that one
+ * repository; the run implements the issue on AI Outfitter inference. */
 export const RUNNER = {
   owner: "ai-outfitter",
   repo: "factory-runner",
@@ -114,12 +114,12 @@ export function startsRun(
 /** The branch the runner works an issue on. */
 export const agentBranch = (issue: number) => `agent/issue-${issue}`;
 
-/** Non-secret inputs the hosted runner takes; all strings, as workflow_dispatch requires. */
-export function runnerInputs(args: { repository: string; issue: number; installationId: number; pr?: number }) {
+/** Inputs the hosted runner takes; all strings, as workflow_dispatch requires. */
+export function runnerInputs(args: { repository: string; issue: number; pr?: number; token: string }) {
   return {
-    installation_id: String(args.installationId),
     repository: args.repository,
     issue_number: String(args.issue),
     pr_number: args.pr ? String(args.pr) : "",
+    token: args.token,
   };
 }
