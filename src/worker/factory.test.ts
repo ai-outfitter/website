@@ -4,7 +4,8 @@ import { agentBranch, mentionName, runnerInputs, startsRun, subjectFromWebhook, 
 const bot = { botLogin: "ai-outfitter[bot]" };
 
 describe("triggerFromWebhook", () => {
-  it("reads a label, an assignment, and a comment", () => {
+  it("reads an opened issue, a label, an assignment, and a comment", () => {
+    expect(triggerFromWebhook("issues", { action: "opened", issue: { user: { type: "User" } } })).toEqual({ kind: "opened", authorType: "User" });
     expect(triggerFromWebhook("issues", { action: "labeled", label: { name: "ai-outfitter" } })).toEqual({ kind: "labeled", label: "ai-outfitter" });
     expect(triggerFromWebhook("issues", { action: "assigned", assignee: { login: "luce" } })).toEqual({ kind: "assigned", assignee: "luce" });
     expect(
@@ -13,13 +14,19 @@ describe("triggerFromWebhook", () => {
   });
 
   it("ignores other events and actions", () => {
-    expect(triggerFromWebhook("issues", { action: "opened" })).toBeUndefined();
+    expect(triggerFromWebhook("issues", { action: "closed" })).toBeUndefined();
     expect(triggerFromWebhook("pull_request", { action: "labeled", label: { name: "ai-outfitter" } })).toBeUndefined();
     expect(triggerFromWebhook("issue_comment", { action: "edited", comment: { body: "@ai-outfitter" } })).toBeUndefined();
   });
 });
 
 describe("startsRun", () => {
+  it("automatically accepts human-opened issues but not bot-created issues", () => {
+    expect(startsRun({ kind: "opened", authorType: "User" }, bot)).toBe(true);
+    expect(startsRun({ kind: "opened", authorType: "Bot" }, bot)).toBe(false);
+    expect(startsRun({ kind: "opened", authorType: "" }, bot)).toBe(false);
+  });
+
   it("accepts the trigger label only", () => {
     expect(startsRun({ kind: "labeled", label: "ai-outfitter" }, bot)).toBe(true);
     expect(startsRun({ kind: "labeled", label: "bug" }, bot)).toBe(false);
@@ -58,8 +65,8 @@ describe("subjectFromWebhook", () => {
 describe("runner contract", () => {
   it("names the branch and stringifies dispatch inputs", () => {
     expect(agentBranch(12)).toBe("agent/issue-12");
-    expect(runnerInputs({ repository: "acme/app", issue: 12, token: "t" })).toEqual({ repository: "acme/app", issue_number: "12", pr_number: "", token: "t" });
-    expect(runnerInputs({ repository: "acme/app", issue: 12, pr: 4, token: "t" }).pr_number).toBe("4");
+    expect(runnerInputs({ repository: "acme/app", issue: 12, installationId: 7 })).toEqual({ repository: "acme/app", issue_number: "12", installation_id: "7", pr_number: "" });
+    expect(runnerInputs({ repository: "acme/app", issue: 12, installationId: 7, pr: 4 }).pr_number).toBe("4");
     expect(mentionName("ai-outfitter[bot]")).toBe("ai-outfitter");
   });
 });

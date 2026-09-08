@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { handleGitHubWebhook, type WebhookDeps } from "./webhooks";
 
 type Call = { route: string; params: Record<string, unknown> };
@@ -14,9 +14,9 @@ function deps(overrides: Partial<WebhookDeps> & { pulls?: Array<{ number: number
   const value: WebhookDeps = {
     verify: async () => true,
     installationClient: () => ({ request } as never),
-    scopedToken: async () => "scoped-token",
     runnerClient: () => ({ request } as never),
     botLogin: "ai-outfitter[bot]",
+    targetOwner: "ai-outfitter",
     ...overrides,
   };
   return { deps: value, calls };
@@ -29,6 +29,14 @@ const labeled = {
   repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } },
   issue: { number: 9 },
 };
+const opened = {
+  ...labeled,
+  action: "opened",
+  label: undefined,
+  repository: { full_name: "ai-outfitter/app", name: "app", owner: { login: "ai-outfitter" } },
+  issue: { number: 9, user: { type: "User" } },
+};
+
 
 function delivery(event: string, payload: unknown, signature = "sha256=ok") {
   return new Request("https://ai-outfitter.com/api/webhooks/github", {
@@ -58,20 +66,33 @@ describe("handleGitHubWebhook", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("dispatches the runner with a token scoped to the one repository", async () => {
-    const scopedToken = vi.fn(async () => "scoped-token");
-    const { deps: d, calls } = deps({ scopedToken });
+  it("automatically dispatches human-opened AI Outfitter issues only", async () => {
+    const accepted = deps();
+    expect((await handleGitHubWebhook(delivery("issues", opened), accepted.deps)).status).toBe(202);
+    expect(accepted.calls.some((call) => call.route.includes("dispatches"))).toBe(true);
+
+    const bot = deps();
+    expect((await handleGitHubWebhook(delivery("issues", { ...opened, issue: { number: 9, user: { type: "Bot" } } }), bot.deps)).status).toBe(200);
+    expect(bot.calls).toHaveLength(0);
+
+    const outside = deps();
+    const outsidePayload = { ...opened, repository: labeled.repository };
+    expect((await handleGitHubWebhook(delivery("issues", outsidePayload), outside.deps)).status).toBe(200);
+    expect(outside.calls).toHaveLength(0);
+  });
+
+  it("dispatches the runner with identifiers and no credential", async () => {
+    const { deps: d, calls } = deps();
     const response = await handleGitHubWebhook(delivery("issues", labeled), d);
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ outcome: "dispatched", repository: "acme/app", issue: 9 });
-    expect(scopedToken).toHaveBeenCalledWith(42, "app");
     const dispatch = calls.find((call) => call.route.includes("dispatches"));
     expect(dispatch?.params).toEqual({
       owner: "ai-outfitter",
       repo: "factory-runner",
       workflow_id: "outfitter-agent.yml",
       ref: "main",
-      inputs: { repository: "acme/app", issue_number: "9", pr_number: "", token: "scoped-token" },
+      inputs: { repository: "acme/app", issue_number: "9", installation_id: "42", pr_number: "" },
     });
   });
 

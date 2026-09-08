@@ -3,8 +3,8 @@
 // here talks to GitHub; webhooks.ts does the I/O.
 
 /** Our private runner repository. The App dispatches this workflow with a
- * customer repository and issue plus a one-hour token scoped to that one
- * repository; the run implements the issue on AI Outfitter inference. */
+ * target repository, issue, and installation identifiers. The workflow
+ * exchanges its GitHub OIDC identity for a scoped token after it starts. */
 export const RUNNER = {
   owner: "ai-outfitter",
   repo: "factory-runner",
@@ -18,6 +18,7 @@ export const TRIGGER_LABEL = "ai-outfitter";
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 export type Trigger =
+  | { kind: "opened"; authorType: string }
   | { kind: "labeled"; label: string }
   | { kind: "mentioned"; body: string; authorAssociation: string; authorType: string }
   | { kind: "assigned"; assignee: string };
@@ -32,7 +33,7 @@ type Payload = {
   action?: string;
   installation?: { id?: number } | null;
   repository?: { full_name?: string; name?: string; owner?: { login?: string } };
-  issue?: { number?: number; pull_request?: unknown };
+  issue?: { number?: number; pull_request?: unknown; user?: { type?: string } | null };
   label?: { name?: string } | null;
   assignee?: { login?: string } | null;
   comment?: { body?: string; author_association?: string; user?: { login?: string; type?: string } | null };
@@ -42,6 +43,9 @@ type Payload = {
  * label or comment on a pull request is not a task. */
 export function triggerFromWebhook(event: string, raw: unknown): Trigger | undefined {
   const payload = raw as Payload;
+  if (event === "issues" && payload.action === "opened") {
+    return { kind: "opened", authorType: payload.issue?.user?.type ?? "" };
+  }
   if (event === "issues" && payload.action === "labeled") {
     return { kind: "labeled", label: payload.label?.name ?? "" };
   }
@@ -92,6 +96,8 @@ export function startsRun(
   options: { botLogin: string; triggerLabel?: string; assignee?: string },
 ) {
   switch (trigger.kind) {
+    case "opened":
+      return trigger.authorType === "User";
     case "labeled":
       return trigger.label === (options.triggerLabel ?? TRIGGER_LABEL);
     case "assigned":
@@ -108,12 +114,12 @@ export function startsRun(
 /** The branch the runner works an issue on. */
 export const agentBranch = (issue: number) => `agent/issue-${issue}`;
 
-/** Inputs the hosted runner takes; all strings, as workflow_dispatch requires. */
-export function runnerInputs(args: { repository: string; issue: number; pr?: number; token: string }) {
+/** Non-secret inputs the hosted runner takes; all strings, as workflow_dispatch requires. */
+export function runnerInputs(args: { repository: string; issue: number; installationId: number; pr?: number }) {
   return {
+    installation_id: String(args.installationId),
     repository: args.repository,
     issue_number: String(args.issue),
     pr_number: args.pr ? String(args.pr) : "",
-    token: args.token,
   };
 }

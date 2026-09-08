@@ -1,5 +1,6 @@
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
+import { actionsTokenDeps, exchangeActionsToken } from "./worker/actions-token";
 import { createAuth, session } from "./worker/auth";
 import { accounts, github, localGitHubToken, tokenAccounts, tokenIdentity, type Account } from "./worker/github";
 import { configurationFreshness, repositoryConfiguration } from "./worker/configuration";
@@ -174,6 +175,7 @@ export default {
       }
 
       if (url.pathname === "/api/webhooks/github" && request.method === "POST") return await handleGitHubWebhook(request, webhookDeps(env));
+      if (url.pathname === "/api/actions/token" && request.method === "POST") return await exchangeActionsToken(request, actionsTokenDeps(env));
       if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
         const state = await authenticatedState(env, request);
