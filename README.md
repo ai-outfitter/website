@@ -118,3 +118,22 @@ devenv shell -- npm run deploy
 `wrangler.jsonc` is the source of truth for the Worker. The site is fully
 pre-rendered, so the Worker serves `dist/` directly without an Astro server
 adapter.
+
+### Stripe subscriptions
+
+The pricing page starts Stripe-hosted Checkout Sessions through the Worker.
+Create two Stripe products with recurring monthly USD prices—Individual at
+$20 and Team at $200—then configure the production Worker without committing
+the values:
+
+```sh
+devenv shell -- npm exec -- wrangler secret put STRIPE_SECRET_KEY
+devenv shell -- npm exec -- wrangler secret put STRIPE_INDIVIDUAL_PRICE_ID
+devenv shell -- npm exec -- wrangler secret put STRIPE_TEAM_PRICE_ID
+```
+
+Use sandbox Price IDs and an `sk_test_` key in the ignored `.dev.vars` file for
+local checkout testing. Production MUST use the matching live Price IDs and a
+live or restricted secret key. The Worker accepts only the two configured
+server-side Price IDs; browser requests select the `individual` or `team` tier
+and cannot submit an arbitrary Stripe price.

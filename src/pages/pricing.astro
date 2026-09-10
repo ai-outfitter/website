@@ -1,0 +1,158 @@
+---
+import SiteShell from '../layouts/SiteShell.astro';
+---
+
+<SiteShell
+  title="Pricing"
+  description="Monthly AI Outfitter subscriptions for individuals and teams."
+>
+  <main class="site-frame pricing-page">
+    <header class="pricing-hero">
+      <p class="eyebrow">Straightforward monthly pricing</p>
+      <h1>Choose your scale.</h1>
+      <p>Use the same open, inspectable AI Outfitter tooling on your own or across a team.</p>
+    </header>
+
+    <section class="pricing-grid" aria-label="Monthly subscriptions">
+      <article class="pricing-card">
+        <p class="pricing-card__label">Individual</p>
+        <p class="pricing-card__price"><span>$20</span> / month</p>
+        <p>For one person configuring and running coding agents with AI Outfitter.</p>
+        <form action="/api/billing/checkout" method="post">
+          <input type="hidden" name="tier" value="individual" />
+          <button class="pricing-card__action" type="submit">Subscribe as an individual</button>
+        </form>
+      </article>
+
+      <article class="pricing-card pricing-card--team">
+        <p class="pricing-card__label">Team</p>
+        <p class="pricing-card__price"><span>$200</span> / month</p>
+        <p>For a team sharing reviewable configuration and repeatable agent workflows.</p>
+        <form action="/api/billing/checkout" method="post">
+          <input type="hidden" name="tier" value="team" />
+          <button class="pricing-card__action" type="submit">Subscribe as a team</button>
+        </form>
+      </article>
+    </section>
+
+    <p class="pricing-note">Checkout and recurring billing are securely hosted by Stripe.</p>
+  </main>
+</SiteShell>
+
+<style>
+  .pricing-page {
+    padding-block: clamp(4rem, 9vw, 8rem);
+  }
+
+  .pricing-hero {
+    max-width: 48rem;
+  }
+
+  h1 {
+    max-width: 10ch;
+    margin-block: 0.7rem 1rem;
+    font-size: clamp(3.2rem, 9vw, 7rem);
+    letter-spacing: -0.065em;
+    line-height: 0.9;
+  }
+
+  .pricing-hero > p:last-child {
+    max-width: 40rem;
+    color: var(--site-muted);
+    font-size: clamp(1.05rem, 2vw, 1.35rem);
+    line-height: 1.55;
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    margin-top: clamp(3rem, 7vw, 6rem);
+    padding: 1px;
+    background: var(--site-line);
+  }
+
+  .pricing-card {
+    display: flex;
+    min-height: 25rem;
+    flex-direction: column;
+    padding: clamp(1.5rem, 4vw, 3rem);
+    background: var(--site-canvas);
+  }
+
+  .pricing-card--team {
+    box-shadow: inset 0 3px 0 var(--site-signal);
+  }
+
+  .pricing-card__label {
+    margin: 0;
+    color: var(--site-signal);
+    font-family: var(--site-font-mono);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .pricing-card__price {
+    margin-block: 1.8rem 1.2rem;
+    color: var(--site-muted);
+    font-family: var(--site-font-mono);
+  }
+
+  .pricing-card__price span {
+    color: var(--site-text);
+    font-family: inherit;
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    font-weight: 750;
+    letter-spacing: -0.07em;
+  }
+
+  .pricing-card > p:not(.pricing-card__label, .pricing-card__price) {
+    max-width: 31rem;
+    color: var(--site-muted);
+    line-height: 1.6;
+  }
+
+  .pricing-card form {
+    margin-top: auto;
+    padding-top: 2.5rem;
+  }
+
+  .pricing-card__action {
+    width: 100%;
+    border: 1px solid var(--site-signal);
+    border-radius: 0;
+    padding: 1rem 1.2rem;
+    background: var(--site-signal);
+    color: var(--site-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .pricing-card__action:hover,
+  .pricing-card__action:focus-visible {
+    border-color: var(--site-signal-high);
+    background: var(--site-signal-high);
+  }
+
+  .pricing-note {
+    margin-top: 1.2rem;
+    color: var(--site-dim);
+    font-size: 0.82rem;
+  }
+
+  @media (max-width: 44rem) {
+    .pricing-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .pricing-card {
+      min-height: 22rem;
+    }
+  }
+</style>

@@ -1,0 +1,63 @@
+---
+import SiteShell from '../../layouts/SiteShell.astro';
+---
+
+<SiteShell
+  title="Subscription started"
+  description="Your AI Outfitter subscription checkout is complete."
+>
+  <main class="site-frame checkout-result">
+    <p class="eyebrow">Checkout complete</p>
+    <h1>Welcome aboard.</h1>
+    <p>Stripe will email your subscription confirmation and receipt.</p>
+    <nav aria-label="Checkout complete actions">
+      <a class="primary" href="/dashboard/">Set up with GitHub</a>
+      <a href="/">Return home</a>
+    </nav>
+  </main>
+</SiteShell>
+
+<style>
+  .checkout-result {
+    display: grid;
+    min-height: 65vh;
+    align-content: center;
+    justify-items: start;
+  }
+
+  h1 {
+    margin-block: 0.5rem;
+    font-size: clamp(3rem, 8vw, 6rem);
+    letter-spacing: -0.06em;
+    line-height: 0.95;
+  }
+
+  .checkout-result > p:not(.eyebrow) {
+    color: var(--site-muted);
+    font-size: 1.15rem;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
+  }
+
+  a {
+    border: 1px solid var(--site-line);
+    padding: 0.8rem 1rem;
+    color: var(--site-text);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  a.primary {
+    border-color: var(--site-signal);
+    background: var(--site-signal);
+    color: var(--site-ink);
+  }
+</style>

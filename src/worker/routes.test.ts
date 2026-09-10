@@ -53,6 +53,12 @@ describe("dashboard routes", () => {
     expect(await response.text()).toContain("Dashboard");
   });
 
+  it("routes billing checkout through the Worker", async () => {
+    const response = await worker.fetch(new Request("https://example.com/api/billing/checkout"), env);
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+  });
+
   for (const path of ["/dashboard/install/adversarial-review/", "/dashboard/Unsupervisedcom/workflows/adversarial-review/"]) {
     it(`serves the dashboard shell at ${path}`, async () => {
       const response = await worker.fetch(new Request(`https://example.com${path}`), env);
