@@ -47,7 +47,8 @@ export async function createCheckoutSession(
     return json({ error: "Checkout requires form data" }, 415);
   }
 
-  const contentLength = Number(request.headers.get("content-length"));
+  const contentLengthHeader = request.headers.get("content-length");
+  const contentLength = contentLengthHeader === null ? Number.NaN : Number(contentLengthHeader);
   if (!Number.isSafeInteger(contentLength) || contentLength < 0) {
     return json({ error: "Checkout requires a content length" }, 411);
   }
@@ -82,15 +83,21 @@ export async function createCheckoutSession(
     "subscription_data[metadata][tier]": tier,
   });
 
-  const stripeResponse = await stripeFetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      authorization: `Basic ${btoa(`${secretKey}:`)}`,
-      "content-type": "application/x-www-form-urlencoded",
-      "idempotency-key": crypto.randomUUID(),
-    },
-    body,
-  });
+  let stripeResponse: Response;
+  try {
+    stripeResponse = await stripeFetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${btoa(`${secretKey}:`)}`,
+        "content-type": "application/x-www-form-urlencoded",
+        "idempotency-key": crypto.randomUUID(),
+      },
+      body,
+    });
+  } catch {
+    console.error(JSON.stringify({ message: "Stripe checkout session request failed" }));
+    return json({ error: "Stripe could not start checkout" }, 502);
+  }
   const stripeRequestId = stripeResponse.headers.get("request-id");
   const session: unknown = await stripeResponse.json().catch(() => null);
   const location = checkoutUrl(

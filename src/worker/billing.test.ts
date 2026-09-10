@@ -61,14 +61,69 @@ describe("createCheckoutSession", () => {
   });
 
   it("rejects cross-origin checkout requests", async () => {
+    const stripeFetch = vi.fn();
     const response = await createCheckoutSession(checkoutRequest("individual", {
       headers: {
         origin: "https://example.com",
         "content-type": "application/x-www-form-urlencoded",
         "content-length": "15",
       },
-    }), billingEnv, vi.fn());
+    }), billingEnv, stripeFetch);
     expect(response.status).toBe(403);
+    expect(stripeFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects requests without form content", async () => {
+    const stripeFetch = vi.fn();
+    const response = await createCheckoutSession(checkoutRequest("individual", {
+      headers: {
+        origin: "https://ai-outfitter.com",
+        "content-type": "application/json",
+        "content-length": "2",
+      },
+    }), billingEnv, stripeFetch);
+    expect(response.status).toBe(415);
+    expect(stripeFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects requests without a content length", async () => {
+    const stripeFetch = vi.fn();
+    const response = await createCheckoutSession(checkoutRequest("individual", {
+      headers: {
+        origin: "https://ai-outfitter.com",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+    }), billingEnv, stripeFetch);
+    expect(response.status).toBe(411);
+    expect(stripeFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a declared body larger than the checkout limit", async () => {
+    const stripeFetch = vi.fn();
+    const response = await createCheckoutSession(checkoutRequest("individual", {
+      headers: {
+        origin: "https://ai-outfitter.com",
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": "257",
+      },
+    }), billingEnv, stripeFetch);
+    expect(response.status).toBe(413);
+    expect(stripeFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects an actual body larger than the checkout limit", async () => {
+    const stripeFetch = vi.fn();
+    const body = `tier=individual&padding=${"x".repeat(257)}`;
+    const response = await createCheckoutSession(checkoutRequest("individual", {
+      body,
+      headers: {
+        origin: "https://ai-outfitter.com",
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": "15",
+      },
+    }), billingEnv, stripeFetch);
+    expect(response.status).toBe(413);
+    expect(stripeFetch).not.toHaveBeenCalled();
   });
 
   it("rejects arbitrary client-selected prices", async () => {
@@ -106,6 +161,19 @@ describe("createCheckoutSession", () => {
     expect(await response.json()).toEqual({ error: "Stripe could not start checkout" });
     expect(log).toHaveBeenCalledWith(expect.stringContaining("req_failure"));
     expect(log).not.toHaveBeenCalledWith(expect.stringContaining("sensitive detail"));
+    log.mockRestore();
+  });
+
+  it("returns a generic error when Stripe cannot be reached", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const stripeFetch: typeof fetch = async () => {
+      throw new Error("network detail");
+    };
+    const response = await createCheckoutSession(checkoutRequest(), billingEnv, stripeFetch);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "Stripe could not start checkout" });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Stripe checkout session request failed"));
+    expect(log).not.toHaveBeenCalledWith(expect.stringContaining("network detail"));
     log.mockRestore();
   });
 });

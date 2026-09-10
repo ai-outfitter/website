@@ -59,16 +59,20 @@ export function validateStripePrice(tier, value, liveMode) {
 }
 
 async function existingPrice(secretKey, tier, liveMode, stripeFetch) {
-  const query = new URLSearchParams({ active: 'true', limit: '2' });
+  const query = new URLSearchParams({ limit: '2' });
   query.append('lookup_keys[]', tier.lookupKey);
   const result = await stripeRequest(secretKey, `/prices?${query}`, {}, stripeFetch);
   if (!isRecord(result) || !Array.isArray(result.data)) {
     throw new Error('Stripe returned an invalid Price list');
   }
   if (result.data.length > 1) {
-    throw new Error(`${tier.name} lookup key resolved to more than one active Price`);
+    throw new Error(`${tier.name} lookup key resolved to more than one Price`);
   }
-  return result.data.length === 1 ? validateStripePrice(tier, result.data[0], liveMode) : null;
+  if (result.data.length === 0) return null;
+  if (result.data[0].active === false) {
+    throw new Error(`${tier.name} lookup key belongs to an archived Stripe Price; restore it or transfer the lookup key before retrying`);
+  }
+  return validateStripePrice(tier, result.data[0], liveMode);
 }
 
 async function createPrice(secretKey, tier, liveMode, stripeFetch) {

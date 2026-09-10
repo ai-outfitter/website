@@ -35,7 +35,7 @@ function parseEnvironment(path) {
 }
 
 function putWorkerSecret(name, value, environment) {
-  const result = spawnSync('npm', ['exec', '--', 'wrangler', 'secret', 'put', name, '--env', ''], {
+  const result = spawnSync('npm', ['exec', '--', 'wrangler', 'secret', 'put', name], {
     cwd: projectRoot,
     env: environment,
     input: `${value}\n`,
@@ -60,10 +60,11 @@ if (!values.CLOUDFLARE_API_TOKEN) {
 
 const prices = await ensureStripePrices(stripeSecretKey, { liveMode: true });
 for (const tier of stripeTiers) {
-  console.log(`${tier.name}: $${tier.unitAmount / 100}/month (${prices[tier.id]})`);
+  console.log(`${tier.name}: $${tier.unitAmount / 100}/month (ready)`);
 }
 
 const environment = { ...process.env, CLOUDFLARE_API_TOKEN: values.CLOUDFLARE_API_TOKEN };
+delete environment.CLOUDFLARE_ENV;
 for (const [name, value] of Object.entries(stripeWorkerSecrets(stripeSecretKey, prices))) {
   putWorkerSecret(name, value, environment);
 }

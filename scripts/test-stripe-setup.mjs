@@ -28,6 +28,25 @@ assert.deepEqual(
 );
 assert.equal(existingRequests.length, 2);
 assert(existingRequests.every(([, init]) => init?.method === undefined));
+assert(existingRequests.every(([url]) => !new URL(url).searchParams.has('active')));
+
+const archivedFetch = async (url) => {
+  const tier = url.includes(stripeTiers[0].lookupKey) ? stripeTiers[0] : stripeTiers[1];
+  return Response.json({ data: [price(tier, { active: false })] });
+};
+await assert.rejects(
+  () => ensureStripePrices('sk_live_example', { liveMode: true, stripeFetch: archivedFetch }),
+  /archived Stripe Price/,
+);
+
+const duplicateFetch = async (url) => {
+  const tier = url.includes(stripeTiers[0].lookupKey) ? stripeTiers[0] : stripeTiers[1];
+  return Response.json({ data: [price(tier), price(tier, { id: `price_${tier.id}_duplicate` })] });
+};
+await assert.rejects(
+  () => ensureStripePrices('sk_live_example', { liveMode: true, stripeFetch: duplicateFetch }),
+  /more than one Price/,
+);
 
 const createRequests = [];
 let listCalls = 0;
@@ -61,6 +80,10 @@ for (const [, init] of writes) {
 
 assert.throws(
   () => validateStripePrice(stripeTiers[0], price(stripeTiers[0], { unit_amount: 2_001 }), true),
+  /pricing other than \$20\/month USD/,
+);
+assert.throws(
+  () => validateStripePrice(stripeTiers[0], price(stripeTiers[0], { livemode: false }), true),
   /pricing other than \$20\/month USD/,
 );
 assert.deepEqual(
