@@ -122,15 +122,19 @@ adapter.
 ### Stripe subscriptions
 
 The pricing page starts Stripe-hosted Checkout Sessions through the Worker.
-Create two Stripe products with recurring monthly USD prices—Individual at
-$20 and Team at $200—then configure the production Worker without committing
-the values:
+Add a live Stripe secret or restricted key as `STRIPE_SECRET_KEY` in the
+ignored AI Outfitter owner `.env`, then run the guarded setup command:
 
 ```sh
-devenv shell -- npm exec -- wrangler secret put STRIPE_SECRET_KEY
-devenv shell -- npm exec -- wrangler secret put STRIPE_INDIVIDUAL_PRICE_ID
-devenv shell -- npm exec -- wrangler secret put STRIPE_TEAM_PRICE_ID
+devenv shell -- npm run stripe:configure -- --live
 ```
+
+The command creates or reuses two Stripe Prices with stable lookup keys,
+verifies that they are live recurring monthly USD prices—Individual at $20
+and Team at $200—and installs the key and Price IDs as production Worker
+secrets without printing the secret key. It is safe to retry after a partial
+failure. The explicit `--live` flag is required because the command changes
+both the Stripe account and the production Worker.
 
 Use sandbox Price IDs and an `sk_test_` key in the ignored `.dev.vars` file for
 local checkout testing. Production MUST use the matching live Price IDs and a
