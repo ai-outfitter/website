@@ -80,9 +80,20 @@ describe("handleGitHubWebhook", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("asks the resident Luce to triage an allowlisted AI Outfitter issue", async () => {
+  it("asks the resident Luce to triage using repository-defined classification labels", async () => {
     const scopedToken = vi.fn(async () => "unused");
-    const { deps: d, calls } = deps({ scopedToken });
+    const { deps: d, calls } = deps({
+      scopedToken,
+      labels: [
+        { name: "research" },
+        { name: "feature" },
+        { name: "idea" },
+        { name: "type:maintenance" },
+        { name: "software-factory" },
+        { name: "status:blocked" },
+        { name: "good first issue" },
+      ],
+    });
     const response = await handleGitHubWebhook(delivery("issues", opened), d);
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ outcome: "resident-triage-requested", repository: "ai-outfitter/app", issue: 9, triager: "luce-unsup" });
@@ -91,7 +102,10 @@ describe("handleGitHubWebhook", () => {
     const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));
     expect(note?.params.body).toContain("@luce-unsup");
     expect(note?.params.body).toContain("Luce or Vega");
-    expect(note?.params.body).toContain('["bug","enhancement"]');
+    expect(note?.params.body).toContain('["research","feature","idea","type:maintenance"]');
+    expect(note?.params.body).not.toContain("software-factory");
+    expect(note?.params.body).not.toContain("status:blocked");
+    expect(note?.params.body).not.toContain("good first issue");
     expect(note?.params.body).not.toContain("type:*");
   });
 
@@ -120,8 +134,8 @@ describe("handleGitHubWebhook", () => {
     expect(calls.filter((call) => call.route.startsWith("POST "))).toHaveLength(0);
   });
 
-  it("asks for human input when the repository has no classification labels", async () => {
-    const { deps: d, calls } = deps({ labels: [] });
+  it("asks for human input when the repository has only routing and metadata labels", async () => {
+    const { deps: d, calls } = deps({ labels: [{ name: "software-factory" }, { name: "status:blocked" }, { name: "needs-human" }] });
     const response = await handleGitHubWebhook(delivery("issues", opened), d);
     expect(response.status).toBe(202);
     const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));

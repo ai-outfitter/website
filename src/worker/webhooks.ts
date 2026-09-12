@@ -7,7 +7,17 @@ import { installationOctokit, scopedInstallationToken, appConfigured, verifySign
 import { RUNNER, agentBranch, runnerInputs, startsRun, subjectFromWebhook, triggerFromWebhook, type IssueSubject } from "./factory";
 
 const RESIDENT_TRIAGE_MARKER = "<!-- ai-outfitter:resident-triage -->";
-const CLASSIFICATION_LABELS = new Set(["bug", "documentation", "enhancement", "feat", "fix", "question"]);
+const CONTROL_LABELS = new Set([
+  "ai-outfitter",
+  "duplicate",
+  "good first issue",
+  "help wanted",
+  "invalid",
+  "needs-human",
+  "software-factory",
+  "wontfix",
+]);
+const CONTROL_LABEL_PREFIXES = ["agent:", "priority:", "resident:", "status:"];
 
 export type WebhookDeps = {
   verify(body: string, signature: string | null): Promise<boolean>;
@@ -82,6 +92,11 @@ async function residentTriageAlreadyRequested(client: Pick<Octokit, "request">, 
   }
 }
 
+function isClassificationCandidate(name: string) {
+  const normalized = name.toLowerCase();
+  return !CONTROL_LABELS.has(normalized) && !CONTROL_LABEL_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
 async function availableClassificationLabels(client: Pick<Octokit, "request">, subject: IssueSubject) {
   const labels: string[] = [];
   for (let page = 1; ; page += 1) {
@@ -94,7 +109,7 @@ async function availableClassificationLabels(client: Pick<Octokit, "request">, s
     const batch = data as Array<{ name?: string }>;
     for (const entry of batch) {
       const name = entry.name?.trim();
-      if (name && (CLASSIFICATION_LABELS.has(name.toLowerCase()) || name.toLowerCase().startsWith("type:"))) labels.push(name);
+      if (name && isClassificationCandidate(name)) labels.push(name);
     }
     if (batch.length < 100) return labels;
   }
@@ -129,8 +144,8 @@ export async function handleGitHubWebhook(request: Request, deps: WebhookDeps | 
     }
     const availableLabels = await availableClassificationLabels(client, subject);
     const routingInstruction = availableLabels.length
-      ? `Choose Luce or Vega from the AI Outfitter organization registry, apply exactly one existing classification label from this JSON array: ${JSON.stringify(availableLabels)}, assign that GitHub account, and request the other resident for independent review when the pull request is ready.`
-      : "This repository has no recognized classification label. Do not assign the issue; ask a human maintainer to add or identify one.";
+      ? `Choose Luce or Vega from the AI Outfitter organization registry, apply exactly one existing classification label from this repository-defined JSON array: ${JSON.stringify(availableLabels)}, assign that GitHub account, and request the other resident for independent review when the pull request is ready. Do not apply routing, status, priority, or other metadata labels during classification.`
+      : "This repository has no classification label other than routing or metadata controls. Do not assign the issue; ask a human maintainer to add or identify one.";
     await comment(
       client,
       subject,
