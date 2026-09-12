@@ -17,7 +17,7 @@ const CONTROL_LABELS = new Set([
   "software-factory",
   "wontfix",
 ]);
-const CONTROL_LABEL_PREFIXES = ["agent:", "priority:", "resident:", "status:"];
+const CONTROL_LABEL_PREFIXES = ["agent:", "autorelease:", "priority:", "resident:", "status:"];
 
 export type WebhookDeps = {
   verify(body: string, signature: string | null): Promise<boolean>;

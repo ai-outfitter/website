@@ -90,6 +90,8 @@ describe("handleGitHubWebhook", () => {
         { name: "idea" },
         { name: "type:maintenance" },
         { name: "software-factory" },
+        { name: "autorelease: pending" },
+        { name: "autorelease: tagged" },
         { name: "status:blocked" },
         { name: "good first issue" },
       ],
@@ -104,6 +106,8 @@ describe("handleGitHubWebhook", () => {
     expect(note?.params.body).toContain("Luce or Vega");
     expect(note?.params.body).toContain('["research","feature","idea","type:maintenance"]');
     expect(note?.params.body).not.toContain("software-factory");
+    expect(note?.params.body).not.toContain("autorelease: pending");
+    expect(note?.params.body).not.toContain("autorelease: tagged");
     expect(note?.params.body).not.toContain("status:blocked");
     expect(note?.params.body).not.toContain("good first issue");
     expect(note?.params.body).not.toContain("type:*");
@@ -135,7 +139,9 @@ describe("handleGitHubWebhook", () => {
   });
 
   it("asks for human input when the repository has only routing and metadata labels", async () => {
-    const { deps: d, calls } = deps({ labels: [{ name: "software-factory" }, { name: "status:blocked" }, { name: "needs-human" }] });
+    const { deps: d, calls } = deps({
+      labels: [{ name: "software-factory" }, { name: "autorelease: pending" }, { name: "autorelease: tagged" }, { name: "status:blocked" }, { name: "needs-human" }],
+    });
     const response = await handleGitHubWebhook(delivery("issues", opened), d);
     expect(response.status).toBe(202);
     const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));
