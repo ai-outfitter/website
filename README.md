@@ -86,6 +86,8 @@ The checkout command uses SSH by default. Public CI can set
 ```sh
 devenv shell -- npm run check
 devenv shell -- npm run build
+devenv shell -- npm run test:stripe
+devenv shell -- npm run test:worker
 devenv shell -- npm run test:links
 devenv shell -- npm run test:publish
 devenv shell -- npm run test:search
@@ -118,3 +120,35 @@ devenv shell -- npm run deploy
 `wrangler.jsonc` is the source of truth for the Worker. The site is fully
 pre-rendered, so the Worker serves `dist/` directly without an Astro server
 adapter.
+
+### Stripe subscriptions
+
+The pricing page starts Stripe-hosted Checkout Sessions through the Worker.
+Add a live Stripe secret or restricted key as `STRIPE_SECRET_KEY` in the
+ignored AI Outfitter owner `.env`, then run the guarded setup command:
+
+```sh
+devenv shell -- npm run stripe:configure -- --live
+```
+
+The command creates or reuses two Stripe Prices with stable lookup keys,
+verifies that they are live recurring monthly USD prices—Individual at $20
+and Team at $200—and installs the key and Price IDs as production Worker
+secrets without printing the key or Price IDs. It is safe to retry after a
+partial failure. The explicit `--live` flag is required because the command
+changes both the Stripe account and the production Worker.
+
+Before running the command, confirm that the Stripe account is enabled for live
+charges. If a stable lookup key belongs to an archived Price, restore that Price
+or transfer the lookup key in Stripe before retrying; the command stops instead
+of silently creating a conflicting replacement.
+
+To roll back the purchase surface, revert its merge commit and run the normal
+main-branch deployment. The Worker secrets may remain installed because the
+reverted Worker has no checkout route that reads them.
+
+Use sandbox Price IDs and an `sk_test_` key in the ignored `.dev.vars` file for
+local checkout testing. Production MUST use the matching live Price IDs and a
+live or restricted secret key. The Worker accepts only the two configured
+server-side Price IDs; browser requests select the `individual` or `team` tier
+and cannot submit an arbitrary Stripe price.

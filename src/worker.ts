@@ -1,6 +1,7 @@
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
 import { createAuth, session } from "./worker/auth";
+import { createCheckoutSession } from "./worker/billing";
 import { accounts, github, localGitHubToken, tokenAccounts, tokenIdentity, type Account } from "./worker/github";
 import { configurationFreshness, repositoryConfiguration } from "./worker/configuration";
 import {
@@ -174,6 +175,7 @@ export default {
       }
 
       if (url.pathname === "/api/webhooks/github" && request.method === "POST") return await handleGitHubWebhook(request, webhookDeps(env));
+      if (url.pathname === "/api/billing/checkout") return await createCheckoutSession(request, env);
       if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
         const state = await authenticatedState(env, request);

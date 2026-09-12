@@ -20,5 +20,8 @@ interface Env {
   LOCAL_GITHUB_ACCOUNTS?: string;
   LOCAL_GITHUB_TOKEN?: string;
   LOCAL_DEV_PORT?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_INDIVIDUAL_PRICE_ID?: string;
+  STRIPE_TEAM_PRICE_ID?: string;
   GITHUB_USER_GRANTS: DurableObjectNamespace<import("./worker/grant").GitHubUserGrant>;
 }

@@ -12,3 +12,9 @@ LOCAL_GITHUB_ACCOUNTS=ai-outfitter
 # Any long, random local value is sufficient. This signs short-lived change
 # previews and active-account cookies; it is not shared with production.
 AGENTS_PLAN_SIGNING_KEY=replace-with-a-long-random-local-value
+
+# Optional Stripe sandbox values for testing the pricing checkout locally.
+# Use recurring monthly Price IDs created in the Stripe sandbox.
+STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_INDIVIDUAL_PRICE_ID=price_replace_me
+STRIPE_TEAM_PRICE_ID=price_replace_me
