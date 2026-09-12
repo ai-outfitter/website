@@ -13,6 +13,9 @@ interface Env {
   RUNNER_INSTALLATION_ID?: string;
   TRIGGER_LABEL?: string;
   TRIGGER_ASSIGNEE?: string;
+  FACTORY_TARGET_OWNER?: string;
+  FACTORY_TRIAGER_LOGIN?: string;
+  FACTORY_AUTO_START_ACTOR_IDS?: string;
   LOCAL_GITHUB_AUTH?: string;
   LOCAL_GITHUB_ACCOUNTS?: string;
   LOCAL_GITHUB_TOKEN?: string;

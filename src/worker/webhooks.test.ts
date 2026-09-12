@@ -3,11 +3,23 @@ import { handleGitHubWebhook, type WebhookDeps } from "./webhooks";
 
 type Call = { route: string; params: Record<string, unknown> };
 
-function deps(overrides: Partial<WebhookDeps> & { pulls?: Array<{ number: number }>; dispatchError?: Error } = {}) {
+function deps(overrides: Partial<WebhookDeps> & {
+  comments?: Array<{ body: string; user: { login: string } }>;
+  commentPages?: Record<number, Array<{ body: string; user: { login: string } }>>;
+  labels?: Array<{ name: string }>;
+  pulls?: Array<{ number: number }>;
+  dispatchError?: Error;
+} = {}) {
   const calls: Call[] = [];
   const request = async (route: string, params: Record<string, unknown>) => {
     calls.push({ route, params });
     if (route.startsWith("GET /repos/{owner}/{repo}/pulls")) return { data: overrides.pulls ?? [] };
+    if (route.startsWith("GET /repos/{owner}/{repo}/issues/{issue_number}/comments")) {
+      return { data: overrides.commentPages?.[Number(params.page ?? 1)] ?? overrides.comments ?? [] };
+    }
+    if (route.startsWith("GET /repos/{owner}/{repo}/labels")) {
+      return { data: overrides.labels ?? [{ name: "bug" }, { name: "enhancement" }] };
+    }
     if (route.includes("dispatches") && overrides.dispatchError) throw overrides.dispatchError;
     return { data: {} };
   };
@@ -17,6 +29,9 @@ function deps(overrides: Partial<WebhookDeps> & { pulls?: Array<{ number: number
     scopedToken: async () => "scoped-token",
     runnerClient: () => ({ request } as never),
     botLogin: "ai-outfitter[bot]",
+    targetOwner: "ai-outfitter",
+    triagerLogin: "luce-unsup",
+    autoStartActorIds: new Set([8276365]),
     ...overrides,
   };
   return { deps: value, calls };
@@ -28,6 +43,13 @@ const labeled = {
   installation: { id: 42 },
   repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } },
   issue: { number: 9 },
+};
+
+const opened = {
+  action: "opened",
+  installation: { id: 42 },
+  repository: { full_name: "ai-outfitter/app", name: "app", owner: { login: "ai-outfitter" } },
+  issue: { number: 9, user: { id: 8276365, type: "User" } },
 };
 
 function delivery(event: string, payload: unknown, signature = "sha256=ok") {
@@ -52,9 +74,85 @@ describe("handleGitHubWebhook", () => {
   it("answers a ping and ignores events that start nothing", async () => {
     const { deps: d, calls } = deps();
     expect((await handleGitHubWebhook(delivery("ping", { zen: "hi" }), d)).status).toBe(200);
-    expect((await handleGitHubWebhook(delivery("issues", { ...labeled, action: "opened" }), d)).status).toBe(200);
+    expect((await handleGitHubWebhook(delivery("issues", { ...opened, issue: { ...opened.issue, user: { id: 7, type: "User" } } }), d)).status).toBe(200);
     expect((await handleGitHubWebhook(delivery("issues", { ...labeled, label: { name: "bug" } }), d)).status).toBe(200);
     expect((await handleGitHubWebhook(delivery("issues", { ...labeled, issue: { number: 9, pull_request: {} } }), d)).status).toBe(200);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("asks the resident Luce to triage using repository-defined classification labels", async () => {
+    const scopedToken = vi.fn(async () => "unused");
+    const { deps: d, calls } = deps({
+      scopedToken,
+      labels: [
+        { name: "research" },
+        { name: "feature" },
+        { name: "idea" },
+        { name: "type:maintenance" },
+        { name: "software-factory" },
+        { name: "autorelease: pending" },
+        { name: "autorelease: tagged" },
+        { name: "status:blocked" },
+        { name: "good first issue" },
+      ],
+    });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ outcome: "resident-triage-requested", repository: "ai-outfitter/app", issue: 9, triager: "luce-unsup" });
+    expect(scopedToken).not.toHaveBeenCalled();
+    expect(calls.some((call) => call.route.includes("dispatches"))).toBe(false);
+    const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));
+    expect(note?.params.body).toContain("@luce-unsup");
+    expect(note?.params.body).toContain("Luce or Vega");
+    expect(note?.params.body).toContain('["research","feature","idea","type:maintenance"]');
+    expect(note?.params.body).not.toContain("software-factory");
+    expect(note?.params.body).not.toContain("autorelease: pending");
+    expect(note?.params.body).not.toContain("autorelease: tagged");
+    expect(note?.params.body).not.toContain("status:blocked");
+    expect(note?.params.body).not.toContain("good first issue");
+    expect(note?.params.body).not.toContain("type:*");
+  });
+
+  it("does not post a second resident wake when GitHub redelivers an opened issue", async () => {
+    const { deps: d, calls } = deps({
+      comments: [{ body: "<!-- ai-outfitter:resident-triage -->\n@luce-unsup triage this issue", user: { login: "ai-outfitter[bot]" } }],
+    });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ outcome: "resident-triage-already-requested", issue: 9 });
+    expect(calls.filter((call) => call.route.startsWith("POST "))).toHaveLength(0);
+  });
+
+  it("finds an earlier resident wake beyond the first comment page", async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ body: `comment ${index}`, user: { login: "someone" } }));
+    const { deps: d, calls } = deps({
+      commentPages: {
+        1: firstPage,
+        2: [{ body: "<!-- ai-outfitter:resident-triage -->", user: { login: "ai-outfitter[bot]" } }],
+      },
+    });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ outcome: "resident-triage-already-requested", issue: 9 });
+    expect(calls.filter((call) => call.route.startsWith("GET ") && call.route.includes("comments"))).toHaveLength(2);
+    expect(calls.filter((call) => call.route.startsWith("POST "))).toHaveLength(0);
+  });
+
+  it("asks for human input when the repository has only routing and metadata labels", async () => {
+    const { deps: d, calls } = deps({
+      labels: [{ name: "software-factory" }, { name: "autorelease: pending" }, { name: "autorelease: tagged" }, { name: "status:blocked" }, { name: "needs-human" }],
+    });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(202);
+    const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));
+    expect(note?.params.body).toContain("Do not assign the issue");
+    expect(note?.params.body).toContain("ask a human maintainer");
+  });
+
+  it("does not auto-triage an issue outside the AI Outfitter organization", async () => {
+    const { deps: d, calls } = deps();
+    const payload = { ...opened, repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } } };
+    expect((await handleGitHubWebhook(delivery("issues", payload), d)).status).toBe(200);
     expect(calls).toHaveLength(0);
   });
 

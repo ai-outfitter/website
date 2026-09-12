@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { agentBranch, mentionName, runnerInputs, startsRun, subjectFromWebhook, triggerFromWebhook } from "./factory";
 
-const bot = { botLogin: "ai-outfitter[bot]" };
+const bot = { botLogin: "ai-outfitter[bot]", autoStartActorIds: new Set([8276365]) };
 
 describe("triggerFromWebhook", () => {
-  it("reads a label, an assignment, and a comment", () => {
+  it("reads an opening, a label, an assignment, and a comment", () => {
+    expect(triggerFromWebhook("issues", { action: "opened", issue: { user: { id: 8276365, type: "User" } } })).toEqual({
+      kind: "opened",
+      authorId: 8276365,
+      authorType: "User",
+    });
     expect(triggerFromWebhook("issues", { action: "labeled", label: { name: "ai-outfitter" } })).toEqual({ kind: "labeled", label: "ai-outfitter" });
     expect(triggerFromWebhook("issues", { action: "assigned", assignee: { login: "luce" } })).toEqual({ kind: "assigned", assignee: "luce" });
     expect(
@@ -13,13 +18,19 @@ describe("triggerFromWebhook", () => {
   });
 
   it("ignores other events and actions", () => {
-    expect(triggerFromWebhook("issues", { action: "opened" })).toBeUndefined();
+    expect(triggerFromWebhook("issues", { action: "closed" })).toBeUndefined();
     expect(triggerFromWebhook("pull_request", { action: "labeled", label: { name: "ai-outfitter" } })).toBeUndefined();
     expect(triggerFromWebhook("issue_comment", { action: "edited", comment: { body: "@ai-outfitter" } })).toBeUndefined();
   });
 });
 
 describe("startsRun", () => {
+  it("accepts an opened issue only from an allowlisted human actor", () => {
+    expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "User" }, bot)).toBe(true);
+    expect(startsRun({ kind: "opened", authorId: 7, authorType: "User" }, bot)).toBe(false);
+    expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "Bot" }, bot)).toBe(false);
+  });
+
   it("accepts the trigger label only", () => {
     expect(startsRun({ kind: "labeled", label: "ai-outfitter" }, bot)).toBe(true);
     expect(startsRun({ kind: "labeled", label: "bug" }, bot)).toBe(false);
