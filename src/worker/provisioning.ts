@@ -10,6 +10,7 @@ const CLAIM_MS = 45 * 60 * 1_000;
 const AUDIT_RETENTION_MINIMUM_MS = 29 * 24 * 60 * 60 * 1_000;
 const HEX_40 = /^[0-9a-f]{40}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
+const OCI_DIGEST = /^.+@sha256:[0-9a-f]{64}$/;
 
 type ProvisioningStore = Pick<BillingStore,
   "claimPendingProvisioningOperation" | "getAccountStatus" | "recordProvisioningResult"
@@ -18,7 +19,7 @@ type ProvisioningStore = Pick<BillingStore,
 type Options = {
   store?: ProvisioningStore;
   verify?: (request: Request, env: Env) => Promise<GitHubOidcIdentity | null>;
-  auditTrust?: { sinkId: string; publicKey: string };
+  auditTrust?: { sinkId: string; publicKey: string; collectorImage: string };
   now?: number;
   uuid?: () => string;
 };
@@ -64,6 +65,13 @@ function requiredDigestArray(value: unknown, name: string, minimum: number) {
   const digests = value.map((item, index) => requiredDigest(item, `${name}[${index}]`));
   if (new Set(digests).size !== digests.length) throw new TypeError(`${name} contains duplicate records`);
   return digests;
+}
+
+function containsExactString(value: unknown, expected: string): boolean {
+  if (typeof value === "string" && value.trim() === expected) return true;
+  if (Array.isArray(value)) return value.some((item) => containsExactString(item, expected));
+  if (record(value)) return Object.values(value).some((item) => containsExactString(item, expected));
+  return false;
 }
 
 function requiredTime(value: unknown, name: string) {
@@ -175,7 +183,7 @@ function successfulEvidence(
 
 async function validatedAuditabilityEvidence(
 	value: Record<string, unknown>, agentName: string, now: number,
-	trustedSink: { sinkId: string; publicKey: string }, expectedProbeNonce: string,
+	trustedSink: { sinkId: string; publicKey: string; collectorImage: string }, expectedProbeNonce: string,
 ) {
   const sink = value.sink;
   const probe = value.traceProbe;
@@ -183,6 +191,10 @@ async function validatedAuditabilityEvidence(
     || !record(probe.capture) || !Array.isArray(probe.recordBodies)
     || !Array.isArray(value.statements)) {
     throw new TypeError("Auditability evidence is incomplete");
+  }
+  const collectorImage = requiredString(value.collectorImage, "auditability.evidence.collectorImage", 500);
+  if (!OCI_DIGEST.test(collectorImage) || collectorImage !== trustedSink.collectorImage) {
+    throw new TypeError("auditability.evidence.collectorImage is not the trusted immutable collector image");
   }
   const collectorRevision = requiredString(value.collectorRevision, "auditability.evidence.collectorRevision", 40);
   if (!HEX_40.test(collectorRevision)) throw new TypeError("auditability.evidence.collectorRevision is invalid");
@@ -267,6 +279,15 @@ async function validatedAuditabilityEvidence(
 
   const terminalDigest = requiredDigest(capture.terminalSessionDigest,
     "auditability.evidence.traceProbe.capture.terminalSessionDigest");
+  const nonceMarker = `pensieve-audit-probe:${expectedProbeNonce}`;
+  const markerToolResults = [...recordBodies.values()].filter((body) => body.kind === "tool-call"
+    && body.phase === "result" && body.tool_name === "read"
+    && containsExactString(body.tool_output, nonceMarker));
+  const markerTranscripts = [...recordBodies.values()].filter((body) => body.kind === "transcript"
+    && body.event === "message-end" && containsExactString(body.message, nonceMarker));
+  if (markerToolResults.length !== 1 || markerTranscripts.length < 1) {
+    throw new TypeError("Auditability immutable records do not bind the provisioning operation nonce");
+  }
   const captured = capture.captured;
   const gaps = capture.gaps;
   if (!session.includes(terminalDigest) || !Array.isArray(captured)
@@ -376,6 +397,7 @@ function configuredAuditTrust(env: Env) {
   return {
     sinkId: requiredString(bindings.AUDITABILITY_SINK_ID, "AUDITABILITY_SINK_ID", 253),
     publicKey: requiredString(bindings.AUDITABILITY_SINK_PUBLIC_KEY, "AUDITABILITY_SINK_PUBLIC_KEY", 2_000),
+    collectorImage: requiredString(bindings.AUDITABILITY_COLLECTOR_IMAGE, "AUDITABILITY_COLLECTOR_IMAGE", 500),
   };
 }
 

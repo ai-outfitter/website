@@ -157,3 +157,10 @@ testing. Production MUST use the matching live Price IDs and a live or
 restricted secret key. The Worker accepts only the configured server-side Price
 IDs; the browser can opt into auditability but cannot submit an arbitrary Stripe
 price or amount.
+
+Before enabling enterprise-auditability checkout, configure the independent
+acceptance trust with `AUDITABILITY_COLLECTOR_IMAGE` set to the exact
+digest-pinned collector image, plus `AUDITABILITY_SINK_ID` and
+`AUDITABILITY_SINK_PUBLIC_KEY` from the deployed Pensieve identity endpoint.
+The Worker rejects callback-supplied collector images and sink keys that do not
+match these values.

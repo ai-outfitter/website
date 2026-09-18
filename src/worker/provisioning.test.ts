@@ -37,11 +37,13 @@ const successEvidence = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const auditKeys = crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const collectorImage = `ghcr.io/ai-outfitter/pensieve@sha256:${"c".repeat(64)}`;
 const auditTrust = async () => {
   const keys = await auditKeys as CryptoKeyPair;
   return {
     sinkId: "pensieve.example.com",
     publicKey: Buffer.from(await crypto.subtle.exportKey("raw", keys.publicKey)).toString("base64"),
+    collectorImage,
   };
 };
 const canonicalize = (value: unknown): string => {
@@ -63,12 +65,14 @@ const auditEvidence = async (
   overrides: Record<string, unknown> = {},
   options: {
     exposedThinking?: boolean;
+    recordProbeNonce?: string;
     recordCollectorRevision?: string;
     reportedCollectorRevision?: string;
   } = {},
 ) => {
   const oidcSubject = "system:serviceaccount:agent-unsupervisedcom-luce-123:agent-runtime";
   const policyDigest = `sha256:${"b".repeat(64)}`;
+  const probeMarker = `pensieve-audit-probe:${options.recordProbeNonce ?? "operation_1"}\n`;
   const recordCollectorRevision = options.recordCollectorRevision ?? "a".repeat(40);
   const base = (kind: string, offset: number) => ({
     kind, run: "run-1", attempt: 1, identity: oidcSubject, environment: "cluster",
@@ -88,7 +92,7 @@ const auditEvidence = async (
         role: "assistant",
         content: [
           ...(options.exposedThinking === false ? [] : [{ type: "thinking", thinking: "inspect the probe" }]),
-          { type: "text", text: "Running the audit probe." },
+          { type: "text", text: probeMarker },
         ],
       },
     },
@@ -102,12 +106,12 @@ const auditEvidence = async (
     },
     {
       ...base("tool-call", 5_000), phase: "call", tool_call_id: "probe-tool-1",
-      tool_name: "audit_probe", tool_input: { value: "ping" },
+      tool_name: "read", tool_input: { path: "/workspace/probe/input.txt" },
     },
     {
       ...base("tool-call", 6_000), phase: "result", tool_call_id: "probe-tool-1",
-      tool_name: "audit_probe", tool_input: { value: "ping" },
-      tool_output: [{ type: "text", text: "pong" }], tool_details: { exitCode: 0 }, is_error: false,
+      tool_name: "read", tool_input: { path: "/workspace/probe/input.txt" },
+      tool_output: [{ type: "text", text: probeMarker }], tool_details: { exitCode: 0 }, is_error: false,
     },
   ];
   const nonterminalDigests = await Promise.all(nonterminal.map((body) => canonicalDigest(body)));
@@ -140,6 +144,7 @@ const auditEvidence = async (
     return { ...unsigned, signature: Buffer.from(signature).toString("base64") };
   }));
   return {
+    collectorImage,
     collectorRevision: options.reportedCollectorRevision ?? recordCollectorRevision,
     oidcSubject,
     sink: {
@@ -259,7 +264,11 @@ describe("provisioning API", () => {
       auditability: { profile: "resident-complete-trace-v1", evidence: await auditEvidence() },
     }), env, {
       store: { recordProvisioningResult } as never, verify: async () => identity, now: NOW,
-      auditTrust: { sinkId: "different.pensieve.example.com", publicKey: Buffer.alloc(32).toString("base64") },
+      auditTrust: {
+        sinkId: "different.pensieve.example.com",
+        publicKey: Buffer.alloc(32).toString("base64"),
+        collectorImage,
+      },
     });
     expect(response.status).toBe(400);
     expect(recordProvisioningResult).not.toHaveBeenCalled();
@@ -276,6 +285,12 @@ describe("provisioning API", () => {
     ["missing exposed thinking", async () => auditEvidence({}, { exposedThinking: false })],
     ["a signed trace from a different collector revision", async () => auditEvidence({}, {
       recordCollectorRevision: "c".repeat(40), reportedCollectorRevision: "a".repeat(40),
+    })],
+    ["a mutable collector image", async () => auditEvidence({
+      collectorImage: "ghcr.io/ai-outfitter/pensieve:latest",
+    })],
+    ["immutable records from another operation nonce", async () => auditEvidence({}, {
+      recordProbeNonce: "operation_old",
     })],
     ["a trace from another provisioning operation", async () => auditEvidence({
       traceProbe: { ...(await auditEvidence()).traceProbe, probeNonce: "operation_other" },
