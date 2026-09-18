@@ -2,7 +2,11 @@ import { BillingStore } from "./billing-store";
 import { verifyGitHubActionsOidc, type GitHubOidcIdentity } from "./github-oidc";
 
 const MAX_BODY_BYTES = 128_000;
-const CLAIM_MS = 10 * 60 * 1_000;
+// Catalog convergence includes GitHub runner startup, cloud identity exchange,
+// cluster rollout, and evidence collection. Keep the lease longer than the
+// reviewed deployment workflow's 30-minute timeout so a successful rollout is
+// still able to submit its terminal evidence.
+const CLAIM_MS = 45 * 60 * 1_000;
 
 type ProvisioningStore = Pick<BillingStore,
   "claimPendingProvisioningOperation" | "getAccountStatus" | "recordProvisioningResult"

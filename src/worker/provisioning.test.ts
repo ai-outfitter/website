@@ -71,7 +71,7 @@ describe("provisioning API", () => {
       workerId: "github-actions:Unsupervisedcom/.agents:12345",
       githubAccountId: "123",
       claimToken: "claim-token",
-      claimExpiresAt: NOW + 600_000,
+      claimExpiresAt: NOW + 45 * 60_000,
       now: NOW,
     });
     expect(await response.json()).toMatchObject({
