@@ -12,6 +12,7 @@ const MAX_BODY_BYTES = 16_384;
 // Stripe only promises meter identifier and idempotency-key deduplication for at
 // least 24 hours. Stop one hour early so delayed scheduler work cannot cross it.
 export const METER_RETRY_WINDOW_MS = 23 * 60 * 60 * 1_000;
+export const METER_EXPORT_LEASE_MS = 5 * 60 * 1_000;
 
 type UsageBody = {
   resident_id?: unknown;
@@ -139,12 +140,16 @@ export async function exportPendingMeterEvents(
   for (const item of pending) {
     const identifier = await meterIdentifier(item);
     const retryDeadlineAt = item.retryDeadlineAt ?? now + METER_RETRY_WINDOW_MS;
-    if (retryDeadlineAt <= now || !await store.beginMeterExportAttempt({
+    const leaseExpiresAt = Math.min(now + METER_EXPORT_LEASE_MS, retryDeadlineAt);
+    if (retryDeadlineAt <= now || leaseExpiresAt <= now) continue;
+    const leaseToken = await store.beginMeterExportAttempt({
       usageEventId: item.usageEventId,
       meterKind: item.meterKind,
       retryDeadlineAt,
+      leaseExpiresAt,
       now,
-    })) continue;
+    });
+    if (!leaseToken) continue;
     const form = new URLSearchParams({
       event_name: item.meterKind === "provider_cost" ? providerEvent : markupEvent,
       identifier,
@@ -172,23 +177,26 @@ export async function exportPendingMeterEvents(
         throw error;
       }
       if (returnedIdentifier !== identifier) throw new Error(`Stripe meter export HTTP ${response.status} returned an unexpected identifier`);
-      await store.recordMeterExportResult({ usageEventId: item.usageEventId, meterKind: item.meterKind,
-        stripeMeterEventId: identifier, now });
-      exported += 1;
+      const recorded = await store.recordMeterExportResult({ usageEventId: item.usageEventId, meterKind: item.meterKind,
+        leaseToken, stripeMeterEventId: identifier, now });
+      if (recorded) exported += 1;
     } catch (error) {
       const exponent = Math.min(item.attemptCount, 8);
       const retryAt = now + 30_000 * (2 ** exponent);
       const status = error instanceof Error && "stripeStatus" in error ? Number(error.stripeStatus) : null;
       const rejected = status !== null && status >= 400 && status < 500 && status !== 409 && status !== 429;
       const requiresManualReconciliation = rejected || retryAt >= retryDeadlineAt;
-      await store.recordMeterExportResult({ usageEventId: item.usageEventId, meterKind: item.meterKind,
+      const recorded = await store.recordMeterExportResult({ usageEventId: item.usageEventId, meterKind: item.meterKind,
+        leaseToken,
         error: error instanceof Error ? error.message.slice(0, 500) : "Stripe meter export failed",
         retryAt: requiresManualReconciliation ? undefined : retryAt,
         manualReconciliation: requiresManualReconciliation,
         deliveryState: rejected ? "rejected" : "ambiguous",
         now });
-      failed += 1;
-      if (requiresManualReconciliation) manualReconciliation += 1;
+      if (recorded) {
+        failed += 1;
+        if (requiresManualReconciliation) manualReconciliation += 1;
+      }
     }
   }
   return { attempted: pending.length, exported, failed, manualReconciliation };

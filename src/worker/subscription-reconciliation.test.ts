@@ -95,6 +95,7 @@ describe("scheduled Stripe subscription reconciliation", () => {
       getBillingAccountByStripeCustomer: vi.fn(async () => account),
       getAccountStatus: vi.fn(),
       applyBillingReviewEvent: vi.fn(),
+      releaseBillingReviewHold: vi.fn(),
       applySubscriptionEvent: vi.fn(async (event: SubscriptionLifecycleEvent) => {
         applied.push(event);
         return { applied: true, provisioningRequested: true };
@@ -160,6 +161,7 @@ describe("scheduled Stripe subscription reconciliation", () => {
       getBillingAccountByStripeCustomer: vi.fn(async () => otherAccount),
       getAccountStatus: vi.fn(),
       applyBillingReviewEvent: vi.fn(),
+      releaseBillingReviewHold: vi.fn(),
       applySubscriptionEvent,
     };
     const stripeFetch = vi.fn(async () => Response.json({

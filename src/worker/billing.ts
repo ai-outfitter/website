@@ -73,6 +73,7 @@ function checkoutConfiguration(env: Env) {
     providerCostPrice: configuredValue(env.STRIPE_PROVIDER_COST_PRICE_ID),
     markupPrice: configuredValue(env.STRIPE_MARKUP_PRICE_ID),
     auditabilityPrice: configuredValue(env.STRIPE_AUDITABILITY_PRICE_ID),
+    auditabilityCheckoutEnabled: configuredValue(env.AUDITABILITY_CHECKOUT_ENABLED) === "true",
     noMarkupPromotion: configuredValue(env.STRIPE_NO_MARKUP_PROMOTION_CODE_ID),
     markupBasisPoints: configuredInteger(env.BILLING_MARKUP_BASIS_POINTS),
     hardSpendLimitMicros: configuredInteger(env.BILLING_HARD_SPEND_LIMIT_MICROS),
@@ -186,6 +187,9 @@ export async function createCheckoutSession(request: Request, env: Env, options:
   const auditability = (form.get("auditability") ?? "").trim();
   if (auditability && auditability !== AUDITABILITY_PLAN) return json({ error: "Choose a supported auditability plan" }, 400);
   const auditabilityEnabled = auditability === AUDITABILITY_PLAN;
+  if (auditabilityEnabled && !config?.auditabilityCheckoutEnabled) {
+    return json({ error: "Enterprise auditability checkout is not open yet" }, 409);
+  }
   if (!config || (promotionCode === NO_MARKUP_CODE && !config.noMarkupPromotion)
     || (auditabilityEnabled && !config.auditabilityPrice)) return json({ error: "Checkout is not configured" }, 503);
   const { identity, store } = options;

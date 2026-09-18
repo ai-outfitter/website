@@ -12,6 +12,7 @@ import {
   validateUsageBillingPolicy,
   validatePersonaLogin,
   type CheckoutLease,
+  type BillingReviewReleaseEvent,
   type InferenceUsage,
   type ProvisioningOperation,
   type ProvisioningDispatchCandidate,
@@ -20,6 +21,26 @@ import {
   type SubscriptionReconciliationCandidate,
   type UsageBillingPolicy,
 } from "./billing-store";
+
+function billingReviewReleaseEvent(
+  overrides: Partial<BillingReviewReleaseEvent> = {},
+): BillingReviewReleaseEvent {
+  return {
+    eventId: "evt_dispute_won",
+    eventType: "charge.dispute.closed",
+    eventCreated: 300,
+    rawJson: "{}",
+    stripeObjectId: "dp_1",
+    stripeObjectJson: "{}",
+    billingAccountId: "account_1",
+    stripeSubscriptionId: "sub_1",
+    subscriptionStatus: "active",
+    currentPeriodEnd: 400,
+    auditabilityEnabled: false,
+    receivedAt: 1_000,
+    ...overrides,
+  };
+}
 
 function usagePolicy(overrides: Partial<UsageBillingPolicy> = {}): UsageBillingPolicy {
   return {
@@ -152,6 +173,57 @@ describe("subscription lifecycle ordering", () => {
     const first = reduceSubscriptionLifecycle(null, lifecycleEvent({ eventId: "evt_b" }));
     expect(reduceSubscriptionLifecycle(first.state, lifecycleEvent({ eventId: "evt_a" })).applies).toBe(false);
     expect(reduceSubscriptionLifecycle(first.state, lifecycleEvent({ eventId: "evt_c" })).applies).toBe(true);
+  });
+});
+
+describe("billing review hold release", () => {
+  it("releases only the exact newer dispute and restores service only after every hold is clear", async () => {
+    const sql: string[] = [];
+    const prepare = vi.fn((statement: string) => {
+      sql.push(statement);
+      return {
+        bind: vi.fn(() => ({
+          first: vi.fn(async () => statement.includes("processing_status FROM stripe_events")
+            ? { processing_status: "applied" }
+            : { requested: 1 }),
+        })),
+      };
+    });
+    const session = {
+      prepare,
+      batch: vi.fn(async (statements: unknown[]) => statements.map((_, index) => ({
+        meta: { changes: index === statements.length - 1 ? 1 : 0 },
+      }))),
+    };
+    const store = new BillingStore({
+      withSession: vi.fn(() => session),
+    } as unknown as D1Database);
+
+    await expect(store.releaseBillingReviewHold(billingReviewReleaseEvent())).resolves.toEqual({
+      applied: true,
+      provisioningRequested: true,
+      residentId: "resident:account_1",
+      operationId: "billing-review-release:account_1:evt_dispute_won",
+    });
+
+    const release = sql.find((statement) => statement.includes("UPDATE billing_review_holds SET"));
+    expect(release).toContain("reason = 'dispute' AND stripe_object_id = ?");
+    expect(release).toContain("released_by_event_id IS NULL");
+    expect(release).toContain("last_event_created < ?");
+    const restore = sql.find((statement) => statement.includes("authorization_state = 'authorized'"));
+    expect(restore).toContain("released_by_event_id = ?");
+    expect(restore).toContain("released_by_event_id IS NULL");
+    const resume = sql.find((statement) => statement.includes("JOIN billing_accounts a"));
+    expect(resume).toContain("suspension_reason = 'billing-review:dispute'");
+    expect(resume).toContain("released_by_event_id IS NULL");
+  });
+
+  it("rejects release without an authoritative active subscription", async () => {
+    const store = new BillingStore({ withSession: vi.fn() } as unknown as D1Database);
+    await expect(store.releaseBillingReviewHold({
+      ...billingReviewReleaseEvent(),
+      subscriptionStatus: "past_due" as never,
+    })).rejects.toThrow("active authoritative subscription");
   });
 });
 
@@ -399,6 +471,55 @@ describe("immutable inference usage dedupe", () => {
   });
 });
 
+describe("meter export leases", () => {
+  it("atomically excludes a row that already has an unexpired lease", async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce({ meta: { changes: 1 } })
+      .mockResolvedValueOnce({ meta: { changes: 0 } });
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+    const store = new BillingStore({ prepare } as unknown as D1Database);
+    const input = {
+      usageEventId: "usage_1",
+      meterKind: "provider_cost" as const,
+      retryDeadlineAt: 100_000,
+      leaseExpiresAt: 2_000,
+      now: 1_000,
+    };
+
+    await expect(store.beginMeterExportAttempt({ ...input, leaseToken: "lease_a" }))
+      .resolves.toBe("lease_a");
+    await expect(store.beginMeterExportAttempt({ ...input, leaseToken: "lease_b" }))
+      .resolves.toBeNull();
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining(
+      "AND (lease_expires_at IS NULL OR lease_expires_at <= ?)",
+    ));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("lease_token = ?"));
+  });
+
+  it("accepts only the owning lease result and never rewrites a confirmed export", async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce({ meta: { changes: 1 } })
+      .mockResolvedValueOnce({ meta: { changes: 0 } });
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+    const store = new BillingStore({ prepare } as unknown as D1Database);
+
+    await expect(store.recordMeterExportResult({
+      usageEventId: "usage_1", meterKind: "provider_cost", leaseToken: "lease_current",
+      stripeMeterEventId: "aio:provider_cost:digest", now: 1_000,
+    })).resolves.toBe(true);
+    await expect(store.recordMeterExportResult({
+      usageEventId: "usage_1", meterKind: "provider_cost", leaseToken: "lease_stale",
+      error: "late timeout", retryAt: 2_000, deliveryState: "ambiguous", now: 1_001,
+    })).resolves.toBe(false);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("AND lease_token = ?"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining(
+      "AND status IN ('pending', 'failed')",
+    ));
+  });
+});
+
 describe("trusted inference billing policy", () => {
   it("rejects caller-supplied markup and rate-card policy mismatches", () => {
     const input = usageEvent();
@@ -451,6 +572,8 @@ describe("trusted inference billing policy", () => {
       retry_deadline_at: null,
       delivery_state: "not_attempted",
       reconciliation_state: "automatic",
+      lease_token: null,
+      lease_expires_at: null,
       stripe_customer_id: "cus_1",
       occurred_at: 1_000,
       provider_cost_micros: 1234,

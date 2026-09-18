@@ -8,6 +8,7 @@ const billingEnv = {
   STRIPE_PROVIDER_COST_PRICE_ID: "price_provider",
   STRIPE_MARKUP_PRICE_ID: "price_markup",
   STRIPE_AUDITABILITY_PRICE_ID: "price_auditability",
+  AUDITABILITY_CHECKOUT_ENABLED: "true",
   STRIPE_NO_MARKUP_PROMOTION_CODE_ID: "promo_no_markup",
   BILLING_MARKUP_BASIS_POINTS: "2000",
   BILLING_HARD_SPEND_LIMIT_MICROS: "100000000",
@@ -155,6 +156,18 @@ describe("createCheckoutSession", () => {
     expect((await createCheckoutSession(checkoutRequest({ tier: "team" }), billingEnv, { identity, store, stripeFetch })).status).toBe(400);
     expect((await createCheckoutSession(checkoutRequest({ tier: "resident", promotion_code: "OTHER" }), billingEnv, { identity, store, stripeFetch })).status).toBe(400);
     expect((await createCheckoutSession(checkoutRequest({ tier: "resident", auditability: "unknown" }), billingEnv, { identity, store, stripeFetch })).status).toBe(400);
+    expect(stripeFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not sell enterprise auditability before its acceptance gate opens", async () => {
+    const stripeFetch = vi.fn();
+    const response = await createCheckoutSession(
+      checkoutRequest({ tier: "resident", auditability: "enterprise" }),
+      { ...billingEnv, AUDITABILITY_CHECKOUT_ENABLED: "false" },
+      { identity, store: makeStore(), stripeFetch },
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "Enterprise auditability checkout is not open yet" });
     expect(stripeFetch).not.toHaveBeenCalled();
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { billedMarkupMicros, type PendingMeterExport } from "./billing-store";
-import { METER_RETRY_WINDOW_MS, exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage, meterIdentifier } from "./inference-billing";
+import { METER_EXPORT_LEASE_MS, METER_RETRY_WINDOW_MS, exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage, meterIdentifier } from "./inference-billing";
 
 const env = {
   BILLING_SERVICE_TOKEN: "billing-service-secret",
@@ -99,22 +99,58 @@ describe("Stripe meter export", () => {
     expect(provider.length).toBeLessThanOrEqual(100);
   });
 
+  it("allows only one concurrent scheduler to send a listed row", async () => {
+    const item: PendingMeterExport = { usageEventId: "usage_concurrent", meterKind: "provider_cost",
+      stripeMeterEventId: null, status: "pending", attemptCount: 0, lastError: null,
+      nextAttemptAt: null, exportedAt: null, firstAttemptAt: null, lastAttemptAt: null,
+      retryDeadlineAt: null, deliveryState: "not_attempted", reconciliationState: "automatic",
+      leaseToken: null, leaseExpiresAt: null,
+      stripeCustomerId: "cus_1", eventTimestamp: 2_000_000_100, amountMicros: 1_000 };
+    let claimed = false;
+    const beginMeterExportAttempt = vi.fn(async () => {
+      if (claimed) return null;
+      claimed = true;
+      return "lease_winner";
+    });
+    const store = {
+      expireAmbiguousMeterExports: vi.fn(async () => 0),
+      listPendingMeterExports: vi.fn(async () => [item]),
+      beginMeterExportAttempt,
+      recordMeterExportResult: vi.fn(async () => true),
+    };
+    const stripeFetch = vi.fn(async (_input, init?: RequestInit) => {
+      const form = init?.body as URLSearchParams;
+      return Response.json({ identifier: form.get("identifier") });
+    });
+
+    const results = await Promise.all([
+      exportPendingMeterEvents(env, store as never, stripeFetch as never, 2_000_000_300_000),
+      exportPendingMeterEvents(env, store as never, stripeFetch as never, 2_000_000_300_000),
+    ]);
+
+    expect(beginMeterExportAttempt).toHaveBeenCalledTimes(2);
+    expect(stripeFetch).toHaveBeenCalledOnce();
+    expect(results.reduce((sum, result) => sum + result.exported, 0)).toBe(1);
+  });
+
   it("exports provider cost and markup as separate idempotent meter events", async () => {
     const pending: PendingMeterExport[] = [
       { usageEventId: "usage_1", meterKind: "provider_cost", stripeMeterEventId: null, status: "pending",
         attemptCount: 0, lastError: null, nextAttemptAt: null, exportedAt: null,
         firstAttemptAt: null, lastAttemptAt: null, retryDeadlineAt: null,
         deliveryState: "not_attempted", reconciliationState: "automatic",
+        leaseToken: null, leaseExpiresAt: null,
         stripeCustomerId: "cus_1", eventTimestamp: 2_000_000_100, amountMicros: 1_000 },
       { usageEventId: "usage_1", meterKind: "markup", stripeMeterEventId: null, status: "pending",
         attemptCount: 0, lastError: null, nextAttemptAt: null, exportedAt: null,
         firstAttemptAt: null, lastAttemptAt: null, retryDeadlineAt: null,
         deliveryState: "not_attempted", reconciliationState: "automatic",
+        leaseToken: null, leaseExpiresAt: null,
         stripeCustomerId: "cus_1", eventTimestamp: 2_000_000_100, amountMicros: 200 },
     ];
-    const recordMeterExportResult = vi.fn(async () => undefined);
+    const recordMeterExportResult = vi.fn(async () => true);
     const store = { expireAmbiguousMeterExports: vi.fn(async () => 0), listPendingMeterExports: vi.fn(async () => pending),
-      beginMeterExportAttempt: vi.fn(async () => true), recordMeterExportResult };
+      beginMeterExportAttempt: vi.fn(async () => "lease_1"), recordMeterExportResult };
     const stripeFetch = vi.fn(async (_input, init?: RequestInit) => {
       const form = init?.body as URLSearchParams;
       return Response.json({ identifier: form.get("identifier") });
@@ -134,6 +170,7 @@ describe("Stripe meter export", () => {
     expect(store.beginMeterExportAttempt).toHaveBeenNthCalledWith(1, {
       usageEventId: "usage_1", meterKind: "provider_cost",
       retryDeadlineAt: 2_000_000_300_000 + METER_RETRY_WINDOW_MS, now: 2_000_000_300_000,
+      leaseExpiresAt: 2_000_000_300_000 + METER_EXPORT_LEASE_MS,
     });
     expect(recordMeterExportResult).toHaveBeenCalledTimes(2);
   });
@@ -143,10 +180,11 @@ describe("Stripe meter export", () => {
       stripeMeterEventId: null, status: "failed", attemptCount: 2, lastError: "old", nextAttemptAt: 1, exportedAt: null,
       firstAttemptAt: 100, lastAttemptAt: 500, retryDeadlineAt: 100 + METER_RETRY_WINDOW_MS,
       deliveryState: "ambiguous", reconciliationState: "automatic",
+      leaseToken: null, leaseExpiresAt: null,
       stripeCustomerId: "cus_2", eventTimestamp: 2_000_000_100, amountMicros: 500 };
-    const recordMeterExportResult = vi.fn(async () => undefined);
+    const recordMeterExportResult = vi.fn(async () => true);
     const store = { expireAmbiguousMeterExports: vi.fn(async () => 0), listPendingMeterExports: vi.fn(async () => [item]),
-      beginMeterExportAttempt: vi.fn(async () => true), recordMeterExportResult };
+      beginMeterExportAttempt: vi.fn(async () => "lease_2"), recordMeterExportResult };
     const result = await exportPendingMeterEvents(env, store as never,
       vi.fn(async () => Response.json({ error: {} }, { status: 503 })), 1_000);
     expect(result).toEqual({ attempted: 1, exported: 0, failed: 1, manualReconciliation: 0 });
@@ -162,10 +200,11 @@ describe("Stripe meter export", () => {
       exportedAt: null,
       firstAttemptAt: now - METER_RETRY_WINDOW_MS + 1_000, lastAttemptAt: now - 1_000,
       retryDeadlineAt: now + 1_000, deliveryState: "ambiguous", reconciliationState: "automatic",
+      leaseToken: null, leaseExpiresAt: null,
       stripeCustomerId: "cus_3", eventTimestamp: 2_000_000_100, amountMicros: 500 };
-    const recordMeterExportResult = vi.fn(async () => undefined);
+    const recordMeterExportResult = vi.fn(async () => true);
     const store = { expireAmbiguousMeterExports: vi.fn(async () => 0), listPendingMeterExports: vi.fn(async () => [item]),
-      beginMeterExportAttempt: vi.fn(async () => true), recordMeterExportResult };
+      beginMeterExportAttempt: vi.fn(async () => "lease_3"), recordMeterExportResult };
     const result = await exportPendingMeterEvents(env, store as never,
       vi.fn(async () => { throw new Error("connection reset after write"); }), now);
     expect(result.manualReconciliation).toBe(1);
@@ -181,10 +220,11 @@ describe("Stripe meter export", () => {
       exportedAt: null,
       firstAttemptAt: null, lastAttemptAt: null, retryDeadlineAt: null,
       deliveryState: "not_attempted", reconciliationState: "automatic",
+      leaseToken: null, leaseExpiresAt: null,
       stripeCustomerId: "cus_4", eventTimestamp: 2_000_000_100, amountMicros: 100 };
-    const recordMeterExportResult = vi.fn(async () => undefined);
+    const recordMeterExportResult = vi.fn(async () => true);
     const store = { expireAmbiguousMeterExports: vi.fn(async () => 0), listPendingMeterExports: vi.fn(async () => [item]),
-      beginMeterExportAttempt: vi.fn(async () => true), recordMeterExportResult };
+      beginMeterExportAttempt: vi.fn(async () => "lease_4"), recordMeterExportResult };
     await exportPendingMeterEvents(env, store as never,
       vi.fn(async () => Response.json({ error: {} }, { status: 400 })), now);
     expect(recordMeterExportResult).toHaveBeenCalledWith(expect.objectContaining({

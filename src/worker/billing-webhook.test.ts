@@ -307,6 +307,104 @@ describe("Stripe billing webhook", () => {
     expect(dispatchProvisioning).toHaveBeenCalledWith(account);
   });
 
+  it("releases the matching won dispute against the authoritative active current subscription", async () => {
+    const dispatchProvisioning = vi.fn(async () => undefined);
+    const releaseBillingReviewHold = vi.fn(async () => ({ applied: true, provisioningRequested: true }));
+    const store = {
+      getBillingAccountByStripeCustomer: vi.fn(async () => account),
+      getAccountStatus: vi.fn(async () => accountStatus()),
+      applySubscriptionEvent: vi.fn(),
+      applyBillingReviewEvent: vi.fn(),
+      releaseBillingReviewHold,
+    };
+    const stripeFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === "/v1/disputes/dp_review") {
+        return Response.json({ id: "dp_review", charge: "ch_review", status: "won" });
+      }
+      if (url.pathname === "/v1/charges/ch_review") {
+        return Response.json({ id: "ch_review", customer: "cus_customer", invoice: "in_resident" });
+      }
+      if (url.pathname === "/v1/invoices/in_resident") {
+        return Response.json({ id: "in_resident", customer: "cus_customer", subscription: "sub_resident" });
+      }
+      if (url.pathname === "/v1/subscriptions/sub_resident") return Response.json(subscription());
+      return Response.json({ error: { message: "not found" } }, { status: 404 });
+    });
+    const response = await handleStripeWebhook(
+      await signedRequest("charge.dispute.closed", { id: "dp_review" }), env,
+      { store: store as never, stripeFetch, dispatchProvisioning, now: NOW },
+    );
+    expect(response.status).toBe(202);
+    expect(stripeFetch).toHaveBeenCalledTimes(4);
+    expect(releaseBillingReviewHold).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: "evt_test",
+      eventType: "charge.dispute.closed",
+      stripeObjectId: "dp_review",
+      billingAccountId: account.id,
+      stripeSubscriptionId: "sub_resident",
+      subscriptionStatus: "active",
+    }));
+    expect(store.applyBillingReviewEvent).not.toHaveBeenCalled();
+    expect(dispatchProvisioning).toHaveBeenCalledWith(account);
+  });
+
+  it.each(["lost", "under_review", "needs_response"])(
+    "does not release a dispute whose authoritative status is %s",
+    async (disputeStatus) => {
+      const store = {
+        getBillingAccountByStripeCustomer: vi.fn(),
+        getAccountStatus: vi.fn(),
+        applySubscriptionEvent: vi.fn(),
+        applyBillingReviewEvent: vi.fn(),
+        releaseBillingReviewHold: vi.fn(),
+      };
+      const stripeFetch = vi.fn(async () => Response.json({
+        id: "dp_review", charge: "ch_review", status: disputeStatus,
+      }));
+      const response = await handleStripeWebhook(
+        await signedRequest("charge.dispute.closed", { id: "dp_review" }), env,
+        { store: store as never, stripeFetch, now: NOW },
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ received: true, applied: false });
+      expect(store.releaseBillingReviewHold).not.toHaveBeenCalled();
+      expect(store.getBillingAccountByStripeCustomer).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not release a won dispute when Stripe reports a non-active current subscription", async () => {
+    const store = {
+      getBillingAccountByStripeCustomer: vi.fn(async () => account),
+      getAccountStatus: vi.fn(async () => accountStatus()),
+      applySubscriptionEvent: vi.fn(),
+      applyBillingReviewEvent: vi.fn(),
+      releaseBillingReviewHold: vi.fn(),
+    };
+    const stripeFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === "/v1/disputes/dp_review") {
+        return Response.json({ id: "dp_review", charge: "ch_review", status: "won" });
+      }
+      if (url.pathname === "/v1/charges/ch_review") {
+        return Response.json({ id: "ch_review", customer: "cus_customer", invoice: "in_resident" });
+      }
+      if (url.pathname === "/v1/invoices/in_resident") {
+        return Response.json({ id: "in_resident", customer: "cus_customer", subscription: "sub_resident" });
+      }
+      if (url.pathname === "/v1/subscriptions/sub_resident") {
+        return Response.json(subscription({ status: "past_due" }));
+      }
+      return Response.json({ error: { message: "not found" } }, { status: 404 });
+    });
+    const response = await handleStripeWebhook(
+      await signedRequest("charge.dispute.closed", { id: "dp_review" }), env,
+      { store: store as never, stripeFetch, now: NOW },
+    );
+    expect(response.status).toBe(200);
+    expect(store.releaseBillingReviewHold).not.toHaveBeenCalled();
+  });
+
   it("fails closed when an authoritative refunded charge cannot be bound to a customer", async () => {
     const store = {
       getBillingAccountByStripeCustomer: vi.fn(),

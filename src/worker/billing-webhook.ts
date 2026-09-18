@@ -26,12 +26,13 @@ const INVOICE_EVENTS = new Set([
   "invoice.finalization_failed", "invoice.voided", "invoice.marked_uncollectible",
 ]);
 const BILLING_REVIEW_EVENTS = new Set([
-  "charge.dispute.created", "charge.refunded", "refund.created", "refund.updated",
+  "charge.dispute.created", "charge.dispute.closed", "charge.refunded", "refund.created", "refund.updated",
 ]);
 
 type StripeRecord = Record<string, unknown>;
 type WebhookStore = Pick<BillingStore,
-  "getBillingAccountByStripeCustomer" | "getAccountStatus" | "applySubscriptionEvent" | "applyBillingReviewEvent">;
+  "getBillingAccountByStripeCustomer" | "getAccountStatus" | "applySubscriptionEvent"
+  | "applyBillingReviewEvent" | "releaseBillingReviewHold">;
 
 type WebhookOptions = {
   store: WebhookStore;
@@ -313,10 +314,16 @@ async function reconcileBillingReview(
   let reviewObject: StripeRecord;
   let charge: StripeRecord;
   let reason: BillingReviewEvent["reason"];
-  if (event.type === "charge.dispute.created") {
+  const releasesDispute = event.type === "charge.dispute.closed";
+  if (event.type === "charge.dispute.created" || releasesDispute) {
     const disputeId = id(event.data.object, "dp_");
     if (!disputeId) throw new Error("Stripe dispute event is missing its dispute ID");
     reviewObject = await retrieveStripeObject(`/disputes/${encodeURIComponent(disputeId)}`, config.secretKey, stripeFetch);
+    if (id(reviewObject, "dp_") !== disputeId) throw new Error("Stripe returned a different dispute");
+    if (releasesDispute) {
+      const disputeStatus = typeof reviewObject.status === "string" ? reviewObject.status : null;
+      if (disputeStatus !== "won") return { received: true, applied: false } as const;
+    }
     const chargeId = id(reviewObject.charge, "ch_");
     if (!chargeId) throw new Error("Stripe dispute is missing its charge");
     charge = await retrieveStripeObject(`/charges/${encodeURIComponent(chargeId)}`, config.secretKey, stripeFetch);
@@ -368,6 +375,27 @@ async function reconcileBillingReview(
   if (!status || status.account.id !== account.id
     || status.subscription?.stripeSubscriptionId !== subscriptionId) {
     return { received: true, applied: false } as const;
+  }
+  if (releasesDispute) {
+    const subscription = await retrieveSubscription(subscriptionId, config.secretKey, stripeFetch);
+    const authoritative = lifecycleEvent(event, rawBody, subscription, null, account, config, now);
+    if (authoritative.status !== "active") return { received: true, applied: false } as const;
+    const result = await options.store.releaseBillingReviewHold({
+      eventId: event.id,
+      eventType: "charge.dispute.closed",
+      eventCreated: event.created,
+      rawJson: rawBody,
+      stripeObjectId: objectId(reviewObject)!,
+      stripeObjectJson: JSON.stringify({ reviewObject, charge, invoice, subscription }),
+      billingAccountId: account.id,
+      stripeSubscriptionId: authoritative.stripeSubscriptionId,
+      subscriptionStatus: "active",
+      currentPeriodEnd: authoritative.currentPeriodEnd,
+      auditabilityEnabled: authoritative.auditabilityEnabled,
+      receivedAt: now,
+    });
+    if (result.applied && result.provisioningRequested) await options.dispatchProvisioning?.(account);
+    return { received: true, applied: result.applied } as const;
   }
   const result = await options.store.applyBillingReviewEvent({
     eventId: event.id,

@@ -10,7 +10,7 @@ const RETRY_MAX_MS = 60 * 60 * 1_000;
 type ReconciliationStore = Pick<BillingStore,
   "listSubscriptionReconciliationCandidates" | "recordSubscriptionReconciliationAttempt"
   | "getBillingAccountByStripeCustomer" | "getAccountStatus"
-  | "applySubscriptionEvent" | "applyBillingReviewEvent">;
+  | "applySubscriptionEvent" | "applyBillingReviewEvent" | "releaseBillingReviewHold">;
 
 function retryDelay(failureCount: number) {
   const exponent = Math.min(Math.max(failureCount, 0), 4);
@@ -45,6 +45,7 @@ async function reconcileCandidate(
     getBillingAccountByStripeCustomer: store.getBillingAccountByStripeCustomer.bind(store),
     getAccountStatus: store.getAccountStatus.bind(store),
     applyBillingReviewEvent: store.applyBillingReviewEvent.bind(store),
+    releaseBillingReviewHold: store.releaseBillingReviewHold.bind(store),
     applySubscriptionEvent: (event: Parameters<ReconciliationStore["applySubscriptionEvent"]>[0]) => {
       if (event.billingAccountId !== candidate.billingAccountId
         || event.stripeSubscriptionId !== candidate.stripeSubscriptionId) {

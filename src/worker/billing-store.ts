@@ -173,6 +173,21 @@ export type BillingReviewEvent = {
   receivedAt?: number;
 };
 
+export type BillingReviewReleaseEvent = {
+  eventId: string;
+  eventType: "charge.dispute.closed";
+  eventCreated: number;
+  rawJson: string;
+  stripeObjectId: string;
+  stripeObjectJson: string;
+  billingAccountId: string;
+  stripeSubscriptionId: string;
+  subscriptionStatus: "active";
+  currentPeriodEnd: number;
+  auditabilityEnabled: boolean;
+  receivedAt?: number;
+};
+
 export type InferenceUsage = {
   id: string;
   billingAccountId: string;
@@ -207,6 +222,8 @@ export type MeterExport = {
   retryDeadlineAt: number | null;
   deliveryState: MeterDeliveryState;
   reconciliationState: MeterReconciliationState;
+  leaseToken: string | null;
+  leaseExpiresAt: number | null;
 };
 
 export type PendingMeterExport = MeterExport & {
@@ -325,6 +342,8 @@ type MeterExportRow = {
   retry_deadline_at: number | null;
   delivery_state: MeterDeliveryState;
   reconciliation_state: MeterReconciliationState;
+  lease_token: string | null;
+  lease_expires_at: number | null;
 };
 
 export type PendingMeterExportRow = MeterExportRow & {
@@ -559,6 +578,8 @@ function meterExportFromRow(row: MeterExportRow): MeterExport {
     retryDeadlineAt: row.retry_deadline_at,
     deliveryState: row.delivery_state,
     reconciliationState: row.reconciliation_state,
+    leaseToken: row.lease_token,
+    leaseExpiresAt: row.lease_expires_at,
   };
 }
 
@@ -973,22 +994,27 @@ export class BillingStore {
           CASE WHEN status = 'active' AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = subscriptions.billing_account_id
+              AND h.released_by_event_id IS NULL
           ) THEN 'active' ELSE 'suspended' END,
           CASE WHEN status = 'active' AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = subscriptions.billing_account_id
+              AND h.released_by_event_id IS NULL
           ) THEN 1 ELSE 0 END,
           CASE WHEN status = 'active' AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = subscriptions.billing_account_id
+              AND h.released_by_event_id IS NULL
           ) THEN 1 ELSE 0 END,
           CASE WHEN status = 'active' AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = subscriptions.billing_account_id
+              AND h.released_by_event_id IS NULL
           ) THEN 1 ELSE 0 END,
           CASE WHEN status = 'active' AND auditability_enabled = 1 AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = subscriptions.billing_account_id
+              AND h.released_by_event_id IS NULL
           ) THEN 1 ELSE 0 END,
           current_period_end, last_event_id, ?
         FROM subscriptions
@@ -1018,6 +1044,7 @@ export class BillingStore {
           AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = subscriptions.billing_account_id
+              AND h.released_by_event_id IS NULL
           )
         ON CONFLICT(billing_account_id) DO NOTHING
       `).bind(
@@ -1038,10 +1065,12 @@ export class BillingStore {
           AND ((s.status = 'active' AND NOT EXISTS (
               SELECT 1 FROM billing_review_holds h
               WHERE h.billing_account_id = s.billing_account_id
+                AND h.released_by_event_id IS NULL
             ) AND r.desired_state = 'suspended')
             OR ((s.status <> 'active' OR EXISTS (
               SELECT 1 FROM billing_review_holds h
               WHERE h.billing_account_id = s.billing_account_id
+                AND h.released_by_event_id IS NULL
             )) AND r.desired_state <> 'suspended'))
         ON CONFLICT(resident_id, desired_revision) DO NOTHING
       `).bind(
@@ -1058,6 +1087,7 @@ export class BillingStore {
                 AND NOT EXISTS (
                   SELECT 1 FROM billing_review_holds h
                   WHERE h.billing_account_id = s.billing_account_id
+                    AND h.released_by_event_id IS NULL
                 )
             ) THEN CASE WHEN observed_state = 'ready' THEN 'active' ELSE 'provisioning' END
             ELSE 'suspended'
@@ -1070,6 +1100,7 @@ export class BillingStore {
                 AND NOT EXISTS (
                   SELECT 1 FROM billing_review_holds h
                   WHERE h.billing_account_id = s.billing_account_id
+                    AND h.released_by_event_id IS NULL
                 )
             ) THEN CASE WHEN pensieve_observed_state = 'ready' THEN 'active' ELSE 'provisioning' END
             WHEN ? THEN 'suspended'
@@ -1106,6 +1137,7 @@ export class BillingStore {
           AND NOT EXISTS (
             SELECT 1 FROM billing_review_holds h
             WHERE h.billing_account_id = s.billing_account_id
+              AND h.released_by_event_id IS NULL
           )
         ON CONFLICT(resident_id, desired_revision) DO NOTHING
       `).bind(operationId, now, now, event.stripeSubscriptionId, ...eventIsCurrentArgs),
@@ -1181,13 +1213,21 @@ export class BillingStore {
         WHERE EXISTS (
           SELECT 1 FROM stripe_events WHERE id = ? AND processing_status = 'pending'
         )
-        ON CONFLICT(billing_account_id) DO UPDATE SET
-          reason = excluded.reason,
-          stripe_object_id = excluded.stripe_object_id,
+          AND NOT EXISTS (
+            SELECT 1 FROM stripe_events closed
+            WHERE closed.object_id = ?
+              AND closed.event_type = 'charge.dispute.closed'
+              AND (closed.event_created > ?
+                OR (closed.event_created = ? AND closed.id > ?))
+          )
+        ON CONFLICT(billing_account_id, reason, stripe_object_id) DO UPDATE SET
           stripe_object_json = excluded.stripe_object_json,
           source_event_id = excluded.source_event_id,
           last_event_created = excluded.last_event_created,
           last_event_id = excluded.last_event_id,
+          released_by_event_id = NULL,
+          released_event_created = NULL,
+          released_at = NULL,
           updated_at = excluded.updated_at
         WHERE excluded.last_event_created > billing_review_holds.last_event_created
            OR (excluded.last_event_created = billing_review_holds.last_event_created
@@ -1195,12 +1235,13 @@ export class BillingStore {
       `).bind(
         event.billingAccountId, event.reason, event.stripeObjectId, event.stripeObjectJson,
         event.eventId, event.eventCreated, event.eventId, now, now, event.eventId,
+        event.stripeObjectId, event.eventCreated, event.eventCreated, event.eventId,
       ),
       session.prepare(`
         UPDATE billing_accounts SET authorization_state = 'suspended', updated_at = ?
         WHERE id = ? AND EXISTS (
           SELECT 1 FROM billing_review_holds
-          WHERE billing_account_id = ? AND source_event_id = ?
+          WHERE billing_account_id = ? AND source_event_id = ? AND released_by_event_id IS NULL
         )
       `).bind(now, event.billingAccountId, event.billingAccountId, event.eventId),
       session.prepare(`
@@ -1210,7 +1251,7 @@ export class BillingStore {
           source_event_id = ?, updated_at = ?
         WHERE billing_account_id = ? AND EXISTS (
           SELECT 1 FROM billing_review_holds
-          WHERE billing_account_id = ? AND source_event_id = ?
+          WHERE billing_account_id = ? AND source_event_id = ? AND released_by_event_id IS NULL
         )
       `).bind(event.eventId, now, event.billingAccountId, event.billingAccountId, event.eventId),
       session.prepare(`
@@ -1239,7 +1280,7 @@ export class BillingStore {
           suspended_at = ?, suspension_reason = ?, updated_at = ?
         WHERE billing_account_id = ? AND EXISTS (
           SELECT 1 FROM billing_review_holds
-          WHERE billing_account_id = ? AND source_event_id = ?
+          WHERE billing_account_id = ? AND source_event_id = ? AND released_by_event_id IS NULL
         )
       `).bind(now, `billing-review:${event.reason}`, now,
         event.billingAccountId, event.billingAccountId, event.eventId),
@@ -1247,11 +1288,183 @@ export class BillingStore {
         UPDATE stripe_events SET
           processing_status = CASE WHEN EXISTS (
             SELECT 1 FROM billing_review_holds
-            WHERE billing_account_id = ? AND source_event_id = ?
+            WHERE billing_account_id = ? AND source_event_id = ? AND released_by_event_id IS NULL
           ) THEN 'applied' ELSE 'ignored' END,
           processed_at = ?
         WHERE id = ? AND processing_status = 'pending'
       `).bind(event.billingAccountId, event.eventId, now, event.eventId),
+    ]);
+    const applied = Number(results.at(-1)?.meta.changes ?? 0) === 1
+      && (await session.prepare(
+        "SELECT processing_status FROM stripe_events WHERE id = ?",
+      ).bind(event.eventId).first<{ processing_status: string }>())?.processing_status === "applied";
+    const requested = applied ? await session.prepare(`
+      SELECT 1 AS requested FROM provisioning_operations
+      WHERE id = ? AND status IN ('pending', 'approved')
+    `).bind(operationId).first<{ requested: number }>() : null;
+    return { applied, provisioningRequested: requested?.requested === 1, residentId, operationId };
+  }
+
+  async releaseBillingReviewHold(event: BillingReviewReleaseEvent) {
+    for (const [name, value] of Object.entries({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      rawJson: event.rawJson,
+      stripeObjectId: event.stripeObjectId,
+      stripeObjectJson: event.stripeObjectJson,
+      billingAccountId: event.billingAccountId,
+      stripeSubscriptionId: event.stripeSubscriptionId,
+      subscriptionStatus: event.subscriptionStatus,
+    })) assertString(value, name);
+    if (event.eventType !== "charge.dispute.closed" || event.subscriptionStatus !== "active") {
+      throw new TypeError("A dispute hold can only be released against an active authoritative subscription");
+    }
+    assertInteger(event.eventCreated, "eventCreated");
+    assertInteger(event.currentPeriodEnd, "currentPeriodEnd");
+    const now = event.receivedAt ?? Date.now();
+    assertInteger(now, "receivedAt");
+    const residentId = `resident:${event.billingAccountId}`;
+    const operationId = `billing-review-release:${event.billingAccountId}:${event.eventId}`;
+    const desiredRevision = `resident-state:active:${event.eventId}`;
+    const session = this.db.withSession("first-primary");
+    const results = await session.batch([
+      session.prepare(`
+        INSERT INTO stripe_events (
+          id, event_type, event_created, object_id, raw_json, processing_status, received_at
+        ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+        ON CONFLICT(id) DO NOTHING
+      `).bind(event.eventId, event.eventType, event.eventCreated, event.stripeObjectId, event.rawJson, now),
+      session.prepare(`
+        UPDATE billing_review_holds SET
+          stripe_object_json = ?, released_by_event_id = ?, released_event_created = ?,
+          released_at = ?, updated_at = ?
+        WHERE billing_account_id = ? AND reason = 'dispute' AND stripe_object_id = ?
+          AND released_by_event_id IS NULL
+          AND (last_event_created < ? OR (last_event_created = ? AND last_event_id < ?))
+          AND EXISTS (
+            SELECT 1 FROM stripe_events
+            WHERE id = ? AND processing_status = 'pending'
+          )
+          AND EXISTS (
+            SELECT 1 FROM subscriptions
+            WHERE billing_account_id = ? AND stripe_subscription_id = ? AND status = 'active'
+          )
+      `).bind(
+        event.stripeObjectJson, event.eventId, event.eventCreated, now, now,
+        event.billingAccountId, event.stripeObjectId,
+        event.eventCreated, event.eventCreated, event.eventId, event.eventId,
+        event.billingAccountId, event.stripeSubscriptionId,
+      ),
+      session.prepare(`
+        UPDATE billing_accounts SET authorization_state = 'authorized', updated_at = ?
+        WHERE id = ? AND authorization_state = 'suspended'
+          AND EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = ? AND released_by_event_id = ?
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = ? AND released_by_event_id IS NULL
+          )
+          AND EXISTS (
+            SELECT 1 FROM subscriptions
+            WHERE billing_account_id = ? AND stripe_subscription_id = ? AND status = 'active'
+          )
+      `).bind(
+        now, event.billingAccountId, event.billingAccountId, event.eventId,
+        event.billingAccountId, event.billingAccountId, event.stripeSubscriptionId,
+      ),
+      session.prepare(`
+        UPDATE entitlements SET
+          status = 'active', provision_enabled = 1, wake_enabled = 1,
+          inference_enabled = 1, auditability_enabled = ?, paid_through = ?,
+          source_event_id = ?, updated_at = ?
+        WHERE billing_account_id = ? AND stripe_subscription_id = ?
+          AND EXISTS (
+            SELECT 1 FROM billing_accounts
+            WHERE id = ? AND authorization_state = 'authorized'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = ? AND released_by_event_id IS NULL
+          )
+      `).bind(
+        event.auditabilityEnabled ? 1 : 0, event.currentPeriodEnd, event.eventId, now,
+        event.billingAccountId, event.stripeSubscriptionId,
+        event.billingAccountId, event.billingAccountId,
+      ),
+      session.prepare(`
+        INSERT INTO provisioning_operations (
+          id, billing_account_id, resident_id, desired_revision, status,
+          approval_state, approved_by, approved_at, approval_evidence_json,
+          attempt_count, created_at, updated_at
+        )
+        SELECT ?, r.billing_account_id, r.id, ?, 'pending', 'approved', ?, ?, ?, 0, ?, ?
+        FROM residents r
+        JOIN billing_accounts a ON a.id = r.billing_account_id
+        JOIN subscriptions s ON s.billing_account_id = r.billing_account_id
+        WHERE r.billing_account_id = ? AND r.desired_state = 'suspended'
+          AND r.suspension_reason = 'billing-review:dispute'
+          AND a.authorization_state = 'authorized'
+          AND s.stripe_subscription_id = ? AND s.status = 'active'
+          AND NOT EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = r.billing_account_id AND released_by_event_id IS NULL
+          )
+          AND EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = r.billing_account_id AND released_by_event_id = ?
+          )
+        ON CONFLICT(resident_id, desired_revision) DO NOTHING
+      `).bind(
+        operationId, desiredRevision, `stripe-billing-review-release:${event.eventId}`, now,
+        JSON.stringify({
+          eventId: event.eventId,
+          eventType: event.eventType,
+          releasedDisputeId: event.stripeObjectId,
+          stripeSubscriptionId: event.stripeSubscriptionId,
+          desiredState: "active",
+        }),
+        now, now, event.billingAccountId, event.stripeSubscriptionId, event.eventId,
+      ),
+      session.prepare(`
+        UPDATE residents SET
+          desired_state = CASE WHEN observed_state = 'ready' THEN 'active' ELSE 'provisioning' END,
+          pensieve_desired_state = CASE
+            WHEN pensieve_desired_state = 'disabled' THEN 'disabled'
+            WHEN pensieve_observed_state = 'ready' THEN 'active'
+            ELSE 'provisioning' END,
+          suspended_at = NULL, suspension_reason = NULL, updated_at = ?
+        WHERE billing_account_id = ? AND desired_state = 'suspended'
+          AND suspension_reason = 'billing-review:dispute'
+          AND EXISTS (
+            SELECT 1 FROM billing_accounts
+            WHERE id = ? AND authorization_state = 'authorized'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = ? AND released_by_event_id IS NULL
+          )
+          AND EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = ? AND released_by_event_id = ?
+          )
+      `).bind(
+        now, event.billingAccountId, event.billingAccountId,
+        event.billingAccountId, event.billingAccountId, event.eventId,
+      ),
+      session.prepare(`
+        UPDATE stripe_events SET
+          processing_status = CASE WHEN EXISTS (
+            SELECT 1 FROM billing_review_holds
+            WHERE billing_account_id = ? AND reason = 'dispute' AND stripe_object_id = ?
+              AND released_by_event_id = ?
+          ) THEN 'applied' ELSE 'ignored' END,
+          processed_at = ?
+        WHERE id = ? AND processing_status = 'pending'
+      `).bind(
+        event.billingAccountId, event.stripeObjectId, event.eventId, now, event.eventId,
+      ),
     ]);
     const applied = Number(results.at(-1)?.meta.changes ?? 0) === 1
       && (await session.prepare(
@@ -1742,7 +1955,7 @@ export class BillingStore {
       SELECT m.usage_event_id, m.meter_kind, m.stripe_meter_event_id, m.status,
         m.attempt_count, m.last_error, m.next_attempt_at, m.exported_at,
         m.first_attempt_at, m.last_attempt_at, m.retry_deadline_at,
-        m.delivery_state, m.reconciliation_state,
+        m.delivery_state, m.reconciliation_state, m.lease_token, m.lease_expires_at,
         a.stripe_customer_id, u.occurred_at, u.provider_cost_micros, u.markup_micros
       FROM meter_exports m
       JOIN inference_usage_events u ON u.id = m.usage_event_id
@@ -1751,9 +1964,10 @@ export class BillingStore {
         AND m.reconciliation_state = 'automatic'
         AND (m.retry_deadline_at IS NULL OR m.retry_deadline_at > ?)
         AND (m.next_attempt_at IS NULL OR m.next_attempt_at <= ?)
+        AND (m.lease_expires_at IS NULL OR m.lease_expires_at <= ?)
       ORDER BY COALESCE(m.next_attempt_at, 0), m.created_at
       LIMIT ?
-    `).bind(now, now, limit).all<PendingMeterExportRow>();
+    `).bind(now, now, now, limit).all<PendingMeterExportRow>();
     return result.results.map(pendingMeterExportFromRow);
   }
 
@@ -1770,7 +1984,8 @@ export class BillingStore {
         AND delivery_state = 'ambiguous'
         AND retry_deadline_at IS NOT NULL
         AND retry_deadline_at <= ?
-    `).bind(now, now).run();
+        AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+    `).bind(now, now, now).run();
     return Number(result.meta.changes ?? 0);
   }
 
@@ -1778,12 +1993,20 @@ export class BillingStore {
     usageEventId: string;
     meterKind: MeterKind;
     retryDeadlineAt: number;
+    leaseExpiresAt: number;
+    leaseToken?: string;
     now?: number;
   }) {
     const now = input.now ?? Date.now();
     assertInteger(now, "now");
     assertInteger(input.retryDeadlineAt, "retryDeadlineAt");
+    assertInteger(input.leaseExpiresAt, "leaseExpiresAt");
     if (input.retryDeadlineAt <= now) throw new TypeError("retryDeadlineAt must be in the future");
+    if (input.leaseExpiresAt <= now || input.leaseExpiresAt > input.retryDeadlineAt) {
+      throw new TypeError("leaseExpiresAt must be after now and no later than retryDeadlineAt");
+    }
+    const leaseToken = input.leaseToken ?? crypto.randomUUID();
+    assertString(leaseToken, "leaseToken");
     const result = await this.db.prepare(`
       UPDATE meter_exports SET
         attempt_count = attempt_count + 1,
@@ -1791,21 +2014,26 @@ export class BillingStore {
         last_attempt_at = ?,
         retry_deadline_at = COALESCE(retry_deadline_at, ?),
         delivery_state = 'ambiguous',
+        lease_token = ?,
+        lease_expires_at = ?,
         updated_at = ?
       WHERE usage_event_id = ? AND meter_kind = ?
         AND status IN ('pending', 'failed')
         AND reconciliation_state = 'automatic'
         AND (retry_deadline_at IS NULL OR retry_deadline_at > ?)
+        AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+        AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
     `).bind(
-      now, now, input.retryDeadlineAt, now,
-      input.usageEventId, input.meterKind, now,
+      now, now, input.retryDeadlineAt, leaseToken, input.leaseExpiresAt, now,
+      input.usageEventId, input.meterKind, now, now, now,
     ).run();
-    return Number(result.meta.changes ?? 0) === 1;
+    return Number(result.meta.changes ?? 0) === 1 ? leaseToken : null;
   }
 
   async recordMeterExportResult(input: {
     usageEventId: string;
     meterKind: MeterKind;
+    leaseToken: string;
     stripeMeterEventId?: string;
     error?: string;
     retryAt?: number;
@@ -1828,7 +2056,8 @@ export class BillingStore {
     if (input.manualReconciliation && input.retryAt !== undefined) {
       throw new TypeError("Manual reconciliation cannot have an automatic retry time");
     }
-    await this.db.prepare(`
+    assertString(input.leaseToken, "leaseToken");
+    const result = await this.db.prepare(`
       UPDATE meter_exports SET
         stripe_meter_event_id = ?,
         status = ?,
@@ -1837,8 +2066,13 @@ export class BillingStore {
         exported_at = ?,
         delivery_state = ?,
         reconciliation_state = ?,
+        lease_token = NULL,
+        lease_expires_at = NULL,
         updated_at = ?
       WHERE usage_event_id = ? AND meter_kind = ?
+        AND lease_token = ?
+        AND status IN ('pending', 'failed')
+        AND reconciliation_state = 'automatic'
     `).bind(
       input.stripeMeterEventId ?? null,
       input.stripeMeterEventId ? "exported" : "failed",
@@ -1850,7 +2084,9 @@ export class BillingStore {
       now,
       input.usageEventId,
       input.meterKind,
+      input.leaseToken,
     ).run();
+    return Number(result.meta.changes ?? 0) === 1;
   }
 
   private validateSubscriptionEvent(event: SubscriptionLifecycleEvent) {

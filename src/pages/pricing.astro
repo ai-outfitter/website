@@ -23,14 +23,10 @@ import SiteShell from '../layouts/SiteShell.astro';
           <li>Inference billed at published provider cost plus 20% markup</li>
           <li>$100 monthly inference budget; new work stops after recorded usage reaches it</li>
           <li>Promotion codes can waive markup without discounting inference cost</li>
-          <li>Optional Pensieve auditability captures the complete Pi-visible session trace in immutable storage</li>
+          <li>Enterprise Pensieve auditability opens after its complete-trace acceptance is proven</li>
         </ul>
         <form action="/api/billing/checkout" method="post">
           <input type="hidden" name="tier" value="resident" />
-          <label class="auditability-field">
-            <input name="auditability" type="checkbox" value="enterprise" checked />
-            <span>Add enterprise auditability (price shown in Stripe Checkout)</span>
-          </label>
           <label class="promotion-field">
             <span>Promotion code</span>
             <input name="promotion_code" type="text" autocomplete="off" maxlength="32" placeholder="Optional" />
@@ -158,20 +154,6 @@ import SiteShell from '../layouts/SiteShell.astro';
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-  }
-
-  .auditability-field {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.65rem;
-    margin-bottom: 1rem;
-    color: var(--site-muted);
-    font-size: 0.82rem;
-    line-height: 1.4;
-  }
-
-  .auditability-field input {
-    margin-top: 0.15rem;
   }
 
   .promotion-field input {
