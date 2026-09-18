@@ -31,7 +31,7 @@ const BILLING_REVIEW_EVENTS = new Set([
 
 type StripeRecord = Record<string, unknown>;
 type WebhookStore = Pick<BillingStore,
-  "getBillingAccountByStripeCustomer" | "applySubscriptionEvent" | "applyBillingReviewEvent">;
+  "getBillingAccountByStripeCustomer" | "getAccountStatus" | "applySubscriptionEvent" | "applyBillingReviewEvent">;
 
 type WebhookOptions = {
   store: WebhookStore;
@@ -93,6 +93,12 @@ function eventSubscriptionId(event: StripeEvent) {
     return id(details?.subscription ?? object.subscription, "sub_");
   }
   return null;
+}
+
+function invoiceSubscriptionId(invoice: StripeRecord) {
+  const parent = record(invoice.parent) ? invoice.parent : null;
+  const details = parent && record(parent.subscription_details) ? parent.subscription_details : null;
+  return id(details?.subscription ?? invoice.subscription, "sub_");
 }
 
 function configured(env: Env) {
@@ -321,16 +327,17 @@ async function reconcileBillingReview(
     charge = await retrieveStripeObject(`/charges/${encodeURIComponent(chargeId)}`, config.secretKey, stripeFetch);
     reviewObject = charge;
     reason = "refund";
+    const amount = integer(charge.amount);
     const amountRefunded = integer(charge.amount_refunded);
-    if (amountRefunded === null || amountRefunded === 0) {
-      throw new Error("Stripe charge has no authoritative refunded amount");
+    if (charge.refunded !== true || amount === null || amount === 0 || amountRefunded !== amount) {
+      return { received: true, applied: false } as const;
     }
   } else {
     const refundId = id(event.data.object, "re_");
     if (!refundId) throw new Error("Stripe refund event is missing its refund ID");
     reviewObject = await retrieveStripeObject(`/refunds/${encodeURIComponent(refundId)}`, config.secretKey, stripeFetch);
     const status = typeof reviewObject.status === "string" ? reviewObject.status : null;
-    if (!status || status === "failed" || status === "canceled") {
+    if (status !== "succeeded") {
       return { received: true, applied: false } as const;
     }
     const amount = integer(reviewObject.amount);
@@ -339,18 +346,36 @@ async function reconcileBillingReview(
     if (!chargeId) throw new Error("Stripe refund is missing its charge");
     charge = await retrieveStripeObject(`/charges/${encodeURIComponent(chargeId)}`, config.secretKey, stripeFetch);
     reason = "refund";
+    const chargeAmount = integer(charge.amount);
+    const amountRefunded = integer(charge.amount_refunded);
+    if (charge.refunded !== true || chargeAmount === null || chargeAmount === 0 || amountRefunded !== chargeAmount) {
+      return { received: true, applied: false } as const;
+    }
   }
   const customerId = id(charge.customer, "cus_");
   if (!customerId) throw new Error("Stripe charge is missing its customer");
   const account = await options.store.getBillingAccountByStripeCustomer(customerId);
-  if (!account) throw new Error("Stripe customer is not bound to a billing account");
+  if (!account) return { received: true, applied: false } as const;
+  const invoiceId = id(charge.invoice, "in_");
+  if (!invoiceId) return { received: true, applied: false } as const;
+  const invoice = await retrieveStripeObject(`/invoices/${encodeURIComponent(invoiceId)}`, config.secretKey, stripeFetch);
+  if (id(invoice, "in_") !== invoiceId || id(invoice.customer, "cus_") !== customerId) {
+    throw new Error("Stripe charge invoice does not match the charge customer");
+  }
+  const subscriptionId = invoiceSubscriptionId(invoice);
+  if (!subscriptionId) return { received: true, applied: false } as const;
+  const status = await options.store.getAccountStatus(account.id);
+  if (!status || status.account.id !== account.id
+    || status.subscription?.stripeSubscriptionId !== subscriptionId) {
+    return { received: true, applied: false } as const;
+  }
   const result = await options.store.applyBillingReviewEvent({
     eventId: event.id,
     eventType: event.type,
     eventCreated: event.created,
     rawJson: rawBody,
     stripeObjectId: objectId(reviewObject)!,
-    stripeObjectJson: JSON.stringify({ reviewObject, charge }),
+    stripeObjectJson: JSON.stringify({ reviewObject, charge, invoice }),
     billingAccountId: account.id,
     reason,
     receivedAt: now,

@@ -22,6 +22,8 @@ import { installationOctokit, provisioningOctokit } from "./worker/app";
 import { exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage } from "./worker/inference-billing";
 import { handleProvisioningCallback, handleProvisioningClaim } from "./worker/provisioning";
 import { pilotAccountAllowed, ProvisionabilityError, verifyProvisioningWorkflow } from "./worker/provisionability";
+import { dispatchPendingProvisioning } from "./worker/provisioning-dispatch";
+import { reconcileStripeSubscriptions } from "./worker/subscription-reconciliation";
 
 export { GitHubUserGrant } from "./worker/grant";
 
@@ -318,7 +320,39 @@ export default {
     }
   },
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    const result = await exportPendingMeterEvents(env);
-    console.log(JSON.stringify({ message: "Stripe meter export completed", ...result }));
+    const [meterExport, subscriptionReconciliation] = await Promise.allSettled([
+      exportPendingMeterEvents(env),
+      reconcileStripeSubscriptions(env),
+    ]);
+    if (meterExport.status === "fulfilled") {
+      console.log(JSON.stringify({ message: "Stripe meter export completed", ...meterExport.value }));
+    } else {
+      console.error(JSON.stringify({
+        message: "Stripe meter export failed",
+        error: meterExport.reason instanceof Error ? meterExport.reason.message : "Unexpected error",
+      }));
+    }
+    if (subscriptionReconciliation.status === "fulfilled") {
+      console.log(JSON.stringify({
+        message: "Stripe subscription reconciliation completed",
+        ...subscriptionReconciliation.value,
+      }));
+    } else {
+      console.error(JSON.stringify({
+        message: "Stripe subscription reconciliation scan failed",
+        error: subscriptionReconciliation.reason instanceof Error
+          ? subscriptionReconciliation.reason.message
+          : "Unexpected error",
+      }));
+    }
+    try {
+      const result = await dispatchPendingProvisioning(env);
+      console.log(JSON.stringify({ message: "Resident provisioning redispatch completed", ...result }));
+    } catch (error) {
+      console.error(JSON.stringify({
+        message: "Resident provisioning redispatch scan failed",
+        error: error instanceof Error ? error.message : "Unexpected error",
+      }));
+    }
   },
 } satisfies ExportedHandler<Env>;

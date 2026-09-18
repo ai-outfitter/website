@@ -33,7 +33,7 @@
     "PROVISIONING_OIDC_WORKFLOW_REF": "Unsupervisedcom/.agents/.github/workflows/deploy.yml@refs/heads/main",
     "PROVISIONING_OIDC_REPOSITORY_ID": "1318516359",
     "PROVISIONING_OIDC_REPOSITORY_OWNER_ID": "36771436",
-    "PROVISIONING_WORKFLOW": "deploy.yml",
+    "PROVISIONING_WORKFLOW": "provision-resident.yml",
     "RESIDENT_AGENT_NAME_OVERRIDES": "{\"36771436\":\"unsupervised-luce\"}",
     "RESIDENT_PILOT_GITHUB_ACCOUNT_IDS": "36771436"
   },
@@ -79,7 +79,7 @@
         "PROVISIONING_OIDC_WORKFLOW_REF": "Unsupervisedcom/.agents/.github/workflows/deploy.yml@refs/heads/main",
         "PROVISIONING_OIDC_REPOSITORY_ID": "1318516359",
         "PROVISIONING_OIDC_REPOSITORY_OWNER_ID": "36771436",
-        "PROVISIONING_WORKFLOW": "deploy.yml",
+        "PROVISIONING_WORKFLOW": "provision-resident.yml",
         "RESIDENT_AGENT_NAME_OVERRIDES": "{\"36771436\":\"unsupervised-luce\"}",
         "RESIDENT_PILOT_GITHUB_ACCOUNT_IDS": "36771436"
       },

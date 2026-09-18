@@ -46,7 +46,10 @@ function updateEnvironment(source, replacements) {
 const source = readFileSync(environmentPath, 'utf8');
 const values = parse(source.split(/\r?\n/));
 const secretKey = values.STRIPE_SECRET_KEY?.trim();
-const auditabilityMonthlyCents = values.AUDITABILITY_MONTHLY_CENTS?.trim();
+// CI and one-shot acceptance may select an obviously synthetic test-mode
+// amount without persisting it as the product owner's live pricing decision.
+const auditabilityMonthlyCents = process.env.AUDITABILITY_MONTHLY_CENTS?.trim()
+  || values.AUDITABILITY_MONTHLY_CENTS?.trim();
 if (!secretKey || !/^[sr]k_test_/.test(secretKey)) throw new Error('STRIPE_SECRET_KEY in .dev.vars must be a Stripe test or restricted test key');
 
 const catalog = await ensureStripeCatalog(secretKey, { liveMode: false, auditabilityMonthlyCents });

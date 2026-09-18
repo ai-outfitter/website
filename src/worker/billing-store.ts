@@ -120,6 +120,21 @@ export type ProvisioningOperation = {
   updatedAt: number;
 };
 
+export type ProvisioningDispatchCandidate = {
+  operationId: string;
+  billingAccountId: string;
+  githubAccountId: string;
+  githubAccountLogin: string;
+  githubInstallationId: string;
+};
+
+export type SubscriptionReconciliationCandidate = {
+  stripeSubscriptionId: string;
+  billingAccountId: string;
+  githubAccountId: string;
+  reconciliationFailureCount: number;
+};
+
 export type SubscriptionLifecycleEvent = {
   eventId: string;
   eventType: string;
@@ -1304,6 +1319,95 @@ export class BillingStore {
     return Number(result.meta.changes ?? 0) === 1;
   }
 
+  async listProvisioningDispatchCandidates(
+    now = Date.now(),
+    limit = 25,
+  ): Promise<ProvisioningDispatchCandidate[]> {
+    assertInteger(now, "now");
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new TypeError("limit must be an integer between 1 and 100");
+    }
+    const result = await this.db.prepare(`
+      SELECT p.id AS operationId,
+        p.billing_account_id AS billingAccountId,
+        a.github_account_id AS githubAccountId,
+        a.github_account_login AS githubAccountLogin,
+        a.github_installation_id AS githubInstallationId
+      FROM provisioning_operations p
+      JOIN billing_accounts a ON a.id = p.billing_account_id
+      JOIN entitlements e ON e.billing_account_id = p.billing_account_id
+      JOIN residents r ON r.id = p.resident_id
+      WHERE p.approval_state = 'approved'
+        AND ((r.desired_state = 'suspended'
+            AND p.desired_revision LIKE 'resident-state:suspended:%')
+          OR (r.desired_state <> 'suspended'
+            AND p.desired_revision NOT LIKE 'resident-state:suspended:%'
+            AND a.authorization_state = 'authorized'
+            AND e.status = 'active' AND e.provision_enabled = 1))
+        AND (
+          p.status IN ('pending', 'approved')
+          OR (p.status = 'running' AND p.claim_expires_at IS NOT NULL
+            AND p.claim_expires_at <= ?)
+        )
+      ORDER BY p.created_at, p.id
+      LIMIT ?
+    `).bind(now, limit).all<ProvisioningDispatchCandidate>();
+    return result.results;
+  }
+
+  async listSubscriptionReconciliationCandidates(
+    now = Date.now(),
+    limit = 25,
+  ): Promise<SubscriptionReconciliationCandidate[]> {
+    assertInteger(now, "now");
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new TypeError("limit must be an integer between 1 and 100");
+    }
+    const result = await this.db.prepare(`
+      SELECT s.stripe_subscription_id AS stripeSubscriptionId,
+        s.billing_account_id AS billingAccountId,
+        a.github_account_id AS githubAccountId,
+        s.reconciliation_failure_count AS reconciliationFailureCount
+      FROM subscriptions s
+      JOIN billing_accounts a ON a.id = s.billing_account_id
+      WHERE s.reconciliation_next_attempt_at <= ?
+      ORDER BY s.reconciliation_next_attempt_at, s.updated_at, s.stripe_subscription_id
+      LIMIT ?
+    `).bind(now, limit).all<SubscriptionReconciliationCandidate>();
+    return result.results;
+  }
+
+  async recordSubscriptionReconciliationAttempt(input: {
+    stripeSubscriptionId: string;
+    billingAccountId: string;
+    succeeded: boolean;
+    nextAttemptAt: number;
+    error?: string;
+    now?: number;
+  }) {
+    assertString(input.stripeSubscriptionId, "stripeSubscriptionId");
+    assertString(input.billingAccountId, "billingAccountId");
+    const now = input.now ?? Date.now();
+    assertInteger(now, "now");
+    assertInteger(input.nextAttemptAt, "nextAttemptAt");
+    if (input.nextAttemptAt <= now) throw new TypeError("nextAttemptAt must be in the future");
+    if (!input.succeeded && !input.error?.trim()) throw new TypeError("failure requires an error");
+    const result = await this.db.prepare(`
+      UPDATE subscriptions SET
+        reconciliation_attempted_at = ?,
+        reconciliation_next_attempt_at = ?,
+        reconciliation_failure_count = CASE WHEN ? THEN 0 ELSE reconciliation_failure_count + 1 END,
+        reconciliation_last_error = CASE WHEN ? THEN NULL ELSE ? END,
+        updated_at = ?
+      WHERE stripe_subscription_id = ? AND billing_account_id = ?
+    `).bind(
+      now, input.nextAttemptAt, input.succeeded ? 1 : 0,
+      input.succeeded ? 1 : 0, input.error ?? null, now,
+      input.stripeSubscriptionId, input.billingAccountId,
+    ).run();
+    return Number(result.meta.changes ?? 0) === 1;
+  }
+
   async claimPendingProvisioningOperation(input: {
     workerId: string;
     githubAccountId: string;
@@ -1402,6 +1506,7 @@ export class BillingStore {
       throw new TypeError("personaLogin is only valid for a successful provisioning result");
     }
     const session = this.db.withSession("first-primary");
+    const completionToken = crypto.randomUUID();
     const auditability = await session.prepare(`
       SELECT r.pensieve_profile, e.auditability_enabled
       FROM provisioning_operations p
@@ -1427,7 +1532,7 @@ export class BillingStore {
             ELSE 'failed'
           END,
           evidence_json = ?, deployment_callback_issuer = ?,
-          deployment_callback_subject = ?, completed_at = ?, last_error = ?,
+          deployment_callback_subject = ?, completion_token = ?, completed_at = ?, last_error = ?,
           claimed_by = NULL, claim_token = NULL, claim_expires_at = NULL, updated_at = ?
         WHERE id = ? AND status = 'running' AND claimed_by = ? AND claim_token = ?
           AND claim_expires_at > ?
@@ -1441,7 +1546,7 @@ export class BillingStore {
           ))
       `).bind(
         input.succeeded ? 1 : 0, input.retryable === true ? 1 : 0, input.evidenceJson,
-        input.callbackIssuer, input.callbackSubject, now, input.error ?? null,
+        input.callbackIssuer, input.callbackSubject, completionToken, now, input.error ?? null,
         now, input.operationId, input.workerId, input.claimToken, now,
         input.githubAccountId, input.succeeded ? 1 : 0,
         input.agentResourceName ?? "", input.desiredState ?? "",
@@ -1473,7 +1578,7 @@ export class BillingStore {
           updated_at = ?
         WHERE id = (
           SELECT resident_id FROM provisioning_operations
-          WHERE id = ? AND completed_at = ? AND status IN ('succeeded', 'failed')
+          WHERE id = ? AND completion_token = ? AND status IN ('succeeded', 'failed')
         )
       `).bind(
         input.operationId, input.operationId,
@@ -1481,7 +1586,7 @@ export class BillingStore {
         input.evidenceJson, input.succeeded ? input.personaLogin ?? null : null,
         input.operationId, input.pensieveProfile ?? null, input.pensieveEvidenceJson ?? null,
         input.pensieveProfile ?? null, input.pensieveEvidenceJson ?? null,
-        now, input.operationId, now,
+        now, input.operationId, completionToken,
       ),
     ]);
     return Number(results[0]?.meta.changes ?? 0) === 1;

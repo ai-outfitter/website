@@ -7,7 +7,7 @@ export class ProvisionabilityError extends Error {
   constructor(readonly kind: "inactive" | "invalid") {
     super(kind === "inactive"
       ? "The configured provisioning workflow is not active"
-      : "The configured provisioning workflow does not support workflow_dispatch");
+      : "The configured provisioning workflow does not satisfy the resident provisioning contract");
   }
 }
 
@@ -15,7 +15,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function supportsWorkflowDispatch(source: string) {
+function exactPermissions(value: unknown) {
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value).sort();
+  return keys.length === 2
+    && keys[0] === "contents"
+    && keys[1] === "id-token"
+    && value.contents === "read"
+    && value["id-token"] === "write";
+}
+
+function satisfiesProvisioningContract(source: string, owner: string) {
   let document: unknown;
   try {
     document = parse(source, { maxAliasCount: 10 });
@@ -24,9 +34,25 @@ function supportsWorkflowDispatch(source: string) {
   }
   if (!isRecord(document)) return false;
   const triggers = document.on;
-  if (triggers === "workflow_dispatch") return true;
-  if (Array.isArray(triggers)) return triggers.includes("workflow_dispatch");
-  return isRecord(triggers) && Object.hasOwn(triggers, "workflow_dispatch");
+  if (!(isRecord(triggers)
+    && Object.keys(triggers).length === 1
+    && Object.hasOwn(triggers, "workflow_dispatch"))) return false;
+
+  // The dispatch entrypoint does not run arbitrary steps. It delegates one job
+  // to the reviewed deployment workflow on the protected default branch. That
+  // reusable workflow is therefore the value GitHub places in job_workflow_ref.
+  const jobs = document.jobs;
+  if (!isRecord(jobs) || Object.keys(jobs).length !== 1) return false;
+  const job = Object.values(jobs)[0];
+  if (!isRecord(job)
+    || job.uses !== `${owner}/.agents/.github/workflows/deploy.yml@main`
+    || Object.hasOwn(job, "runs-on")
+    || Object.hasOwn(job, "steps")) return false;
+
+  // A called workflow can only retain or reduce its caller's permissions. Give
+  // it precisely the repository read and OIDC capabilities used by deployment,
+  // and reject broader caller permissions such as write-all.
+  return exactPermissions(job.permissions ?? document.permissions);
 }
 
 export function pilotAccountAllowed(githubAccountId: number, configuredIds: string | undefined) {
@@ -45,12 +71,14 @@ export async function verifyProvisioningWorkflow(
   workflow: string,
   ref = "main",
 ) {
+  const expectedPath = `.github/workflows/${workflow}`;
   const metadata = await client.request("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}", {
     owner,
     repo: ".agents",
     workflow_id: workflow,
   });
   if (metadata.data.state !== "active") throw new ProvisionabilityError("inactive");
+  if (metadata.data.path !== expectedPath) throw new ProvisionabilityError("invalid");
 
   const content = await client.request("GET /repos/{owner}/{repo}/contents/{path}", {
     owner,
@@ -67,5 +95,5 @@ export async function verifyProvisioningWorkflow(
     atob(content.data.content.replaceAll("\n", "")),
     (character) => character.charCodeAt(0),
   ));
-  if (!supportsWorkflowDispatch(source)) throw new ProvisionabilityError("invalid");
+  if (!satisfiesProvisioningContract(source, owner)) throw new ProvisionabilityError("invalid");
 }

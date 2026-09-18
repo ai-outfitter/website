@@ -14,8 +14,10 @@ import {
   type CheckoutLease,
   type InferenceUsage,
   type ProvisioningOperation,
+  type ProvisioningDispatchCandidate,
   type PendingMeterExportRow,
   type SubscriptionLifecycleEvent,
+  type SubscriptionReconciliationCandidate,
   type UsageBillingPolicy,
 } from "./billing-store";
 
@@ -293,6 +295,83 @@ describe("provisioning operation claims", () => {
       now: 1_000,
     })).rejects.toThrow("only valid for a successful provisioning result");
     expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("lists a bounded durable redispatch queue using immutable tenant bindings", async () => {
+    const candidates: ProvisioningDispatchCandidate[] = [{
+      operationId: "operation_1",
+      billingAccountId: "account_1",
+      githubAccountId: "123456",
+      githubAccountLogin: "example",
+      githubInstallationId: "789",
+    }];
+    const all = vi.fn().mockResolvedValue({ results: candidates });
+    const bind = vi.fn(() => ({ all }));
+    const prepare = vi.fn(() => ({ bind }));
+    const store = new BillingStore({ prepare } as unknown as D1Database);
+
+    await expect(store.listProvisioningDispatchCandidates(1_000, 25)).resolves.toEqual(candidates);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("p.claim_expires_at <= ?"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("p.status IN ('pending', 'approved')"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("a.github_account_id AS githubAccountId"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("a.authorization_state = 'authorized'"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("r.desired_state = 'suspended'"));
+    expect(bind).toHaveBeenCalledWith(1_000, 25);
+  });
+
+  it("rejects an unbounded provisioning redispatch scan", async () => {
+    const store = new BillingStore({ prepare: vi.fn() } as unknown as D1Database);
+    await expect(store.listProvisioningDispatchCandidates(1_000, 101))
+      .rejects.toThrow("between 1 and 100");
+  });
+});
+
+describe("scheduled subscription reconciliation", () => {
+  it("lists a bounded due queue with immutable tenant identity", async () => {
+    const candidates: SubscriptionReconciliationCandidate[] = [{
+      stripeSubscriptionId: "sub_1",
+      billingAccountId: "account_1",
+      githubAccountId: "123456",
+      reconciliationFailureCount: 0,
+    }];
+    const all = vi.fn().mockResolvedValue({ results: candidates });
+    const bind = vi.fn(() => ({ all }));
+    const prepare = vi.fn(() => ({ bind }));
+    const store = new BillingStore({ prepare } as unknown as D1Database);
+
+    await expect(store.listSubscriptionReconciliationCandidates(1_000, 25))
+      .resolves.toEqual(candidates);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("reconciliation_next_attempt_at <= ?"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("a.github_account_id AS githubAccountId"));
+    expect(bind).toHaveBeenCalledWith(1_000, 25);
+  });
+
+  it("rejects an unbounded subscription reconciliation scan", async () => {
+    const store = new BillingStore({ prepare: vi.fn() } as unknown as D1Database);
+    await expect(store.listSubscriptionReconciliationCandidates(1_000, 101))
+      .rejects.toThrow("between 1 and 100");
+  });
+
+  it("persists retry scheduling against the exact account subscription binding", async () => {
+    const run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+    const store = new BillingStore({ prepare } as unknown as D1Database);
+
+    await expect(store.recordSubscriptionReconciliationAttempt({
+      stripeSubscriptionId: "sub_1",
+      billingAccountId: "account_1",
+      succeeded: false,
+      nextAttemptAt: 2_000,
+      error: "temporary Stripe failure",
+      now: 1_000,
+    })).resolves.toBe(true);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining(
+      "WHERE stripe_subscription_id = ? AND billing_account_id = ?",
+    ));
+    expect(bind).toHaveBeenCalledWith(
+      1_000, 2_000, 0, 0, "temporary Stripe failure", 1_000, "sub_1", "account_1",
+    );
   });
 });
 

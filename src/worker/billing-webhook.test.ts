@@ -75,6 +75,15 @@ function stripeFetchFor(value = subscription()) {
   });
 }
 
+function accountStatus(stripeSubscriptionId = "sub_resident") {
+  return {
+    account,
+    subscription: { stripeSubscriptionId },
+    resident: null,
+    entitlement: null,
+  };
+}
+
 async function signedRequest(type = "checkout.session.completed", object: Record<string, unknown> = {
   id: "cs_checkout", subscription: "sub_resident",
 }) {
@@ -265,6 +274,7 @@ describe("Stripe billing webhook", () => {
     const applyBillingReviewEvent = vi.fn(async () => ({ applied: true, provisioningRequested: true }));
     const store = {
       getBillingAccountByStripeCustomer: vi.fn(async () => account),
+      getAccountStatus: vi.fn(async () => accountStatus()),
       applySubscriptionEvent: vi.fn(),
       applyBillingReviewEvent,
     };
@@ -274,7 +284,10 @@ describe("Stripe billing webhook", () => {
         return Response.json({ id: "dp_review", charge: "ch_review", status: "needs_response" });
       }
       if (url.pathname === "/v1/charges/ch_review") {
-        return Response.json({ id: "ch_review", customer: "cus_customer" });
+        return Response.json({ id: "ch_review", customer: "cus_customer", invoice: "in_resident" });
+      }
+      if (url.pathname === "/v1/invoices/in_resident") {
+        return Response.json({ id: "in_resident", customer: "cus_customer", subscription: "sub_resident" });
       }
       return Response.json({ error: { message: "not found" } }, { status: 404 });
     });
@@ -283,7 +296,7 @@ describe("Stripe billing webhook", () => {
       { store: store as never, stripeFetch, dispatchProvisioning, now: NOW },
     );
     expect(response.status).toBe(202);
-    expect(stripeFetch).toHaveBeenCalledTimes(2);
+    expect(stripeFetch).toHaveBeenCalledTimes(3);
     expect(applyBillingReviewEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventId: "evt_test",
       eventType: "charge.dispute.created",
@@ -301,7 +314,7 @@ describe("Stripe billing webhook", () => {
       applyBillingReviewEvent: vi.fn(),
     };
     const stripeFetch = vi.fn(async () => Response.json({
-      id: "ch_refunded", amount_refunded: 2_000, customer: null,
+      id: "ch_refunded", amount: 2_000, amount_refunded: 2_000, refunded: true, customer: null,
     }));
     const response = await handleStripeWebhook(
       await signedRequest("charge.refunded", { id: "ch_refunded" }), env,
@@ -328,5 +341,124 @@ describe("Stripe billing webhook", () => {
     expect(await response.json()).toEqual({ received: true, applied: false });
     expect(store.getBillingAccountByStripeCustomer).not.toHaveBeenCalled();
     expect(store.applyBillingReviewEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a partial charge refund", "charge.refunded", { id: "ch_refunded" }, {
+      id: "ch_refunded", amount: 4_000, amount_refunded: 2_000, refunded: false,
+      customer: "cus_customer", invoice: "in_resident",
+    }],
+    ["a pending refund", "refund.updated", { id: "re_pending" }, {
+      id: "re_pending", charge: "ch_refunded", amount: 2_000, status: "pending",
+    }],
+  ])("ignores %s", async (_description, eventType, eventObject, authoritativeObject) => {
+    const store = {
+      getBillingAccountByStripeCustomer: vi.fn(),
+      getAccountStatus: vi.fn(),
+      applySubscriptionEvent: vi.fn(),
+      applyBillingReviewEvent: vi.fn(),
+    };
+    const stripeFetch = vi.fn(async () => Response.json(authoritativeObject));
+    const response = await handleStripeWebhook(
+      await signedRequest(eventType, eventObject), env,
+      { store: store as never, stripeFetch, now: NOW },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, applied: false });
+    expect(store.getBillingAccountByStripeCustomer).not.toHaveBeenCalled();
+    expect(store.applyBillingReviewEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["old", "sub_previous"],
+    ["unrelated", "sub_other"],
+  ])("ignores a fully refunded charge from an %s subscription", async (_description, invoiceSubscriptionId) => {
+    const store = {
+      getBillingAccountByStripeCustomer: vi.fn(async () => account),
+      getAccountStatus: vi.fn(async () => accountStatus()),
+      applySubscriptionEvent: vi.fn(),
+      applyBillingReviewEvent: vi.fn(),
+    };
+    const stripeFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === "/v1/charges/ch_refunded") return Response.json({
+        id: "ch_refunded", amount: 2_000, amount_refunded: 2_000, refunded: true,
+        customer: "cus_customer", invoice: "in_previous",
+      });
+      if (url.pathname === "/v1/invoices/in_previous") return Response.json({
+        id: "in_previous", customer: "cus_customer", subscription: invoiceSubscriptionId,
+      });
+      return Response.json({ error: { message: "not found" } }, { status: 404 });
+    });
+    const response = await handleStripeWebhook(
+      await signedRequest("charge.refunded", { id: "ch_refunded" }), env,
+      { store: store as never, stripeFetch, now: NOW },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, applied: false });
+    expect(store.applyBillingReviewEvent).not.toHaveBeenCalled();
+  });
+
+  it("ignores a dispute whose charge invoice belongs to a non-current subscription", async () => {
+    const store = {
+      getBillingAccountByStripeCustomer: vi.fn(async () => account),
+      getAccountStatus: vi.fn(async () => accountStatus()),
+      applySubscriptionEvent: vi.fn(),
+      applyBillingReviewEvent: vi.fn(),
+    };
+    const stripeFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === "/v1/disputes/dp_previous") {
+        return Response.json({ id: "dp_previous", charge: "ch_previous", status: "needs_response" });
+      }
+      if (url.pathname === "/v1/charges/ch_previous") {
+        return Response.json({ id: "ch_previous", customer: "cus_customer", invoice: "in_previous" });
+      }
+      if (url.pathname === "/v1/invoices/in_previous") {
+        return Response.json({ id: "in_previous", customer: "cus_customer", subscription: "sub_previous" });
+      }
+      return Response.json({ error: { message: "not found" } }, { status: 404 });
+    });
+    const response = await handleStripeWebhook(
+      await signedRequest("charge.dispute.created", { id: "dp_previous" }), env,
+      { store: store as never, stripeFetch, now: NOW },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, applied: false });
+    expect(store.applyBillingReviewEvent).not.toHaveBeenCalled();
+  });
+
+  it("suspends for a full refund only after binding its invoice to the current resident subscription", async () => {
+    const applyBillingReviewEvent = vi.fn(async () => ({ applied: true, provisioningRequested: false }));
+    const store = {
+      getBillingAccountByStripeCustomer: vi.fn(async () => account),
+      getAccountStatus: vi.fn(async () => accountStatus()),
+      applySubscriptionEvent: vi.fn(),
+      applyBillingReviewEvent,
+    };
+    const stripeFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      if (url.pathname === "/v1/refunds/re_complete") return Response.json({
+        id: "re_complete", charge: "ch_refunded", amount: 2_000, status: "succeeded",
+      });
+      if (url.pathname === "/v1/charges/ch_refunded") return Response.json({
+        id: "ch_refunded", amount: 2_000, amount_refunded: 2_000, refunded: true,
+        customer: "cus_customer", invoice: "in_resident",
+      });
+      if (url.pathname === "/v1/invoices/in_resident") return Response.json({
+        id: "in_resident", customer: "cus_customer",
+        parent: { subscription_details: { subscription: "sub_resident" } },
+      });
+      return Response.json({ error: { message: "not found" } }, { status: 404 });
+    });
+    const response = await handleStripeWebhook(
+      await signedRequest("refund.updated", { id: "re_complete" }), env,
+      { store: store as never, stripeFetch, now: NOW },
+    );
+    expect(response.status).toBe(202);
+    expect(applyBillingReviewEvent).toHaveBeenCalledWith(expect.objectContaining({
+      billingAccountId: account.id,
+      reason: "refund",
+    }));
   });
 });
