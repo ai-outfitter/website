@@ -37,6 +37,13 @@ const successEvidence = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const auditKeys = crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const auditTrust = async () => {
+  const keys = await auditKeys as CryptoKeyPair;
+  return {
+    sinkId: "pensieve.example.com",
+    publicKey: Buffer.from(await crypto.subtle.exportKey("raw", keys.publicKey)).toString("base64"),
+  };
+};
 const canonicalize = (value: unknown): string => {
   if (value === null) return "null";
   if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
@@ -213,7 +220,8 @@ describe("provisioning API", () => {
       },
     };
     const response = await handleProvisioningCallback(request("/callback", value), env, {
-      store: { recordProvisioningResult } as never, verify: async () => identity, now: NOW,
+      store: { recordProvisioningResult } as never, verify: async () => identity,
+      auditTrust: await auditTrust(), now: NOW,
     });
     expect(response.status).toBe(200);
     expect(recordProvisioningResult).toHaveBeenCalledWith(expect.objectContaining({
@@ -232,6 +240,20 @@ describe("provisioning API", () => {
       pensieveProfile: "resident-complete-trace-v1",
       pensieveEvidenceJson: JSON.stringify(value.auditability.evidence),
     }));
+  });
+
+  it("rejects a correctly self-signed statement from a sink the Worker does not trust", async () => {
+    const recordProvisioningResult = vi.fn(async () => true);
+    const response = await handleProvisioningCallback(request("/callback", {
+      operation_id: "operation_1", claim_token: "claim-token", succeeded: true,
+      observed_generation: 4, pinned_catalog_revision: "abc123", evidence: successEvidence(),
+      auditability: { profile: "resident-complete-trace-v1", evidence: await auditEvidence() },
+    }), env, {
+      store: { recordProvisioningResult } as never, verify: async () => identity, now: NOW,
+      auditTrust: { sinkId: "different.pensieve.example.com", publicKey: Buffer.alloc(32).toString("base64") },
+    });
+    expect(response.status).toBe(400);
+    expect(recordProvisioningResult).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -278,7 +300,10 @@ describe("provisioning API", () => {
       operation_id: "operation_1", claim_token: "claim-token", succeeded: true,
       observed_generation: 4, pinned_catalog_revision: "abc123", evidence: successEvidence(),
       auditability: { profile: "resident-complete-trace-v1", evidence: await makeEvidence() },
-    }), env, { store: { recordProvisioningResult } as never, verify: async () => identity, now: NOW });
+    }), env, {
+      store: { recordProvisioningResult } as never, verify: async () => identity,
+      auditTrust: await auditTrust(), now: NOW,
+    });
     expect(response.status).toBe(400);
     expect(recordProvisioningResult).not.toHaveBeenCalled();
   });

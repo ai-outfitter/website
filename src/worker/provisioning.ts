@@ -18,6 +18,7 @@ type ProvisioningStore = Pick<BillingStore,
 type Options = {
   store?: ProvisioningStore;
   verify?: (request: Request, env: Env) => Promise<GitHubOidcIdentity | null>;
+  auditTrust?: { sinkId: string; publicKey: string };
   now?: number;
   uuid?: () => string;
 };
@@ -172,7 +173,10 @@ function successfulEvidence(
   };
 }
 
-async function validatedAuditabilityEvidence(value: Record<string, unknown>, agentName: string, now: number) {
+async function validatedAuditabilityEvidence(
+  value: Record<string, unknown>, agentName: string, now: number,
+  trustedSink: { sinkId: string; publicKey: string },
+) {
   const sink = value.sink;
   const probe = value.traceProbe;
   if (!record(sink) || !record(probe) || !record(probe.records)
@@ -189,6 +193,9 @@ async function validatedAuditabilityEvidence(value: Record<string, unknown>, age
   const sinkId = requiredString(sink.id, "auditability.evidence.sink.id", 253);
   const sinkKeyId = requiredString(sink.keyId, "auditability.evidence.sink.keyId", 128);
   const publicKey = base64Bytes(sink.publicKey, "auditability.evidence.sink.publicKey", 32);
+  if (sinkId !== trustedSink.sinkId || publicKey.encoded !== trustedSink.publicKey) {
+    throw new TypeError("Auditability evidence is signed by an untrusted sink");
+  }
   if (sinkKeyId !== publicKey.encoded.slice(0, 16)) {
     throw new TypeError("Auditability sink key ID does not match its public key");
   }
@@ -357,6 +364,14 @@ function workerId(identity: GitHubOidcIdentity) {
   return `github-actions:${identity.repository}:${identity.runId}`;
 }
 
+function configuredAuditTrust(env: Env) {
+  const bindings = env as unknown as Record<string, unknown>;
+  return {
+    sinkId: requiredString(bindings.AUDITABILITY_SINK_ID, "AUDITABILITY_SINK_ID", 253),
+    publicKey: requiredString(bindings.AUDITABILITY_SINK_PUBLIC_KEY, "AUDITABILITY_SINK_PUBLIC_KEY", 2_000),
+  };
+}
+
 async function identity(request: Request, env: Env, options: Options) {
   return (options.verify ?? verifyGitHubActionsOidc)(request, env);
 }
@@ -434,7 +449,10 @@ export async function handleProvisioningCallback(request: Request, env: Env, opt
       throw new TypeError("Auditability profile is unsupported");
     }
     const validatedPensieveEvidence = record(auditability) && record(auditability.evidence) && evidence
-      ? await validatedAuditabilityEvidence(auditability.evidence, evidence.agent.name, now) : undefined;
+      ? await validatedAuditabilityEvidence(
+        auditability.evidence, evidence.agent.name, now,
+        options.auditTrust ?? configuredAuditTrust(env),
+      ) : undefined;
     const pensieveEvidenceJson = validatedPensieveEvidence
       ? JSON.stringify(validatedPensieveEvidence) : undefined;
     if (record(auditability) && !pensieveEvidenceJson) throw new TypeError("Auditability evidence is invalid");
