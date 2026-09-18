@@ -48,10 +48,69 @@ const canonicalize = (value: unknown): string => {
     object[key] === undefined ? [] : [`${JSON.stringify(key)}:${canonicalize(object[key])}`]
   )).join(",")}}`;
 };
+const canonicalDigest = async (value: unknown) => Buffer.from(
+  await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalize(value))),
+).toString("hex");
 
-const auditEvidence = async (overrides: Record<string, unknown> = {}) => {
-  const digests = "12345678".split("").map((character) => character.repeat(64));
+const auditEvidence = async (
+  overrides: Record<string, unknown> = {},
+  options: { exposedThinking?: boolean } = {},
+) => {
   const oidcSubject = "system:serviceaccount:agent-unsupervisedcom-luce-123:agent-runtime";
+  const policyDigest = `sha256:${"b".repeat(64)}`;
+  const base = (kind: string, offset: number) => ({
+    kind, run: "run-1", attempt: 1, identity: oidcSubject, environment: "cluster",
+    policy_digest: policyDigest, created_at: new Date(NOW - 60_000 + offset).toISOString(),
+    install_scope: "managed", harness: "pi", harness_version: "test",
+    event_surface: "extension:in-process",
+  });
+  const nonterminal = [
+    { ...base("session", 0), argv: ["--print", "audit probe"] },
+    {
+      ...base("transcript", 1_000), event: "before-agent-start", prompt: "audit probe",
+      system_prompt: "You are the resident audit probe.", system_prompt_options: { agent: "luce" },
+    },
+    {
+      ...base("transcript", 2_000), event: "message-end",
+      message: {
+        role: "assistant",
+        content: [
+          ...(options.exposedThinking === false ? [] : [{ type: "thinking", thinking: "inspect the probe" }]),
+          { type: "text", text: "Running the audit probe." },
+        ],
+      },
+    },
+    {
+      ...base("model-exchange", 3_000), direction: "request",
+      payload: { model: "audit-probe", messages: [{ role: "user", content: "audit probe" }] },
+    },
+    {
+      ...base("model-exchange", 4_000), direction: "response-metadata", status: 200,
+      headers: { "x-request-id": "probe-request-1" },
+    },
+    {
+      ...base("tool-call", 5_000), phase: "call", tool_call_id: "probe-tool-1",
+      tool_name: "audit_probe", tool_input: { value: "ping" },
+    },
+    {
+      ...base("tool-call", 6_000), phase: "result", tool_call_id: "probe-tool-1",
+      tool_name: "audit_probe", tool_input: { value: "ping" },
+      tool_output: [{ type: "text", text: "pong" }], tool_details: { exitCode: 0 }, is_error: false,
+    },
+  ];
+  const nonterminalDigests = await Promise.all(nonterminal.map((body) => canonicalDigest(body)));
+  const requiredClasses = ["session", "transcript", "model-exchange", "tool-call"];
+  const terminal = {
+    ...base("session", 7_000), terminal: true, uncommitted: true,
+    segment: nonterminalDigests, captured: requiredClasses,
+    capture: {
+      profile: "resident-complete-trace-v1", required: requiredClasses,
+      captured: requiredClasses, gaps: [],
+    },
+  };
+  const terminalDigest = await canonicalDigest(terminal);
+  const digests = [...nonterminalDigests, terminalDigest];
+  const recordBodies = [...nonterminal, terminal];
   const keys = await auditKeys as CryptoKeyPair;
   const publicKey = Buffer.from(await crypto.subtle.exportKey("raw", keys.publicKey)).toString("base64");
   const keyId = publicKey.slice(0, 16);
@@ -77,19 +136,16 @@ const auditEvidence = async (overrides: Record<string, unknown> = {}) => {
     },
     traceProbe: {
       run: "run-1", identity: oidcSubject, environment: "cluster", harness: "pi",
-      installScope: "managed", policyDigest: `sha256:${"b".repeat(64)}`,
-      startedAt: new Date(NOW - 60_000).toISOString(), completedAt: new Date(NOW).toISOString(),
+      installScope: "managed", policyDigest,
+      startedAt: new Date(NOW - 70_000).toISOString(), completedAt: new Date(NOW).toISOString(),
       records: {
-        session: digests.slice(0, 2), transcript: digests.slice(2, 4),
-        modelExchange: digests.slice(4, 6), toolCall: digests.slice(6, 8),
+        session: [digests[0], terminalDigest], transcript: digests.slice(1, 3),
+        modelExchange: digests.slice(3, 5), toolCall: digests.slice(5, 7),
       },
+      recordBodies,
       capture: {
-        terminalSessionDigest: digests[1],
+        terminalSessionDigest: terminalDigest,
         captured: ["session", "transcript", "model-exchange", "tool-call"], gaps: [],
-      },
-      assertions: {
-        prompt: true, systemPrompt: true, assistantMessage: true, exposedThinking: true,
-        modelRequest: true, modelResponseMetadata: true, toolCallIntent: true, toolCallResult: true,
       },
     },
     statements,
@@ -186,11 +242,14 @@ describe("provisioning API", () => {
     ["a different workload identity", async () => auditEvidence({
       oidcSubject: "system:serviceaccount:other:agent-runtime",
     })],
-    ["missing exposed thinking", async () => {
+    ["missing exposed thinking", async () => auditEvidence({}, { exposedThinking: false })],
+    ["a record body changed after storage", async () => {
       const evidence = await auditEvidence();
       return { ...evidence, traceProbe: {
         ...evidence.traceProbe,
-        assertions: { ...evidence.traceProbe.assertions, exposedThinking: false },
+        recordBodies: evidence.traceProbe.recordBodies.map((body, index) => (
+          index === 0 ? { ...body, argv: ["tampered"] } : body
+        )),
       } };
     }],
     ["a declared capture gap", async () => {

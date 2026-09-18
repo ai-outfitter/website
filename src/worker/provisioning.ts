@@ -88,6 +88,18 @@ function canonicalize(value: unknown): string {
   throw new TypeError(`Cannot canonicalize ${typeof value}`);
 }
 
+async function canonicalDigest(value: unknown) {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalize(value)));
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function sameStringSet(value: unknown, expected: string[]) {
+  return Array.isArray(value) && value.length === expected.length
+    && value.every((item) => typeof item === "string")
+    && new Set(value).size === value.length
+    && expected.every((item) => value.includes(item));
+}
+
 function base64Bytes(value: unknown, name: string, expectedLength: number) {
   const encoded = requiredString(value, name, 2_000);
   try {
@@ -164,7 +176,8 @@ async function validatedAuditabilityEvidence(value: Record<string, unknown>, age
   const sink = value.sink;
   const probe = value.traceProbe;
   if (!record(sink) || !record(probe) || !record(probe.records)
-    || !record(probe.assertions) || !record(probe.capture) || !Array.isArray(value.statements)) {
+    || !record(probe.capture) || !Array.isArray(probe.recordBodies)
+    || !Array.isArray(value.statements)) {
     throw new TypeError("Auditability evidence is incomplete");
   }
   const collectorRevision = requiredString(value.collectorRevision, "auditability.evidence.collectorRevision", 40);
@@ -200,7 +213,6 @@ async function validatedAuditabilityEvidence(value: Record<string, unknown>, age
 
   const records = probe.records;
   const capture = probe.capture;
-  const assertions = probe.assertions;
   const session = requiredDigestArray(records.session, "auditability.evidence.traceProbe.records.session", 2);
   const transcript = requiredDigestArray(records.transcript, "auditability.evidence.traceProbe.records.transcript", 2);
   const modelExchange = requiredDigestArray(records.modelExchange, "auditability.evidence.traceProbe.records.modelExchange", 2);
@@ -209,6 +221,40 @@ async function validatedAuditabilityEvidence(value: Record<string, unknown>, age
   if (new Set(allDigests).size !== allDigests.length) {
     throw new TypeError("Auditability trace record classes overlap");
   }
+
+  // Do not trust callback assertions about what the probe captured. Hash the
+  // bounded synthetic record bodies exactly as Pensieve does, bind each body
+  // to its claimed class, and derive completeness from the immutable bytes.
+  if (probe.recordBodies.length !== allDigests.length) {
+    throw new TypeError("Auditability trace does not include every record body");
+  }
+  const classDigests = new Map<string, string>([
+    ...session.map((digest) => [digest, "session"] as const),
+    ...transcript.map((digest) => [digest, "transcript"] as const),
+    ...modelExchange.map((digest) => [digest, "model-exchange"] as const),
+    ...toolCall.map((digest) => [digest, "tool-call"] as const),
+  ]);
+  const recordBodies = new Map<string, Record<string, unknown>>();
+  for (const [index, body] of probe.recordBodies.entries()) {
+    if (!record(body)) throw new TypeError(`auditability.evidence.traceProbe.recordBodies[${index}] is invalid`);
+    const digest = await canonicalDigest(body);
+    const expectedKind = classDigests.get(digest);
+    if (!expectedKind || recordBodies.has(digest) || body.kind !== expectedKind) {
+      throw new TypeError("Auditability trace record body does not match its digest class");
+    }
+    if (body.run !== probe.run || body.identity !== oidcSubject || body.environment !== "cluster"
+      || body.harness !== "pi" || body.install_scope !== "managed"
+      || body.policy_digest !== policyDigest) {
+      throw new TypeError("Auditability trace record body has inconsistent provenance");
+    }
+    const created = requiredTime(body.created_at,
+      `auditability.evidence.traceProbe.recordBodies[${index}].created_at`);
+    if (created.time < started.time || created.time > completed.time) {
+      throw new TypeError("Auditability trace record body is outside the probe window");
+    }
+    recordBodies.set(digest, body);
+  }
+
   const terminalDigest = requiredDigest(capture.terminalSessionDigest,
     "auditability.evidence.traceProbe.capture.terminalSessionDigest");
   const captured = capture.captured;
@@ -219,13 +265,48 @@ async function validatedAuditabilityEvidence(value: Record<string, unknown>, age
     ) || !Array.isArray(gaps) || gaps.length !== 0) {
     throw new TypeError("Auditability terminal capture is incomplete");
   }
-  for (const assertion of [
-    "prompt", "systemPrompt", "assistantMessage", "exposedThinking",
-    "modelRequest", "modelResponseMetadata", "toolCallIntent", "toolCallResult",
-  ]) {
-    if (assertions[assertion] !== true) {
-      throw new TypeError(`Auditability trace assertion ${assertion} is missing`);
-    }
+
+  const requiredClasses = ["session", "transcript", "model-exchange", "tool-call"];
+  const terminal = recordBodies.get(terminalDigest);
+  const terminalCapture = terminal?.capture;
+  const terminalSegment = terminal?.segment;
+  if (!terminal || terminal.terminal !== true || terminal.uncommitted !== true
+    || !record(terminalCapture) || terminalCapture.profile !== "resident-complete-trace-v1"
+    || !sameStringSet(terminalCapture.required, requiredClasses)
+    || !sameStringSet(terminalCapture.captured, requiredClasses)
+    || !Array.isArray(terminalCapture.gaps) || terminalCapture.gaps.length !== 0
+    || !sameStringSet(terminalSegment, allDigests.filter((digest) => digest !== terminalDigest))) {
+    throw new TypeError("Auditability terminal record does not prove complete capture");
+  }
+
+  const bodies = [...recordBodies.values()];
+  const sessionStart = bodies.some((body) => body.kind === "session"
+    && body.terminal !== true && Array.isArray(body.argv));
+  const prompt = bodies.some((body) => body.kind === "transcript"
+    && body.event === "before-agent-start" && typeof body.prompt === "string" && body.prompt.length > 0
+    && typeof body.system_prompt === "string" && body.system_prompt.length > 0);
+  const assistant = bodies.some((body) => {
+    if (body.kind !== "transcript" || body.event !== "message-end" || !record(body.message)
+      || body.message.role !== "assistant" || !Array.isArray(body.message.content)) return false;
+    return body.message.content.some((part) => record(part) && part.type === "text" && typeof part.text === "string")
+      && body.message.content.some((part) => record(part) && part.type === "thinking"
+        && typeof part.thinking === "string" && part.thinking.length > 0);
+  });
+  const modelRequest = bodies.some((body) => body.kind === "model-exchange"
+    && body.direction === "request" && record(body.payload));
+  const modelResponse = bodies.some((body) => body.kind === "model-exchange"
+    && body.direction === "response-metadata" && Number.isSafeInteger(body.status)
+    && Number(body.status) >= 100 && Number(body.status) <= 599 && record(body.headers));
+  const calls = bodies.filter((body) => body.kind === "tool-call" && body.phase === "call"
+    && typeof body.tool_call_id === "string" && body.tool_call_id.length > 0
+    && typeof body.tool_name === "string" && body.tool_input !== undefined);
+  const completedTool = calls.some((call) => bodies.some((body) => body.kind === "tool-call"
+    && body.phase === "result" && body.tool_call_id === call.tool_call_id
+    && body.tool_name === call.tool_name && body.tool_output !== undefined
+    && typeof body.is_error === "boolean"));
+  if (!sessionStart || !prompt || !assistant || !modelRequest || !modelResponse
+    || calls.length === 0 || !completedTool) {
+    throw new TypeError("Auditability record bytes do not contain a complete synthetic trace");
   }
 
   if (value.statements.length !== allDigests.length) {
