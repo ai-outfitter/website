@@ -61,15 +61,20 @@ const canonicalDigest = async (value: unknown) => Buffer.from(
 
 const auditEvidence = async (
   overrides: Record<string, unknown> = {},
-  options: { exposedThinking?: boolean } = {},
+  options: {
+    exposedThinking?: boolean;
+    recordCollectorRevision?: string;
+    reportedCollectorRevision?: string;
+  } = {},
 ) => {
   const oidcSubject = "system:serviceaccount:agent-unsupervisedcom-luce-123:agent-runtime";
   const policyDigest = `sha256:${"b".repeat(64)}`;
+  const recordCollectorRevision = options.recordCollectorRevision ?? "a".repeat(40);
   const base = (kind: string, offset: number) => ({
     kind, run: "run-1", attempt: 1, identity: oidcSubject, environment: "cluster",
     policy_digest: policyDigest, created_at: new Date(NOW - 60_000 + offset).toISOString(),
     install_scope: "managed", harness: "pi", harness_version: "test",
-    event_surface: "extension:in-process",
+    event_surface: "extension:in-process", collector_revision: recordCollectorRevision,
   });
   const nonterminal = [
     { ...base("session", 0), argv: ["--print", "audit probe"] },
@@ -135,7 +140,7 @@ const auditEvidence = async (
     return { ...unsigned, signature: Buffer.from(signature).toString("base64") };
   }));
   return {
-    collectorRevision: "a".repeat(40),
+    collectorRevision: options.reportedCollectorRevision ?? recordCollectorRevision,
     oidcSubject,
     sink: {
       id: "pensieve.example.com", keyId, publicKey,
@@ -269,6 +274,9 @@ describe("provisioning API", () => {
       oidcSubject: "system:serviceaccount:other:agent-runtime",
     })],
     ["missing exposed thinking", async () => auditEvidence({}, { exposedThinking: false })],
+    ["a signed trace from a different collector revision", async () => auditEvidence({}, {
+      recordCollectorRevision: "c".repeat(40), reportedCollectorRevision: "a".repeat(40),
+    })],
     ["a record body changed after storage", async () => {
       const evidence = await auditEvidence();
       return { ...evidence, traceProbe: {

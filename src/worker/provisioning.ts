@@ -251,7 +251,7 @@ async function validatedAuditabilityEvidence(
     }
     if (body.run !== probe.run || body.identity !== oidcSubject || body.environment !== "cluster"
       || body.harness !== "pi" || body.install_scope !== "managed"
-      || body.policy_digest !== policyDigest) {
+      || body.policy_digest !== policyDigest || body.collector_revision !== collectorRevision) {
       throw new TypeError("Auditability trace record body has inconsistent provenance");
     }
     const created = requiredTime(body.created_at,
