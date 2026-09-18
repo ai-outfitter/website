@@ -14,7 +14,13 @@ LOCAL_GITHUB_ACCOUNTS=ai-outfitter
 AGENTS_PLAN_SIGNING_KEY=replace-with-a-long-random-local-value
 
 # Optional Stripe sandbox values for testing the pricing checkout locally.
-# Use recurring monthly Price IDs created in the Stripe sandbox.
+# `npm run stripe:configure:test` creates the catalog after the product owner
+# chooses an auditability price in whole cents.
 STRIPE_SECRET_KEY=sk_test_replace_me
-STRIPE_INDIVIDUAL_PRICE_ID=price_replace_me
-STRIPE_TEAM_PRICE_ID=price_replace_me
+AUDITABILITY_MONTHLY_CENTS=replace_with_approved_amount
+STRIPE_RESIDENT_PRICE_ID=price_replace_me
+STRIPE_PROVIDER_COST_PRICE_ID=price_replace_me
+STRIPE_MARKUP_PRICE_ID=price_replace_me
+STRIPE_AUDITABILITY_PRICE_ID=price_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+BILLING_SERVICE_TOKEN=replace_with_a_long_random_local_value

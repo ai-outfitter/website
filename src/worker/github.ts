@@ -13,6 +13,7 @@ export type Repository = {
 };
 
 export type Account = {
+  id: number;
   login: string;
   type: "User" | "Organization";
   installationId: number | null;
@@ -34,7 +35,7 @@ export type SourceFreshness = {
 
 type Installation = {
   id: number;
-  account?: { login?: string; type?: string };
+  account?: { id?: number; login?: string; type?: string };
   updated_at?: string;
 };
 
@@ -98,8 +99,10 @@ export async function accounts(client: Octokit, options: { repositories?: boolea
   for (const installation of installed) {
     const login = installation.account?.login;
     const type = installation.account?.type;
-    if (!login || (type !== "User" && type !== "Organization")) continue;
+    const id = installation.account?.id;
+    if (!login || !Number.isSafeInteger(id) || Number(id) <= 0 || (type !== "User" && type !== "Organization")) continue;
     values.set(login, {
+      id: Number(id),
       login,
       type,
       installationId: installation.id,
@@ -109,7 +112,7 @@ export async function accounts(client: Octokit, options: { repositories?: boolea
   }
 
   const personal = values.get(String(viewer.data.login));
-  if (personal) values.set(personal.login, { ...personal, type: "User" });
+  if (personal) values.set(personal.login, { ...personal, id: Number(viewer.data.id), type: "User" });
   return [...values.values()].sort((left, right) => left.login.localeCompare(right.login));
 }
 
@@ -142,25 +145,27 @@ export async function tokenAccounts(client: Octokit, configured = "", options: {
     tokenIdentity(client),
     tokenOrganizations(client),
   ]);
-  const values = new Map<string, Account>([
-    ...configured
-      .split(",")
-      .map((login) => login.trim())
-      .filter(Boolean)
-      .map((login) => [login, {
-        login,
-        type: "Organization" as const,
-        installationId: null,
-        repository: null,
-      }] as const),
-    ...organizations.map((organization) => [String(organization.login), {
+  const values = new Map<string, Account>(organizations.map((organization) => [String(organization.login), {
+      id: Number(organization.id),
       login: String(organization.login),
       type: "Organization" as const,
       installationId: null,
       repository: null,
-    }] as const),
-  ]);
+    }] as const));
+  const configuredLogins = configured.split(",").map((login) => login.trim()).filter(Boolean);
+  for (const login of configuredLogins) {
+    if (values.has(login)) continue;
+    const response = await client.request("GET /orgs/{org}", { org: login });
+    values.set(login, {
+      id: Number(response.data.id),
+      login: String(response.data.login),
+      type: "Organization",
+      installationId: null,
+      repository: null,
+    });
+  }
   values.set(viewer.login, {
+    id: viewer.id,
     login: viewer.login,
     type: "User",
     installationId: null,
@@ -172,6 +177,19 @@ export async function tokenAccounts(client: Octokit, configured = "", options: {
     ...account,
     repository: await installationAgentsRepository(client, account.login),
   })));
+}
+
+/** Billing can create infrastructure and financial liability. Installation
+ * visibility is insufficient; recheck current organization administration. */
+export async function canAdministerBilling(client: Octokit, account: Account, githubUserId: number) {
+  if (account.type === "User") return account.id === githubUserId;
+  try {
+    const response = await client.request("GET /user/memberships/orgs/{org}", { org: account.login });
+    return response.data.state === "active" && response.data.role === "admin";
+  } catch (error) {
+    if ([403, 404].includes(Number((error as { status?: number }).status))) return false;
+    throw error;
+  }
 }
 
 export async function repository(client: Octokit, owner: string): Promise<Repository> {

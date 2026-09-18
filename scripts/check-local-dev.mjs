@@ -46,6 +46,7 @@ async function main() {
   if (values.LOCAL_GITHUB_AUTH !== "true") throw new Error("LOCAL_GITHUB_AUTH must be true in .dev.vars");
   const token = required(values, "LOCAL_GITHUB_TOKEN");
   const signingKey = required(values, "AGENTS_PLAN_SIGNING_KEY");
+  required(values, "BILLING_SERVICE_TOKEN");
   if (signingKey.startsWith("replace-with-")) throw new Error("Replace the example AGENTS_PLAN_SIGNING_KEY in .dev.vars");
 
   const response = await fetch("https://api.github.com/user", {

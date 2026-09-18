@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { agentBranch, mentionName, runnerInputs, startsRun, subjectFromWebhook, triggerFromWebhook } from "./factory";
 
-const bot = { botLogin: "ai-outfitter[bot]" };
+const bot = { botLogin: "ai-outfitter[bot]", autoStartActorIds: new Set([8276365]) };
 
 describe("triggerFromWebhook", () => {
-  it("reads a label, an assignment, and a comment", () => {
+  it("reads an opening, a label, an assignment, and a comment", () => {
+    expect(triggerFromWebhook("issues", { action: "opened", issue: { user: { id: 8276365, type: "User" } } })).toEqual({
+      kind: "opened",
+      authorId: 8276365,
+      authorType: "User",
+    });
     expect(triggerFromWebhook("issues", { action: "labeled", label: { name: "ai-outfitter" } })).toEqual({ kind: "labeled", label: "ai-outfitter" });
     expect(triggerFromWebhook("issues", { action: "assigned", assignee: { login: "luce" } })).toEqual({ kind: "assigned", assignee: "luce" });
     expect(
@@ -13,13 +18,20 @@ describe("triggerFromWebhook", () => {
   });
 
   it("ignores other events and actions", () => {
-    expect(triggerFromWebhook("issues", { action: "opened" })).toBeUndefined();
+    expect(triggerFromWebhook("issues", { action: "closed" })).toBeUndefined();
     expect(triggerFromWebhook("pull_request", { action: "labeled", label: { name: "ai-outfitter" } })).toBeUndefined();
     expect(triggerFromWebhook("issue_comment", { action: "edited", comment: { body: "@ai-outfitter" } })).toBeUndefined();
   });
 });
 
 describe("startsRun", () => {
+  it("accepts a human-opened issue independently of the legacy global actor allowlist", () => {
+    expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "User" }, bot)).toBe(true);
+    expect(startsRun({ kind: "opened", authorId: 7, authorType: "User" }, bot)).toBe(true);
+    expect(startsRun({ kind: "opened", authorId: 7, authorType: "User" }, { ...bot, autoStartActorIds: undefined })).toBe(true);
+    expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "Bot" }, bot)).toBe(false);
+  });
+
   it("accepts the trigger label only", () => {
     expect(startsRun({ kind: "labeled", label: "ai-outfitter" }, bot)).toBe(true);
     expect(startsRun({ kind: "labeled", label: "bug" }, bot)).toBe(false);
@@ -43,15 +55,18 @@ describe("startsRun", () => {
 });
 
 describe("subjectFromWebhook", () => {
-  const payload = { installation: { id: 7 }, repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } }, issue: { number: 3 } };
+  const payload = { installation: { id: 7 }, repository: { full_name: "acme/app", name: "app", owner: { id: 101, login: "acme" } }, issue: { number: 3 } };
 
-  it("names the issue, repository, and installation", () => {
-    expect(subjectFromWebhook(payload)).toEqual({ repository: { full_name: "acme/app", owner: { login: "acme" }, name: "app" }, issue: { number: 3 }, installationId: 7 });
+  it("names the issue, immutable owner account, repository, and installation", () => {
+    expect(subjectFromWebhook(payload)).toEqual({ repository: { full_name: "acme/app", owner: { id: 101, login: "acme" }, name: "app" }, issue: { number: 3 }, installationId: 7 });
   });
 
-  it("rejects pull requests and deliveries without an installation", () => {
+  it("rejects pull requests and deliveries without immutable positive IDs", () => {
     expect(subjectFromWebhook({ ...payload, issue: { number: 3, pull_request: {} } })).toBeNull();
     expect(subjectFromWebhook({ ...payload, installation: null })).toBeNull();
+    expect(subjectFromWebhook({ ...payload, installation: { id: 0 } })).toBeNull();
+    expect(subjectFromWebhook({ ...payload, repository: { ...payload.repository, owner: { login: "acme" } } })).toBeNull();
+    expect(subjectFromWebhook({ ...payload, repository: { ...payload.repository, owner: { id: -1, login: "acme" } } })).toBeNull();
   });
 });
 

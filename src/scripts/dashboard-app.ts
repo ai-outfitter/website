@@ -14,7 +14,7 @@ const ONBOARDING_CHOICES: Array<{ id: string; note: string; recommended?: boolea
   { id: "founder", note: "Plan and scope work into typed issues before any implementation." },
 ];
 const PLAYGROUND_REPOSITORY = "outfitter-playground";
-type Account = { login: string; type: "User" | "Organization"; installationId: number | null; repository: Repository | null };
+type Account = { id: number; login: string; type: "User" | "Organization"; installationId: number | null; repository: Repository | null };
 type Workflow = {
   id: string;
   title?: string;

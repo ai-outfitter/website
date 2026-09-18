@@ -42,6 +42,22 @@ export function installationOctokit(env: Env, installationId: number) {
   });
 }
 
+/** A client whose token can only read the tenant catalog and dispatch its
+ * Actions workflows. Token creation fails when the installation has not
+ * granted both capabilities, which lets checkout fail before taking payment. */
+export function provisioningOctokit(env: Env, installationId: number) {
+  return new Octokit({
+    authStrategy: createAppAuth,
+    auth: {
+      appId: env.GITHUB_APP_ID,
+      privateKey: env.GITHUB_APP_PRIVATE_KEY,
+      installationId,
+      repositoryNames: [".agents"],
+      permissions: { actions: "write", contents: "read", metadata: "read" },
+    },
+  });
+}
+
 /** A one-hour token that can act on exactly one repository. The runner
  * receives this and nothing else. */
 export async function scopedInstallationToken(env: Env, installationId: number, repositoryName: string) {

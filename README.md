@@ -125,18 +125,22 @@ adapter.
 
 The pricing page starts Stripe-hosted Checkout Sessions through the Worker.
 Add a live Stripe secret or restricted key as `STRIPE_SECRET_KEY` in the
-ignored AI Outfitter owner `.env`, then run the guarded setup command:
+ignored AI Outfitter owner `.env`. Set `AUDITABILITY_MONTHLY_CENTS` to the
+product-owner-approved recurring price per covered resident, then run the
+guarded setup command:
 
 ```sh
 devenv shell -- npm run stripe:configure -- --live
 ```
 
-The command creates or reuses two Stripe Prices with stable lookup keys,
-verifies that they are live recurring monthly USD prices—Individual at $20
-and Team at $200—and installs the key and Price IDs as production Worker
-secrets without printing the key or Price IDs. It is safe to retry after a
+The command creates or reuses four Stripe Prices with stable lookup keys:
+resident at `$20/month`, provider-cost and markup meters, and the chosen
+enterprise-auditability monthly add-on. It installs the key and Price IDs as
+production Worker secrets without printing them. It is safe to retry after a
 partial failure. The explicit `--live` flag is required because the command
-changes both the Stripe account and the production Worker.
+changes both the Stripe account and the production Worker. A different approved
+auditability amount gets a different lookup key; the setup command never mutates
+or silently reuses a Price with different terms.
 
 Before running the command, confirm that the Stripe account is enabled for live
 charges. If a stable lookup key belongs to an archived Price, restore that Price
@@ -147,8 +151,9 @@ To roll back the purchase surface, revert its merge commit and run the normal
 main-branch deployment. The Worker secrets may remain installed because the
 reverted Worker has no checkout route that reads them.
 
-Use sandbox Price IDs and an `sk_test_` key in the ignored `.dev.vars` file for
-local checkout testing. Production MUST use the matching live Price IDs and a
-live or restricted secret key. The Worker accepts only the two configured
-server-side Price IDs; browser requests select the `individual` or `team` tier
-and cannot submit an arbitrary Stripe price.
+Use `npm run stripe:configure:test` with an `sk_test_` key and approved
+`AUDITABILITY_MONTHLY_CENTS` in the ignored `.dev.vars` file for local checkout
+testing. Production MUST use the matching live Price IDs and a live or
+restricted secret key. The Worker accepts only the configured server-side Price
+IDs; the browser can opt into auditability but cannot submit an arbitrary Stripe
+price or amount.

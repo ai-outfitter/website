@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { access, chmod, lstat, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, lstat, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,6 +47,14 @@ if (await exists(localEnvironment)) {
     throw new Error(".dev.vars must be a regular file, not a symlink");
   }
   if ((status.mode & 0o777) !== 0o600) await chmod(localEnvironment, 0o600);
+  const source = await readFile(localEnvironment, "utf8");
+  const values = parseEnvironment(source);
+  if (!values.BILLING_SERVICE_TOKEN) {
+    const temporary = `${localEnvironment}.tmp-${process.pid}`;
+    await writeFile(temporary, `${source.replace(/\n*$/, "\n")}BILLING_SERVICE_TOKEN=${randomBytes(32).toString("hex")}\n`, { mode: 0o600, flag: "wx" });
+    await rename(temporary, localEnvironment);
+    console.log("Added a local billing service token to .dev.vars.");
+  }
   console.log("Keeping existing .dev.vars.");
   process.exit(0);
 }
@@ -63,6 +71,7 @@ await writeFile(localEnvironment, [
   "LOCAL_GITHUB_AUTH=true",
   "LOCAL_GITHUB_ACCOUNTS=ai-outfitter",
   `AGENTS_PLAN_SIGNING_KEY=${randomBytes(32).toString("hex")}`,
+  `BILLING_SERVICE_TOKEN=${randomBytes(32).toString("hex")}`,
   "",
 ].join("\n"), { mode: 0o600, flag: "wx" });
 

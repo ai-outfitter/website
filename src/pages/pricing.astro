@@ -4,38 +4,51 @@ import SiteShell from '../layouts/SiteShell.astro';
 
 <SiteShell
   title="Pricing"
-  description="Monthly AI Outfitter subscriptions for individuals and teams."
+  description="A persistent AI Outfitter resident with metered inference."
 >
   <main class="site-frame pricing-page">
     <header class="pricing-hero">
-      <p class="eyebrow">Straightforward monthly pricing</p>
-      <h1>Choose your scale.</h1>
-      <p>Use the same open, inspectable AI Outfitter tooling on your own or across a team.</p>
+      <p class="eyebrow">Resident agents</p>
+      <h1>Put an agent on the work.</h1>
+      <p>Start with issue triage, keep the resident available between tasks, and pay for the inference it actually uses.</p>
     </header>
 
     <section class="pricing-grid" aria-label="Monthly subscriptions">
       <article class="pricing-card">
-        <p class="pricing-card__label">Individual</p>
+        <p class="pricing-card__label">Resident</p>
         <p class="pricing-card__price"><span>$20</span> / month</p>
-        <p>For one person configuring and running coding agents with AI Outfitter.</p>
+        <p>One persistent resident for one GitHub organization. It starts with issue triage and uses reviewable, organization-owned configuration.</p>
+        <ul>
+          <li>Issue triage included</li>
+          <li>Inference billed at published provider cost plus 20% markup</li>
+          <li>$100 monthly inference budget; new work stops after recorded usage reaches it</li>
+          <li>Promotion codes can waive markup without discounting inference cost</li>
+          <li>Optional Pensieve auditability captures the complete Pi-visible session trace in immutable storage</li>
+        </ul>
         <form action="/api/billing/checkout" method="post">
-          <input type="hidden" name="tier" value="individual" />
-          <button class="pricing-card__action" type="submit">Subscribe as an individual</button>
+          <input type="hidden" name="tier" value="resident" />
+          <label class="auditability-field">
+            <input name="auditability" type="checkbox" value="enterprise" checked />
+            <span>Add enterprise auditability (price shown in Stripe Checkout)</span>
+          </label>
+          <label class="promotion-field">
+            <span>Promotion code</span>
+            <input name="promotion_code" type="text" autocomplete="off" maxlength="32" placeholder="Optional" />
+          </label>
+          <button class="pricing-card__action" type="submit">Get a resident</button>
         </form>
       </article>
 
       <article class="pricing-card pricing-card--team">
-        <p class="pricing-card__label">Team</p>
+        <p class="pricing-card__label">Resident fleet</p>
         <p class="pricing-card__price"><span>$200</span> / month</p>
-        <p>For a team sharing reviewable configuration and repeatable agent workflows.</p>
-        <form action="/api/billing/checkout" method="post">
-          <input type="hidden" name="tier" value="team" />
-          <button class="pricing-card__action" type="submit">Subscribe as a team</button>
-        </form>
+        <p>Multiple collaborating residents with explicit concurrency, support, and spending controls.</p>
+        <p class="pricing-card__availability">Coming after the single-resident contract is proven.</p>
+        <span class="pricing-card__action pricing-card__action--disabled" aria-disabled="true">Fleet checkout is not open yet</span>
       </article>
     </section>
 
-    <p class="pricing-note">Checkout and recurring billing are securely hosted by Stripe.</p>
+    <p class="pricing-note">Stripe hosts checkout and recurring billing. Provider cost and the 20% markup remain visible as separate invoice items. NO-MARKUP waives only the markup. In-flight usage can settle above the monthly budget.</p>
   </main>
 </SiteShell>
 
@@ -114,13 +127,72 @@ import SiteShell from '../layouts/SiteShell.astro';
     line-height: 1.6;
   }
 
+  .pricing-card ul {
+    display: grid;
+    gap: 0.65rem;
+    padding-left: 1.2rem;
+    color: var(--site-muted);
+    line-height: 1.5;
+  }
+
+  .pricing-card__availability {
+    margin-top: auto;
+    padding-top: 2rem;
+    font-family: var(--site-font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+
   .pricing-card form {
     margin-top: auto;
     padding-top: 2.5rem;
   }
 
+  .promotion-field {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+    color: var(--site-dim);
+    font-family: var(--site-font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .auditability-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+    color: var(--site-muted);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  .auditability-field input {
+    margin-top: 0.15rem;
+  }
+
+  .promotion-field input {
+    border: 1px solid var(--site-line);
+    border-radius: 0;
+    padding: 0.85rem 0.9rem;
+    background: transparent;
+    color: var(--site-text);
+    font: inherit;
+    letter-spacing: 0.04em;
+  }
+
+  .promotion-field input:focus-visible {
+    border-color: var(--site-signal);
+    outline: 1px solid var(--site-signal);
+  }
+
   .pricing-card__action {
+    display: block;
     width: 100%;
+    box-sizing: border-box;
     border: 1px solid var(--site-signal);
     border-radius: 0;
     padding: 1rem 1.2rem;
@@ -132,12 +204,22 @@ import SiteShell from '../layouts/SiteShell.astro';
     font-weight: 800;
     letter-spacing: 0.09em;
     text-transform: uppercase;
+    text-align: center;
+    text-decoration: none;
   }
 
   .pricing-card__action:hover,
   .pricing-card__action:focus-visible {
     border-color: var(--site-signal-high);
     background: var(--site-signal-high);
+  }
+
+  .pricing-card__action--disabled,
+  .pricing-card__action--disabled:hover {
+    border-color: var(--site-line);
+    background: transparent;
+    color: var(--site-dim);
+    cursor: default;
   }
 
   .pricing-note {

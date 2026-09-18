@@ -22,6 +22,7 @@
     "test:dashboard": "node scripts/test-dashboard.mjs",
     "secrets:generate": "node scripts/generate-worker-secrets.mjs",
     "stripe:configure": "node scripts/configure-stripe.mjs",
+    "stripe:configure:test": "node scripts/configure-stripe-test.mjs",
     "test:links": "node scripts/check-links.mjs",
     "test:publish": "node scripts/test-publish.mjs",
     "test:search": "node scripts/test-search.mjs",

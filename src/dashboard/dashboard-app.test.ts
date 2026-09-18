@@ -34,7 +34,7 @@ const fixture = `
     </section>
   </section><p id="dashboard-status"></p>`;
 
-const account = { login: "acme", type: "Organization", installationId: 7, repository: { fullName: "acme/.agents", defaultBranch: "main", private: true, canPush: true } };
+const account = { id: 8, login: "acme", type: "Organization", installationId: 7, repository: { fullName: "acme/.agents", defaultBranch: "main", private: true, canPush: true } };
 const configuration = {
   login: "acme", repository: account.repository, repositoryUrl: "https://github.com/acme/.agents",
   settings: { exists: true, valid: true, raw: "# keep\nsources:\n  - github: ai-outfitter/community-profiles\n    ref: v1\nworkflows:\n  - review\n", defaults: {}, workflows: ["review"], sources: [{ id: "sources:0", section: "sources", kind: "github", location: "ai-outfitter/community-profiles", github: "ai-outfitter/community-profiles", ref: "v1", dependencies: ["review"], repositoryUrl: "https://github.com/ai-outfitter/community-profiles" }] },

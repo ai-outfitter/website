@@ -8,14 +8,61 @@ import SiteShell from '../../layouts/SiteShell.astro';
 >
   <main class="site-frame checkout-result">
     <p class="eyebrow">Stripe Checkout</p>
-    <h1>Thanks for checking out.</h1>
-    <p>If you completed checkout, Stripe securely manages your subscription details.</p>
+    <h1>We’re confirming your resident.</h1>
+    <p id="checkout-status" role="status">Stripe is confirming the subscription before AI Outfitter grants access.</p>
     <nav aria-label="Checkout return actions">
       <a class="primary" href="/dashboard/">Set up with GitHub</a>
       <a href="/">Return home</a>
     </nav>
   </main>
 </SiteShell>
+
+<script>
+  const output = document.querySelector<HTMLElement>('#checkout-status');
+  const sessionId = new URLSearchParams(window.location.search).get('session_id');
+  const messages: Record<string, string> = {
+    active: 'Payment is confirmed. Your issue-triage resident is being provisioned.',
+    trialing: 'Your subscription is active and your issue-triage resident is being provisioned.',
+    past_due: 'Stripe needs payment attention before the resident can run.',
+    unpaid: 'The subscription is unpaid, so resident access is suspended.',
+    canceled: 'The subscription is canceled and resident access is suspended.',
+  };
+
+  async function refresh(attempt = 0) {
+    if (!output || !sessionId?.startsWith('cs_')) {
+      if (output) output.textContent = 'The Checkout Session is missing. Open the dashboard to review billing status.';
+      return;
+    }
+    const response = await fetch(`/api/billing/status?session_id=${encodeURIComponent(sessionId)}`, {
+      headers: { accept: 'application/json' },
+    });
+    if (response.status === 401) {
+      output.textContent = 'Sign in with GitHub to view this Checkout Session.';
+      return;
+    }
+    if (!response.ok) {
+      if (attempt < 8) window.setTimeout(() => void refresh(attempt + 1), 1500);
+      else output.textContent = 'Stripe is still confirming the subscription. Check the dashboard in a moment.';
+      return;
+    }
+    const status = await response.json() as {
+      subscription: string | null;
+      resident: { observedState: string } | null;
+    };
+    if (status.resident?.observedState === 'ready') {
+      output.textContent = 'Your issue-triage resident is ready.';
+      return;
+    }
+    output.textContent = status.subscription && messages[status.subscription]
+      ? messages[status.subscription]
+      : 'Payment is still being confirmed. No resident access is granted until Stripe reports an active subscription.';
+    if ((!status.subscription || status.subscription === 'active' || status.subscription === 'trialing') && attempt < 20) {
+      window.setTimeout(() => void refresh(attempt + 1), 1500);
+    }
+  }
+
+  void refresh();
+</script>
 
 <style>
   .checkout-result {
