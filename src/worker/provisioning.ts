@@ -357,7 +357,11 @@ async function validatedAuditabilityEvidence(
     || allDigests.some((digest) => !statementDigests.has(digest))) {
     throw new TypeError("Auditability storage statements do not cover the accepted trace");
   }
-  return value;
+  // The record bytes are required only to verify the canary. Raw prompts,
+  // thinking, tool payloads, and model exchanges remain in Pensieve; D1 keeps
+  // their digests, signed lock statements, and the derived health summary.
+  const { recordBodies: _verifiedAndDiscarded, ...traceProbeSummary } = probe;
+  return { ...value, traceProbe: traceProbeSummary };
 }
 
 function workerId(identity: GitHubOidcIdentity) {

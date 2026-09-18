@@ -238,8 +238,12 @@ describe("provisioning API", () => {
       desiredState: "active",
       personaLogin: "luce-unsup",
       pensieveProfile: "resident-complete-trace-v1",
-      pensieveEvidenceJson: JSON.stringify(value.auditability.evidence),
     }));
+    const stored = recordProvisioningResult.mock.calls[0]?.[0];
+    const storedAudit = JSON.parse(String(stored?.pensieveEvidenceJson));
+    expect(storedAudit.traceProbe.recordBodies).toBeUndefined();
+    expect(storedAudit.traceProbe.records).toEqual(value.auditability.evidence.traceProbe.records);
+    expect(storedAudit.statements).toEqual(value.auditability.evidence.statements);
   });
 
   it("rejects a correctly self-signed statement from a sink the Worker does not trust", async () => {
