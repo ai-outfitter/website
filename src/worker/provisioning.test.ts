@@ -147,7 +147,7 @@ const auditEvidence = async (
       attested: true, conforming: true, mechanism: "s3",
     },
     traceProbe: {
-      run: "run-1", identity: oidcSubject, environment: "cluster", harness: "pi",
+      run: "run-1", probeNonce: "operation_1", identity: oidcSubject, environment: "cluster", harness: "pi",
       installScope: "managed", policyDigest,
       startedAt: new Date(NOW - 70_000).toISOString(), completedAt: new Date(NOW).toISOString(),
       records: {
@@ -208,7 +208,7 @@ describe("provisioning API", () => {
       tenant: { githubAccountId: "123", githubAccountLogin: "Unsupervisedcom" },
       resident: {
         agentResourceName: "unsupervisedcom-luce-123", startingWorkflow: "issue-triage",
-        auditability: { required: true, profile: "resident-complete-trace-v1", desiredState: "provisioning" },
+        auditability: { required: true, profile: "resident-complete-trace-v1", desiredState: "provisioning", probeNonce: "operation_1" },
       },
     });
   });
@@ -276,6 +276,9 @@ describe("provisioning API", () => {
     ["missing exposed thinking", async () => auditEvidence({}, { exposedThinking: false })],
     ["a signed trace from a different collector revision", async () => auditEvidence({}, {
       recordCollectorRevision: "c".repeat(40), reportedCollectorRevision: "a".repeat(40),
+    })],
+    ["a trace from another provisioning operation", async () => auditEvidence({
+      traceProbe: { ...(await auditEvidence()).traceProbe, probeNonce: "operation_other" },
     })],
     ["a record body changed after storage", async () => {
       const evidence = await auditEvidence();

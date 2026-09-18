@@ -174,8 +174,8 @@ function successfulEvidence(
 }
 
 async function validatedAuditabilityEvidence(
-  value: Record<string, unknown>, agentName: string, now: number,
-  trustedSink: { sinkId: string; publicKey: string },
+	value: Record<string, unknown>, agentName: string, now: number,
+	trustedSink: { sinkId: string; publicKey: string }, expectedProbeNonce: string,
 ) {
   const sink = value.sink;
   const probe = value.traceProbe;
@@ -209,6 +209,9 @@ async function validatedAuditabilityEvidence(
     throw new TypeError("Auditability trace does not come from the managed resident Pi workload");
   }
   const policyDigest = requiredString(probe.policyDigest, "auditability.evidence.traceProbe.policyDigest", 71);
+  if (requiredString(probe.probeNonce, "auditability.evidence.traceProbe.probeNonce", 128) !== expectedProbeNonce) {
+    throw new TypeError("Auditability trace probe does not match the claimed provisioning operation");
+  }
   if (!/^sha256:[0-9a-f]{64}$/.test(policyDigest)) {
     throw new TypeError("Auditability trace policy digest is invalid");
   }
@@ -421,6 +424,7 @@ export async function handleProvisioningClaim(request: Request, env: Env, option
         required: status.subscription?.auditabilityEnabled === true,
         profile: status.resident.pensieveProfile,
         desiredState: status.resident.pensieveDesiredState,
+        probeNonce: operation.id,
       },
     },
   });
@@ -452,10 +456,12 @@ export async function handleProvisioningCallback(request: Request, env: Env, opt
     if (pensieveProfile !== undefined && pensieveProfile !== "resident-complete-trace-v1") {
       throw new TypeError("Auditability profile is unsupported");
     }
+    const operationID = requiredString(value.operation_id, "operation_id", 128);
     const validatedPensieveEvidence = record(auditability) && record(auditability.evidence) && evidence
       ? await validatedAuditabilityEvidence(
         auditability.evidence, evidence.agent.name, now,
         options.auditTrust ?? configuredAuditTrust(env),
+        operationID,
       ) : undefined;
     const pensieveEvidenceJson = validatedPensieveEvidence
       ? JSON.stringify(validatedPensieveEvidence) : undefined;
@@ -465,7 +471,7 @@ export async function handleProvisioningCallback(request: Request, env: Env, opt
     }
     const store = options.store ?? new BillingStore(env.BILLING_DB);
     const recorded = await store.recordProvisioningResult({
-      operationId: requiredString(value.operation_id, "operation_id"),
+      operationId: operationID,
       workerId: workerId(authenticated),
       claimToken: requiredString(value.claim_token, "claim_token"),
       succeeded: value.succeeded,
