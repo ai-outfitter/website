@@ -7,6 +7,9 @@ const MAX_BODY_BYTES = 128_000;
 // reviewed deployment workflow's 30-minute timeout so a successful rollout is
 // still able to submit its terminal evidence.
 const CLAIM_MS = 45 * 60 * 1_000;
+const AUDIT_RETENTION_MINIMUM_MS = 29 * 24 * 60 * 60 * 1_000;
+const HEX_40 = /^[0-9a-f]{40}$/;
+const HEX_64 = /^[0-9a-f]{64}$/;
 
 type ProvisioningStore = Pick<BillingStore,
   "claimPendingProvisioningOperation" | "getAccountStatus" | "recordProvisioningResult"
@@ -45,6 +48,55 @@ function requiredString(value: unknown, name: string, maximum = 500) {
 function requiredNonNegativeInteger(value: unknown, name: string) {
   if (!Number.isSafeInteger(value) || Number(value) < 0) throw new TypeError(`${name} is invalid`);
   return Number(value);
+}
+
+function requiredDigest(value: unknown, name: string) {
+  const digest = requiredString(value, name, 64);
+  if (!HEX_64.test(digest)) throw new TypeError(`${name} is invalid`);
+  return digest;
+}
+
+function requiredDigestArray(value: unknown, name: string, minimum: number) {
+  if (!Array.isArray(value) || value.length < minimum || value.length > 1_000) {
+    throw new TypeError(`${name} is invalid`);
+  }
+  const digests = value.map((item, index) => requiredDigest(item, `${name}[${index}]`));
+  if (new Set(digests).size !== digests.length) throw new TypeError(`${name} contains duplicate records`);
+  return digests;
+}
+
+function requiredTime(value: unknown, name: string) {
+  const text = requiredString(value, name, 100);
+  const time = Date.parse(text);
+  if (!Number.isFinite(time)) throw new TypeError(`${name} is invalid`);
+  return { text, time };
+}
+
+function canonicalize(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError("Cannot canonicalize a non-finite number");
+    return JSON.stringify(value);
+  }
+  if (typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item ?? null)).join(",")}]`;
+  if (record(value)) {
+    return `{${Object.keys(value).sort().flatMap((key) => (
+      value[key] === undefined ? [] : [`${JSON.stringify(key)}:${canonicalize(value[key])}`]
+    )).join(",")}}`;
+  }
+  throw new TypeError(`Cannot canonicalize ${typeof value}`);
+}
+
+function base64Bytes(value: unknown, name: string, expectedLength: number) {
+  const encoded = requiredString(value, name, 2_000);
+  try {
+    const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+    if (bytes.byteLength !== expectedLength) throw new Error("length");
+    return { encoded, bytes };
+  } catch {
+    throw new TypeError(`${name} is invalid`);
+  }
 }
 
 type SuccessfulProvisioningEvidence = {
@@ -108,6 +160,118 @@ function successfulEvidence(
   };
 }
 
+async function validatedAuditabilityEvidence(value: Record<string, unknown>, agentName: string, now: number) {
+  const sink = value.sink;
+  const probe = value.traceProbe;
+  if (!record(sink) || !record(probe) || !record(probe.records)
+    || !record(probe.assertions) || !record(probe.capture) || !Array.isArray(value.statements)) {
+    throw new TypeError("Auditability evidence is incomplete");
+  }
+  const collectorRevision = requiredString(value.collectorRevision, "auditability.evidence.collectorRevision", 40);
+  if (!HEX_40.test(collectorRevision)) throw new TypeError("auditability.evidence.collectorRevision is invalid");
+  const oidcSubject = requiredString(value.oidcSubject, "auditability.evidence.oidcSubject", 253);
+  const expectedSubject = `system:serviceaccount:agent-${agentName}:agent-runtime`;
+  if (oidcSubject !== expectedSubject) throw new TypeError("Auditability evidence uses the wrong workload identity");
+
+  const sinkId = requiredString(sink.id, "auditability.evidence.sink.id", 253);
+  const sinkKeyId = requiredString(sink.keyId, "auditability.evidence.sink.keyId", 128);
+  const publicKey = base64Bytes(sink.publicKey, "auditability.evidence.sink.publicKey", 32);
+  if (sinkKeyId !== publicKey.encoded.slice(0, 16)) {
+    throw new TypeError("Auditability sink key ID does not match its public key");
+  }
+  if (sink.attested !== true || sink.conforming !== true || sink.mechanism !== "s3") {
+    throw new TypeError("Auditability sink is not attested, conforming S3 storage");
+  }
+
+  requiredString(probe.run, "auditability.evidence.traceProbe.run", 253);
+  if (probe.identity !== oidcSubject || probe.environment !== "cluster" || probe.harness !== "pi"
+    || probe.installScope !== "managed") {
+    throw new TypeError("Auditability trace does not come from the managed resident Pi workload");
+  }
+  const policyDigest = requiredString(probe.policyDigest, "auditability.evidence.traceProbe.policyDigest", 71);
+  if (!/^sha256:[0-9a-f]{64}$/.test(policyDigest)) {
+    throw new TypeError("Auditability trace policy digest is invalid");
+  }
+  const started = requiredTime(probe.startedAt, "auditability.evidence.traceProbe.startedAt");
+  const completed = requiredTime(probe.completedAt, "auditability.evidence.traceProbe.completedAt");
+  if (started.time > completed.time || completed.time > now + 5 * 60_000) {
+    throw new TypeError("Auditability trace time window is invalid");
+  }
+
+  const records = probe.records;
+  const capture = probe.capture;
+  const assertions = probe.assertions;
+  const session = requiredDigestArray(records.session, "auditability.evidence.traceProbe.records.session", 2);
+  const transcript = requiredDigestArray(records.transcript, "auditability.evidence.traceProbe.records.transcript", 2);
+  const modelExchange = requiredDigestArray(records.modelExchange, "auditability.evidence.traceProbe.records.modelExchange", 2);
+  const toolCall = requiredDigestArray(records.toolCall, "auditability.evidence.traceProbe.records.toolCall", 2);
+  const allDigests = [...session, ...transcript, ...modelExchange, ...toolCall];
+  if (new Set(allDigests).size !== allDigests.length) {
+    throw new TypeError("Auditability trace record classes overlap");
+  }
+  const terminalDigest = requiredDigest(capture.terminalSessionDigest,
+    "auditability.evidence.traceProbe.capture.terminalSessionDigest");
+  const captured = capture.captured;
+  const gaps = capture.gaps;
+  if (!session.includes(terminalDigest) || !Array.isArray(captured)
+    || !["session", "transcript", "model-exchange", "tool-call"].every(
+      (kind) => captured.includes(kind),
+    ) || !Array.isArray(gaps) || gaps.length !== 0) {
+    throw new TypeError("Auditability terminal capture is incomplete");
+  }
+  for (const assertion of [
+    "prompt", "systemPrompt", "assistantMessage", "exposedThinking",
+    "modelRequest", "modelResponseMetadata", "toolCallIntent", "toolCallResult",
+  ]) {
+    if (assertions[assertion] !== true) {
+      throw new TypeError(`Auditability trace assertion ${assertion} is missing`);
+    }
+  }
+
+  if (value.statements.length !== allDigests.length) {
+    throw new TypeError("Auditability evidence does not cover every trace record");
+  }
+  const verificationKey = await crypto.subtle.importKey(
+    "raw", publicKey.bytes, { name: "Ed25519" }, false, ["verify"],
+  );
+  const statementDigests = new Set<string>();
+  for (const [index, statementValue] of value.statements.entries()) {
+    if (!record(statementValue)) throw new TypeError(`auditability.evidence.statements[${index}] is invalid`);
+    const digest = requiredDigest(statementValue.record_digest,
+      `auditability.evidence.statements[${index}].record_digest`);
+    if (statementValue.content_digest !== digest || statementValue.sink !== sinkId
+      || statementValue.key_id !== sinkKeyId || statementValue.mechanism !== "s3"
+      || statementValue.lock_verified !== true || statementValue.conforming !== true) {
+      throw new TypeError("Auditability storage statement does not match the accepted trace");
+    }
+    requiredString(statementValue.locator, `auditability.evidence.statements[${index}].locator`, 2_000);
+    requiredString(statementValue.object_version,
+      `auditability.evidence.statements[${index}].object_version`, 1_000);
+    const retention = requiredTime(statementValue.retain_until,
+      `auditability.evidence.statements[${index}].retain_until`);
+    if (retention.time < now + AUDIT_RETENTION_MINIMUM_MS) {
+      throw new TypeError("Auditability storage retention is too short");
+    }
+    const issued = requiredTime(statementValue.issued_at,
+      `auditability.evidence.statements[${index}].issued_at`);
+    if (issued.time > now + 5 * 60_000) throw new TypeError("Auditability storage statement is future-dated");
+    const signature = base64Bytes(statementValue.signature,
+      `auditability.evidence.statements[${index}].signature`, 64);
+    const { signature: _signature, ...unsigned } = statementValue;
+    const validSignature = await crypto.subtle.verify(
+      { name: "Ed25519" }, verificationKey, signature.bytes,
+      new TextEncoder().encode(canonicalize(unsigned)),
+    );
+    if (!validSignature) throw new TypeError("Auditability storage statement signature is invalid");
+    statementDigests.add(digest);
+  }
+  if (statementDigests.size !== allDigests.length
+    || allDigests.some((digest) => !statementDigests.has(digest))) {
+    throw new TypeError("Auditability storage statements do not cover the accepted trace");
+  }
+  return value;
+}
+
 function workerId(identity: GitHubOidcIdentity) {
   return `github-actions:${identity.repository}:${identity.runId}`;
 }
@@ -167,6 +331,7 @@ export async function handleProvisioningCallback(request: Request, env: Env, opt
   const authenticated = await identity(request, env, options);
   if (!authenticated) return json({ error: "Unauthorized" }, 401);
   try {
+    const now = options.now ?? Date.now();
     const value = await requestBody(request);
     if (typeof value.succeeded !== "boolean" || !record(value.evidence)) throw new TypeError("Callback result is invalid");
     const evidence = value.succeeded ? successfulEvidence(value.evidence, authenticated) : null;
@@ -184,13 +349,17 @@ export async function handleProvisioningCallback(request: Request, env: Env, opt
     if (auditability !== undefined && !record(auditability)) throw new TypeError("Auditability evidence is invalid");
     const pensieveProfile = record(auditability)
       ? requiredString(auditability.profile, "auditability.profile") : undefined;
-    const pensieveEvidenceJson = record(auditability) && record(auditability.evidence)
-      ? JSON.stringify(auditability.evidence) : undefined;
+    if (pensieveProfile !== undefined && pensieveProfile !== "resident-complete-trace-v1") {
+      throw new TypeError("Auditability profile is unsupported");
+    }
+    const validatedPensieveEvidence = record(auditability) && record(auditability.evidence) && evidence
+      ? await validatedAuditabilityEvidence(auditability.evidence, evidence.agent.name, now) : undefined;
+    const pensieveEvidenceJson = validatedPensieveEvidence
+      ? JSON.stringify(validatedPensieveEvidence) : undefined;
     if (record(auditability) && !pensieveEvidenceJson) throw new TypeError("Auditability evidence is invalid");
     if (pensieveEvidenceJson && pensieveEvidenceJson.length > 100_000) {
       throw new TypeError("Auditability evidence is too large");
     }
-    const now = options.now ?? Date.now();
     const store = options.store ?? new BillingStore(env.BILLING_DB);
     const recorded = await store.recordProvisioningResult({
       operationId: requiredString(value.operation_id, "operation_id"),

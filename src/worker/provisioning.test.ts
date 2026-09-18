@@ -36,6 +36,67 @@ const successEvidence = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const auditKeys = crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+const canonicalize = (value: unknown): string => {
+  if (value === null) return "null";
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item ?? null)).join(",")}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().flatMap((key) => (
+    object[key] === undefined ? [] : [`${JSON.stringify(key)}:${canonicalize(object[key])}`]
+  )).join(",")}}`;
+};
+
+const auditEvidence = async (overrides: Record<string, unknown> = {}) => {
+  const digests = "12345678".split("").map((character) => character.repeat(64));
+  const oidcSubject = "system:serviceaccount:agent-unsupervisedcom-luce-123:agent-runtime";
+  const keys = await auditKeys as CryptoKeyPair;
+  const publicKey = Buffer.from(await crypto.subtle.exportKey("raw", keys.publicKey)).toString("base64");
+  const keyId = publicKey.slice(0, 16);
+  const statements = await Promise.all(digests.map(async (digest, index) => {
+    const unsigned = {
+      record_digest: digest, content_digest: digest,
+      locator: `s3://bucket/records/${digest}.json`, object_version: `version-${index}`,
+      sink: "pensieve.example.com", key_id: keyId,
+      mechanism: "s3", retain_until: new Date(NOW + 30 * 24 * 60 * 60_000).toISOString(),
+      lock_verified: true, conforming: true, issued_at: new Date(NOW).toISOString(),
+    };
+    const signature = await crypto.subtle.sign(
+      { name: "Ed25519" }, keys.privateKey, new TextEncoder().encode(canonicalize(unsigned)),
+    );
+    return { ...unsigned, signature: Buffer.from(signature).toString("base64") };
+  }));
+  return {
+    collectorRevision: "a".repeat(40),
+    oidcSubject,
+    sink: {
+      id: "pensieve.example.com", keyId, publicKey,
+      attested: true, conforming: true, mechanism: "s3",
+    },
+    traceProbe: {
+      run: "run-1", identity: oidcSubject, environment: "cluster", harness: "pi",
+      installScope: "managed", policyDigest: `sha256:${"b".repeat(64)}`,
+      startedAt: new Date(NOW - 60_000).toISOString(), completedAt: new Date(NOW).toISOString(),
+      records: {
+        session: digests.slice(0, 2), transcript: digests.slice(2, 4),
+        modelExchange: digests.slice(4, 6), toolCall: digests.slice(6, 8),
+      },
+      capture: {
+        terminalSessionDigest: digests[1],
+        captured: ["session", "transcript", "model-exchange", "tool-call"], gaps: [],
+      },
+      assertions: {
+        prompt: true, systemPrompt: true, assistantMessage: true, exposedThinking: true,
+        modelRequest: true, modelResponseMetadata: true, toolCallIntent: true, toolCallResult: true,
+      },
+    },
+    statements,
+    ...overrides,
+  };
+};
+
 describe("provisioning API", () => {
   it("fails closed when GitHub OIDC does not verify", async () => {
     const store = { claimPendingProvisioningOperation: vi.fn() };
@@ -92,7 +153,7 @@ describe("provisioning API", () => {
       evidence: successEvidence(),
       auditability: {
         profile: "resident-complete-trace-v1",
-        evidence: { collectorRevision: "abc123", oidcSubject: "system:serviceaccount:tenant:agent-runtime", traceProbe: "sha256:123" },
+        evidence: await auditEvidence(),
       },
     };
     const response = await handleProvisioningCallback(request("/callback", value), env, {
@@ -115,6 +176,52 @@ describe("provisioning API", () => {
       pensieveProfile: "resident-complete-trace-v1",
       pensieveEvidenceJson: JSON.stringify(value.auditability.evidence),
     }));
+  });
+
+  it.each([
+    ["an advisory collector", async () => {
+      const evidence = await auditEvidence();
+      return { ...evidence, traceProbe: { ...evidence.traceProbe, installScope: "session" } };
+    }],
+    ["a different workload identity", async () => auditEvidence({
+      oidcSubject: "system:serviceaccount:other:agent-runtime",
+    })],
+    ["missing exposed thinking", async () => {
+      const evidence = await auditEvidence();
+      return { ...evidence, traceProbe: {
+        ...evidence.traceProbe,
+        assertions: { ...evidence.traceProbe.assertions, exposedThinking: false },
+      } };
+    }],
+    ["a declared capture gap", async () => {
+      const evidence = await auditEvidence();
+      return { ...evidence, traceProbe: {
+        ...evidence.traceProbe,
+        capture: { ...evidence.traceProbe.capture, gaps: ["model-exchange"] },
+      } };
+    }],
+    ["an unlocked statement", async () => {
+      const evidence = await auditEvidence();
+      return { ...evidence, statements: evidence.statements.map((statement, index) => (
+        index === 0 ? { ...statement, lock_verified: false } : statement
+      )) };
+    }],
+    ["a forged storage signature", async () => {
+      const evidence = await auditEvidence();
+      const forged = Buffer.alloc(64, 7).toString("base64");
+      return { ...evidence, statements: evidence.statements.map((statement, index) => (
+        index === 0 ? { ...statement, signature: forged } : statement
+      )) };
+    }],
+  ])("rejects enterprise audit evidence with %s", async (_label, makeEvidence) => {
+    const recordProvisioningResult = vi.fn(async () => true);
+    const response = await handleProvisioningCallback(request("/callback", {
+      operation_id: "operation_1", claim_token: "claim-token", succeeded: true,
+      observed_generation: 4, pinned_catalog_revision: "abc123", evidence: successEvidence(),
+      auditability: { profile: "resident-complete-trace-v1", evidence: await makeEvidence() },
+    }), env, { store: { recordProvisioningResult } as never, verify: async () => identity, now: NOW });
+    expect(response.status).toBe(400);
+    expect(recordProvisioningResult).not.toHaveBeenCalled();
   });
 
   it.each([
