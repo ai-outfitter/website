@@ -209,7 +209,7 @@ describe("provisioning API", () => {
   });
 
   it("records deployment evidence only against the live claim and OIDC identity", async () => {
-    const recordProvisioningResult = vi.fn(async () => true);
+    const recordProvisioningResult = vi.fn(async (_input: { pensieveEvidenceJson?: string }) => true);
     const value = {
       operation_id: "operation_1", claim_token: "claim-token", succeeded: true,
       observed_generation: 4, pinned_catalog_revision: "abc123", persona_login: "luce-unsup",
