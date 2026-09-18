@@ -19,7 +19,7 @@ type ProvisioningStore = Pick<BillingStore,
 type Options = {
   store?: ProvisioningStore;
   verify?: (request: Request, env: Env) => Promise<GitHubOidcIdentity | null>;
-  auditTrust?: { sinkId: string; publicKey: string; collectorImage: string };
+  auditTrust?: { sinkId: string; publicKey: string; collectorImage: string; collectorRevision: string };
   now?: number;
   uuid?: () => string;
 };
@@ -183,7 +183,7 @@ function successfulEvidence(
 
 async function validatedAuditabilityEvidence(
 	value: Record<string, unknown>, agentName: string, now: number,
-	trustedSink: { sinkId: string; publicKey: string; collectorImage: string }, expectedProbeNonce: string,
+	trustedSink: { sinkId: string; publicKey: string; collectorImage: string; collectorRevision: string }, expectedProbeNonce: string,
 ) {
   const sink = value.sink;
   const probe = value.traceProbe;
@@ -197,7 +197,9 @@ async function validatedAuditabilityEvidence(
     throw new TypeError("auditability.evidence.collectorImage is not the trusted immutable collector image");
   }
   const collectorRevision = requiredString(value.collectorRevision, "auditability.evidence.collectorRevision", 40);
-  if (!HEX_40.test(collectorRevision)) throw new TypeError("auditability.evidence.collectorRevision is invalid");
+  if (!HEX_40.test(collectorRevision) || collectorRevision !== trustedSink.collectorRevision) {
+    throw new TypeError("auditability.evidence.collectorRevision is not the trusted collector revision");
+  }
   const oidcSubject = requiredString(value.oidcSubject, "auditability.evidence.oidcSubject", 253);
   const expectedSubject = `system:serviceaccount:agent-${agentName}:agent-runtime`;
   if (oidcSubject !== expectedSubject) throw new TypeError("Auditability evidence uses the wrong workload identity");
@@ -398,6 +400,9 @@ function configuredAuditTrust(env: Env) {
     sinkId: requiredString(bindings.AUDITABILITY_SINK_ID, "AUDITABILITY_SINK_ID", 253),
     publicKey: requiredString(bindings.AUDITABILITY_SINK_PUBLIC_KEY, "AUDITABILITY_SINK_PUBLIC_KEY", 2_000),
     collectorImage: requiredString(bindings.AUDITABILITY_COLLECTOR_IMAGE, "AUDITABILITY_COLLECTOR_IMAGE", 500),
+    collectorRevision: requiredString(
+      bindings.AUDITABILITY_COLLECTOR_REVISION, "AUDITABILITY_COLLECTOR_REVISION", 40,
+    ),
   };
 }
 

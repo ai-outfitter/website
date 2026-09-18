@@ -38,12 +38,14 @@ const successEvidence = (overrides: Record<string, unknown> = {}) => ({
 
 const auditKeys = crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
 const collectorImage = `ghcr.io/ai-outfitter/pensieve@sha256:${"c".repeat(64)}`;
+const collectorRevision = "a".repeat(40);
 const auditTrust = async () => {
   const keys = await auditKeys as CryptoKeyPair;
   return {
     sinkId: "pensieve.example.com",
     publicKey: Buffer.from(await crypto.subtle.exportKey("raw", keys.publicKey)).toString("base64"),
     collectorImage,
+    collectorRevision,
   };
 };
 const canonicalize = (value: unknown): string => {
@@ -73,7 +75,7 @@ const auditEvidence = async (
   const oidcSubject = "system:serviceaccount:agent-unsupervisedcom-luce-123:agent-runtime";
   const policyDigest = `sha256:${"b".repeat(64)}`;
   const probeMarker = `pensieve-audit-probe:${options.recordProbeNonce ?? "operation_1"}\n`;
-  const recordCollectorRevision = options.recordCollectorRevision ?? "a".repeat(40);
+  const recordCollectorRevision = options.recordCollectorRevision ?? collectorRevision;
   const base = (kind: string, offset: number) => ({
     kind, run: "run-1", attempt: 1, identity: oidcSubject, environment: "cluster",
     policy_digest: policyDigest, created_at: new Date(NOW - 60_000 + offset).toISOString(),
@@ -268,6 +270,7 @@ describe("provisioning API", () => {
         sinkId: "different.pensieve.example.com",
         publicKey: Buffer.alloc(32).toString("base64"),
         collectorImage,
+        collectorRevision,
       },
     });
     expect(response.status).toBe(400);
@@ -285,6 +288,9 @@ describe("provisioning API", () => {
     ["missing exposed thinking", async () => auditEvidence({}, { exposedThinking: false })],
     ["a signed trace from a different collector revision", async () => auditEvidence({}, {
       recordCollectorRevision: "c".repeat(40), reportedCollectorRevision: "a".repeat(40),
+    })],
+    ["a consistently relabeled but untrusted collector revision", async () => auditEvidence({}, {
+      recordCollectorRevision: "c".repeat(40), reportedCollectorRevision: "c".repeat(40),
     })],
     ["a mutable collector image", async () => auditEvidence({
       collectorImage: "ghcr.io/ai-outfitter/pensieve:latest",

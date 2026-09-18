@@ -160,7 +160,8 @@ price or amount.
 
 Before enabling enterprise-auditability checkout, configure the independent
 acceptance trust with `AUDITABILITY_COLLECTOR_IMAGE` set to the exact
-digest-pinned collector image, plus `AUDITABILITY_SINK_ID` and
+digest-pinned collector image and `AUDITABILITY_COLLECTOR_REVISION` set to the
+40-character source commit built into it, plus `AUDITABILITY_SINK_ID` and
 `AUDITABILITY_SINK_PUBLIC_KEY` from the deployed Pensieve identity endpoint.
 The Worker rejects callback-supplied collector images and sink keys that do not
 match these values.
