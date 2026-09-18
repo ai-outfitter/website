@@ -68,6 +68,13 @@ function checkoutRequest(values: Record<string, string> = { tier: "resident" }, 
 function makeStore(existing: BillingAccount | null = account) {
   return {
     getBillingAccountByTenant: vi.fn(async () => existing),
+    refreshBillingAccountGitHubIdentity: vi.fn(async (input: {
+      billingAccountId: string; githubAccountId: string; githubAccountLogin: string; githubInstallationId: string;
+    }) => existing ? ({
+      ...existing,
+      githubAccountLogin: input.githubAccountLogin,
+      githubInstallationId: input.githubInstallationId,
+    }) : null),
     upsertBillingAccount: vi.fn(async (input: Omit<BillingAccount, "createdAt" | "updatedAt">) => ({ ...input, createdAt: 1, updatedAt: 1 })),
     acquireCheckoutLease: vi.fn(async () => ({ lease, reused: false })),
     attachCheckoutSession: vi.fn(async () => true),
@@ -112,6 +119,12 @@ describe("createCheckoutSession", () => {
     expect(body.get("subscription_data[metadata][auditability]")).toBe("enterprise");
     expect(body.get("subscription_data[metadata][pensieve_profile]")).toBe("resident-complete-trace-v1");
     expect(body.get("success_url")).toContain("session_id={CHECKOUT_SESSION_ID}");
+    expect(store.refreshBillingAccountGitHubIdentity).toHaveBeenCalledWith({
+      billingAccountId: account.id,
+      githubAccountId: "8",
+      githubAccountLogin: "Unsupervisedcom",
+      githubInstallationId: "42",
+    });
     expect(store.attachCheckoutSession).toHaveBeenCalledWith(lease.id, "cs_test_resident", 1_800_000_000_000);
   });
 
