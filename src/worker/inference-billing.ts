@@ -114,8 +114,11 @@ function basicAuthorization(secret: string) {
   return `Basic ${btoa(`${secret}:`)}`;
 }
 
-function meterIdentifier(item: PendingMeterExport) {
-  return `ai-outfitter:${item.usageEventId}:${item.meterKind}`;
+export async function meterIdentifier(item: Pick<PendingMeterExport, "usageEventId" | "meterKind">) {
+  const input = new TextEncoder().encode(`${item.usageEventId}\0${item.meterKind}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input));
+  const hex = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `aio:${item.meterKind}:${hex}`;
 }
 
 export async function exportPendingMeterEvents(
@@ -134,7 +137,7 @@ export async function exportPendingMeterEvents(
   let failed = 0;
   let manualReconciliation = 0;
   for (const item of pending) {
-    const identifier = meterIdentifier(item);
+    const identifier = await meterIdentifier(item);
     const retryDeadlineAt = item.retryDeadlineAt ?? now + METER_RETRY_WINDOW_MS;
     if (retryDeadlineAt <= now || !await store.beginMeterExportAttempt({
       usageEventId: item.usageEventId,

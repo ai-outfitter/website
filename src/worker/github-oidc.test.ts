@@ -7,6 +7,8 @@ const env = {
   PROVISIONING_OIDC_AUDIENCE: "ai-outfitter-billing",
   PROVISIONING_OIDC_SUBJECT: "repo:Unsupervisedcom/.agents:ref:refs/heads/main",
   PROVISIONING_OIDC_WORKFLOW_REF: "Unsupervisedcom/.agents/.github/workflows/deploy.yml@refs/heads/main",
+  PROVISIONING_OIDC_REPOSITORY_ID: "1318516359",
+  PROVISIONING_OIDC_REPOSITORY_OWNER_ID: "36771436",
 } as Env;
 
 function base64url(value: Uint8Array | string) {
@@ -25,6 +27,8 @@ async function fixture(overrides: Record<string, unknown> = {}) {
     sub: env.PROVISIONING_OIDC_SUBJECT,
     aud: env.PROVISIONING_OIDC_AUDIENCE,
     repository: "Unsupervisedcom/.agents",
+    repository_id: env.PROVISIONING_OIDC_REPOSITORY_ID,
+    repository_owner_id: env.PROVISIONING_OIDC_REPOSITORY_OWNER_ID,
     job_workflow_ref: env.PROVISIONING_OIDC_WORKFLOW_REF,
     run_id: "12345",
     iat: NOW - 10,
@@ -50,6 +54,8 @@ describe("GitHub Actions OIDC", () => {
       issuer: "https://token.actions.githubusercontent.com",
       subject: env.PROVISIONING_OIDC_SUBJECT,
       repository: "Unsupervisedcom/.agents",
+      repositoryId: "1318516359",
+      repositoryOwnerId: "36771436",
       workflowRef: env.PROVISIONING_OIDC_WORKFLOW_REF,
       runId: "12345",
     });
@@ -59,6 +65,8 @@ describe("GitHub Actions OIDC", () => {
     ["wrong audience", { aud: "different" }],
     ["wrong subject", { sub: "repo:attacker/repo:ref:refs/heads/main" }],
     ["wrong workflow", { job_workflow_ref: "attacker/repo/workflow.yml@refs/heads/main" }],
+    ["wrong repository ID", { repository_id: "999" }],
+    ["wrong repository owner ID", { repository_owner_id: "999" }],
     ["expired", { exp: NOW }],
   ] as const) {
     it(`rejects ${name}`, async () => {

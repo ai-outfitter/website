@@ -29,6 +29,13 @@ function supportsWorkflowDispatch(source: string) {
   return isRecord(triggers) && Object.hasOwn(triggers, "workflow_dispatch");
 }
 
+export function pilotAccountAllowed(githubAccountId: number, configuredIds: string | undefined) {
+  if (!Number.isSafeInteger(githubAccountId) || githubAccountId <= 0) return false;
+  const ids = configuredIds?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
+  return ids.length > 0 && ids.every((value) => /^\d+$/.test(value))
+    && ids.includes(String(githubAccountId));
+}
+
 /** Prove the scoped installation token can see an active workflow on the
  * exact ref the webhook will dispatch, and that the workflow declares the
  * dispatch event. */

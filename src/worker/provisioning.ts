@@ -108,12 +108,6 @@ function workerId(identity: GitHubOidcIdentity) {
   return `github-actions:${identity.repository}:${identity.runId}`;
 }
 
-function githubAccountLogin(identity: GitHubOidcIdentity) {
-  const [owner, repository, ...extra] = identity.repository.split("/");
-  if (!owner || !repository || extra.length) throw new TypeError("OIDC repository claim is invalid");
-  return owner;
-}
-
 async function identity(request: Request, env: Env, options: Options) {
   return (options.verify ?? verifyGitHubActionsOidc)(request, env);
 }
@@ -128,7 +122,7 @@ export async function handleProvisioningClaim(request: Request, env: Env, option
   const store = options.store ?? new BillingStore(env.BILLING_DB);
   const claimToken = (options.uuid ?? crypto.randomUUID.bind(crypto))();
   const operation = await store.claimPendingProvisioningOperation({
-    workerId: workerId(authenticated), githubAccountLogin: githubAccountLogin(authenticated),
+    workerId: workerId(authenticated), githubAccountId: authenticated.repositoryOwnerId,
     claimToken, claimExpiresAt: now + CLAIM_MS, now,
   });
   if (!operation) return new Response(null, { status: 204 });
@@ -202,7 +196,7 @@ export async function handleProvisioningCallback(request: Request, env: Env, opt
       evidenceJson,
       callbackIssuer: authenticated.issuer,
       callbackSubject: authenticated.subject,
-      githubAccountLogin: githubAccountLogin(authenticated),
+      githubAccountId: authenticated.repositoryOwnerId,
       observedGeneration,
       pinnedCatalogRevision,
       agentResourceName: evidence?.agent.name,

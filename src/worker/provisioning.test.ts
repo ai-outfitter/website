@@ -8,6 +8,8 @@ const identity: GitHubOidcIdentity = {
   issuer: "https://token.actions.githubusercontent.com",
   subject: "repo:Unsupervisedcom/.agents:ref:refs/heads/main",
   repository: "Unsupervisedcom/.agents",
+  repositoryId: "1318516359",
+  repositoryOwnerId: "123",
   workflowRef: "Unsupervisedcom/.agents/.github/workflows/deploy.yml@refs/heads/main",
   runId: "12345",
 };
@@ -67,7 +69,7 @@ describe("provisioning API", () => {
     expect(response.status).toBe(200);
     expect(claimPendingProvisioningOperation).toHaveBeenCalledWith({
       workerId: "github-actions:Unsupervisedcom/.agents:12345",
-      githubAccountLogin: "Unsupervisedcom",
+      githubAccountId: "123",
       claimToken: "claim-token",
       claimExpiresAt: NOW + 600_000,
       now: NOW,
@@ -103,7 +105,7 @@ describe("provisioning API", () => {
       claimToken: "claim-token",
       callbackIssuer: identity.issuer,
       callbackSubject: identity.subject,
-      githubAccountLogin: "Unsupervisedcom",
+      githubAccountId: "123",
       succeeded: true,
       observedGeneration: 4,
       pinnedCatalogRevision: "abc123",
@@ -202,7 +204,7 @@ describe("provisioning API", () => {
     }), env, { store: { recordProvisioningResult } as never, verify: async () => identity, now: NOW });
     expect(response.status).toBe(200);
     expect(recordProvisioningResult).toHaveBeenCalledWith(expect.objectContaining({
-      githubAccountLogin: "Unsupervisedcom",
+      githubAccountId: "123",
       retryable: true,
     }));
   });

@@ -287,7 +287,7 @@ describe("provisioning operation claims", () => {
       evidenceJson: "{}",
       callbackIssuer: "https://token.actions.githubusercontent.com",
       callbackSubject: "repo:example/catalog:ref:refs/heads/main",
-      githubAccountLogin: "example",
+      githubAccountId: "123",
       personaLogin: "luce-unsup",
       error: "deployment failed",
       now: 1_000,

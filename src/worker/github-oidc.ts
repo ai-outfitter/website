@@ -9,6 +9,8 @@ export type GitHubOidcIdentity = {
   issuer: typeof ISSUER;
   subject: string;
   repository: string;
+  repositoryId: string;
+  repositoryOwnerId: string;
   workflowRef: string;
   runId: string;
 };
@@ -52,8 +54,11 @@ export async function verifyGitHubActionsOidc(
   const audience = env.PROVISIONING_OIDC_AUDIENCE?.trim();
   const expectedSubject = env.PROVISIONING_OIDC_SUBJECT?.trim();
   const expectedWorkflow = env.PROVISIONING_OIDC_WORKFLOW_REF?.trim();
+  const expectedRepositoryId = env.PROVISIONING_OIDC_REPOSITORY_ID?.trim();
+  const expectedOwnerId = env.PROVISIONING_OIDC_REPOSITORY_OWNER_ID?.trim();
   const token = bearer(request);
-  if (!audience || !expectedSubject || !expectedWorkflow || !token || token.length > 16_384) return null;
+  if (!audience || !expectedSubject || !expectedWorkflow || !expectedRepositoryId || !expectedOwnerId
+    || !token || token.length > 16_384) return null;
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((part) => !part)) return null;
   let header: JsonRecord;
@@ -64,9 +69,12 @@ export async function verifyGitHubActionsOidc(
   } catch { return null; }
   if (header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) return null;
   if (claims.iss !== ISSUER || typeof claims.sub !== "string" || typeof claims.repository !== "string"
+    || typeof claims.repository_id !== "string" || typeof claims.repository_owner_id !== "string"
     || typeof claims.job_workflow_ref !== "string" || typeof claims.run_id !== "string") return null;
   if (!await secureEqual(claims.sub, expectedSubject)
     || !await secureEqual(claims.job_workflow_ref, expectedWorkflow)
+    || !await secureEqual(claims.repository_id, expectedRepositoryId)
+    || !await secureEqual(claims.repository_owner_id, expectedOwnerId)
     || !await audienceMatches(claims.aud, audience)) return null;
   const exp = Number(claims.exp);
   const nbf = claims.nbf === undefined ? null : Number(claims.nbf);
@@ -94,6 +102,8 @@ export async function verifyGitHubActionsOidc(
     issuer: ISSUER,
     subject: claims.sub,
     repository: claims.repository,
+    repositoryId: claims.repository_id,
+    repositoryOwnerId: claims.repository_owner_id,
     workflowRef: claims.job_workflow_ref,
     runId: claims.run_id,
   };

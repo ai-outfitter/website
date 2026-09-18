@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { billedMarkupMicros, type PendingMeterExport } from "./billing-store";
-import { METER_RETRY_WINDOW_MS, exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage } from "./inference-billing";
+import { METER_RETRY_WINDOW_MS, exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage, meterIdentifier } from "./inference-billing";
 
 const env = {
   BILLING_SERVICE_TOKEN: "billing-service-secret",
@@ -91,6 +91,14 @@ describe("trusted inference billing API", () => {
 });
 
 describe("Stripe meter export", () => {
+  it("uses deterministic Stripe identifiers within the 100-character limit", async () => {
+    const usageEventId = `usage:${"r".repeat(255)}:${"q".repeat(255)}`;
+    const provider = await meterIdentifier({ usageEventId, meterKind: "provider_cost" });
+    expect(provider).toBe(await meterIdentifier({ usageEventId, meterKind: "provider_cost" }));
+    expect(provider).not.toBe(await meterIdentifier({ usageEventId, meterKind: "markup" }));
+    expect(provider.length).toBeLessThanOrEqual(100);
+  });
+
   it("exports provider cost and markup as separate idempotent meter events", async () => {
     const pending: PendingMeterExport[] = [
       { usageEventId: "usage_1", meterKind: "provider_cost", stripeMeterEventId: null, status: "pending",
@@ -119,7 +127,10 @@ describe("Stripe meter export", () => {
       ["provider_cost_microdollars", "1000"], ["markup_microdollars", "200"],
     ]);
     expect(stripeFetch.mock.calls.map(([, init]) => (init?.headers as Record<string, string>)["idempotency-key"]))
-      .toEqual(["ai-outfitter:usage_1:provider_cost", "ai-outfitter:usage_1:markup"]);
+      .toEqual([
+        await meterIdentifier({ usageEventId: "usage_1", meterKind: "provider_cost" }),
+        await meterIdentifier({ usageEventId: "usage_1", meterKind: "markup" }),
+      ]);
     expect(store.beginMeterExportAttempt).toHaveBeenNthCalledWith(1, {
       usageEventId: "usage_1", meterKind: "provider_cost",
       retryDeadlineAt: 2_000_000_300_000 + METER_RETRY_WINDOW_MS, now: 2_000_000_300_000,

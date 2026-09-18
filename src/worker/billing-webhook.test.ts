@@ -16,6 +16,7 @@ const env = {
   STRIPE_AUDITABILITY_PRICE_ID: "price_auditability",
   STRIPE_NO_MARKUP_COUPON_ID: "ai_outfitter_no_markup_forever_v2",
   STRIPE_NO_MARKUP_PROMOTION_CODE_ID: "promo_no_markup",
+  RESIDENT_AGENT_NAME_OVERRIDES: '{"123":"unsupervised-luce"}',
 } as Env;
 
 const account: BillingAccount = {
@@ -127,7 +128,7 @@ describe("Stripe billing webhook", () => {
       pensieveProfile: null,
       status: "active",
       residentQuantity: 1,
-      agentResourceName: "unsupervisedcom-luce-123",
+      agentResourceName: "unsupervised-luce",
       authoritative: true,
     });
   });

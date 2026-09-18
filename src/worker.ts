@@ -21,7 +21,7 @@ import { handleGitHubWebhook, webhookDeps } from "./worker/webhooks";
 import { installationOctokit, provisioningOctokit } from "./worker/app";
 import { exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage } from "./worker/inference-billing";
 import { handleProvisioningCallback, handleProvisioningClaim } from "./worker/provisioning";
-import { ProvisionabilityError, verifyProvisioningWorkflow } from "./worker/provisionability";
+import { pilotAccountAllowed, ProvisionabilityError, verifyProvisioningWorkflow } from "./worker/provisionability";
 
 export { GitHubUserGrant } from "./worker/grant";
 
@@ -172,6 +172,9 @@ async function residentCheckout(env: Env, request: Request) {
   const account = state.activeAccount;
   if (!account) throw httpError({ error: "Select a GitHub account before checkout" }, 400);
   if (account.type !== "Organization") throw httpError({ error: "Resident subscriptions require a GitHub organization" }, 400);
+  if (!pilotAccountAllowed(account.id, env.RESIDENT_PILOT_GITHUB_ACCOUNT_IDS)) {
+    throw httpError({ error: "Resident checkout is currently limited to approved pilot organizations" }, 403);
+  }
   if (!account.installationId) throw httpError({ error: "Install the GitHub App for this account before checkout" }, 400);
   if (!account.repository) throw httpError({ error: "Create the organization's .agents repository before checkout" }, 409);
   const viewer = await tokenIdentity(state.client);

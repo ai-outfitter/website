@@ -104,8 +104,10 @@ function configured(env: Env) {
   const auditabilityPrice = env.STRIPE_AUDITABILITY_PRICE_ID?.trim();
   const coupon = env.STRIPE_NO_MARKUP_COUPON_ID?.trim();
   const promotionCode = env.STRIPE_NO_MARKUP_PROMOTION_CODE_ID?.trim();
+  const residentAgentNameOverrides = env.RESIDENT_AGENT_NAME_OVERRIDES?.trim();
   return secretKey && webhookSecret && residentPrice && providerCostPrice && markupPrice && coupon && promotionCode
-    ? { secretKey, webhookSecret, residentPrice, providerCostPrice, markupPrice, auditabilityPrice, coupon, promotionCode }
+    ? { secretKey, webhookSecret, residentPrice, providerCostPrice, markupPrice, auditabilityPrice, coupon, promotionCode,
+      residentAgentNameOverrides }
     : null;
 }
 
@@ -159,6 +161,22 @@ function deterministicAgentName(account: BillingAccount) {
   const login = account.githubAccountLogin.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 38) || "github";
   const suffix = account.githubAccountId.replace(/[^0-9]/g, "").slice(-10) || "account";
   return `${login}-luce-${suffix}`.slice(0, 63).replace(/-+$/g, "");
+}
+
+function residentAgentName(account: BillingAccount, overridesJson: string | undefined) {
+  const configured = overridesJson?.trim();
+  if (!configured) return deterministicAgentName(account);
+  let parsed: unknown;
+  try { parsed = JSON.parse(configured); }
+  catch { throw new Error("Resident Agent name overrides are invalid"); }
+  if (!record(parsed)) throw new Error("Resident Agent name overrides are invalid");
+  const override = parsed[account.githubAccountId];
+  if (override === undefined) return deterministicAgentName(account);
+  if (typeof override !== "string" || override.length > 63
+    || !/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(override)) {
+    throw new Error("Configured resident Agent name is invalid");
+  }
+  return override;
 }
 
 function lifecycleEvent(
@@ -244,7 +262,7 @@ function lifecycleEvent(
     currentPeriodEnd: period.end,
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
     residentQuantity: 1,
-    agentResourceName: deterministicAgentName(account),
+    agentResourceName: residentAgentName(account, config.residentAgentNameOverrides),
     personaLogin: null,
     provisioningApprovalActor: approvedCheckout ? `stripe-checkout:${approvedCheckout}` : undefined,
     provisioningApprovalEvidenceJson: approvedCheckout ? JSON.stringify({

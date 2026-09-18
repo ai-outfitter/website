@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ProvisionabilityError, verifyProvisioningWorkflow } from "./provisionability";
+import { pilotAccountAllowed, ProvisionabilityError, verifyProvisioningWorkflow } from "./provisionability";
 
 function encoded(source: string) {
   return btoa(source);
@@ -17,6 +17,13 @@ function client(source = "on:\n  workflow_dispatch:\njobs: {}\n", state = "activ
 }
 
 describe("verifyProvisioningWorkflow", () => {
+  it("limits checkout to explicitly configured immutable GitHub account IDs", () => {
+    expect(pilotAccountAllowed(36771436, "36771436, 123")).toBe(true);
+    expect(pilotAccountAllowed(999, "36771436,123")).toBe(false);
+    expect(pilotAccountAllowed(36771436, undefined)).toBe(false);
+    expect(pilotAccountAllowed(36771436, "36771436,not-an-id")).toBe(false);
+  });
+
   it("verifies the active workflow and dispatch trigger on the deployed ref", async () => {
     const github = client();
     await verifyProvisioningWorkflow(github as never, "Unsupervisedcom", "deploy.yml");

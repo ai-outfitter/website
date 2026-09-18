@@ -770,6 +770,26 @@ export class BillingStore {
     return row ? accountFromRow(row) : null;
   }
 
+  async refreshBillingAccountGitHubIdentity(input: {
+    billingAccountId: string;
+    githubAccountId: string;
+    githubAccountLogin: string;
+    githubInstallationId: string;
+  }, now = Date.now()) {
+    for (const [name, value] of Object.entries(input)) assertString(value, name);
+    assertInteger(now, "now");
+    const result = await this.db.prepare(`
+      UPDATE billing_accounts SET
+        github_account_login = ?, github_installation_id = ?, updated_at = ?
+      WHERE id = ? AND github_account_id = ?
+    `).bind(
+      input.githubAccountLogin, input.githubInstallationId, now,
+      input.billingAccountId, input.githubAccountId,
+    ).run();
+    if (Number(result.meta.changes ?? 0) !== 1) return null;
+    return this.getBillingAccountByGitHubAccountId(input.githubAccountId);
+  }
+
   async getBillingAccountByStripeCustomer(stripeCustomerId: string) {
     const row = await this.db.prepare("SELECT * FROM billing_accounts WHERE stripe_customer_id = ?")
       .bind(stripeCustomerId).first<BillingAccountRow>();
@@ -1286,13 +1306,13 @@ export class BillingStore {
 
   async claimPendingProvisioningOperation(input: {
     workerId: string;
-    githubAccountLogin: string;
+    githubAccountId: string;
     claimToken: string;
     claimExpiresAt: number;
     now?: number;
   }) {
     assertString(input.workerId, "workerId");
-    assertString(input.githubAccountLogin, "githubAccountLogin");
+    assertString(input.githubAccountId, "githubAccountId");
     assertString(input.claimToken, "claimToken");
     const now = input.now ?? Date.now();
     assertInteger(now, "now");
@@ -1308,10 +1328,13 @@ export class BillingStore {
         JOIN entitlements e ON e.billing_account_id = p.billing_account_id
         JOIN residents r ON r.id = p.resident_id
         WHERE p.approval_state = 'approved'
-          AND a.authorization_state = 'authorized'
-          AND lower(a.github_account_login) = lower(?)
-          AND (r.desired_state = 'suspended'
-            OR (e.status = 'active' AND e.provision_enabled = 1))
+          AND a.github_account_id = ?
+          AND ((r.desired_state = 'suspended'
+              AND p.desired_revision LIKE 'resident-state:suspended:%')
+            OR (r.desired_state <> 'suspended'
+              AND p.desired_revision NOT LIKE 'resident-state:suspended:%'
+              AND a.authorization_state = 'authorized'
+              AND e.status = 'active' AND e.provision_enabled = 1))
           AND (
             p.status IN ('pending', 'approved')
             OR (p.status = 'running' AND p.claim_expires_at IS NOT NULL AND p.claim_expires_at <= ?)
@@ -1322,7 +1345,7 @@ export class BillingStore {
       RETURNING *
     `).bind(
       input.workerId, input.claimToken, input.claimExpiresAt, now,
-      input.githubAccountLogin, now,
+      input.githubAccountId, now,
     ).first<ProvisioningOperationRow>();
     return row ? provisioningOperationFromRow(row) : null;
   }
@@ -1335,7 +1358,7 @@ export class BillingStore {
     evidenceJson: string;
     callbackIssuer: string;
     callbackSubject: string;
-    githubAccountLogin: string;
+    githubAccountId: string;
     observedGeneration?: number;
     pinnedCatalogRevision?: string;
     agentResourceName?: string;
@@ -1354,7 +1377,7 @@ export class BillingStore {
       evidenceJson: input.evidenceJson,
       callbackIssuer: input.callbackIssuer,
       callbackSubject: input.callbackSubject,
-      githubAccountLogin: input.githubAccountLogin,
+      githubAccountId: input.githubAccountId,
     })) assertString(value, name);
     const now = input.now ?? Date.now();
     assertInteger(now, "now");
@@ -1409,7 +1432,7 @@ export class BillingStore {
         WHERE id = ? AND status = 'running' AND claimed_by = ? AND claim_token = ?
           AND claim_expires_at > ?
           AND billing_account_id IN (
-            SELECT id FROM billing_accounts WHERE lower(github_account_login) = lower(?)
+            SELECT id FROM billing_accounts WHERE github_account_id = ?
           )
           AND (? = 0 OR resident_id IN (
             SELECT id FROM residents
@@ -1420,7 +1443,7 @@ export class BillingStore {
         input.succeeded ? 1 : 0, input.retryable === true ? 1 : 0, input.evidenceJson,
         input.callbackIssuer, input.callbackSubject, now, input.error ?? null,
         now, input.operationId, input.workerId, input.claimToken, now,
-        input.githubAccountLogin, input.succeeded ? 1 : 0,
+        input.githubAccountId, input.succeeded ? 1 : 0,
         input.agentResourceName ?? "", input.desiredState ?? "",
       ),
       session.prepare(`

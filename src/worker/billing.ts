@@ -19,7 +19,7 @@ export type CheckoutIdentity = {
 };
 
 type CheckoutStore = Pick<BillingStore,
-  "getBillingAccountByTenant" | "upsertBillingAccount" | "acquireCheckoutLease" | "attachCheckoutSession"
+  "getBillingAccountByTenant" | "refreshBillingAccountGitHubIdentity" | "upsertBillingAccount" | "acquireCheckoutLease" | "attachCheckoutSession"
 >;
 
 type CheckoutOptions = {
@@ -92,7 +92,14 @@ async function ensureStripeCustomer(identity: CheckoutIdentity, secretKey: strin
   const existing = await store.getBillingAccountByTenant(key);
   if (existing) {
     if (existing.authorizationState !== "authorized") throw new Error("Billing account is not authorized");
-    return existing;
+    const refreshed = await store.refreshBillingAccountGitHubIdentity({
+      billingAccountId: existing.id,
+      githubAccountId: String(identity.githubAccountId),
+      githubAccountLogin: identity.githubAccountLogin,
+      githubInstallationId: String(identity.githubInstallationId),
+    });
+    if (!refreshed) throw new Error("Billing account identity could not be refreshed");
+    return refreshed;
   }
   const body = new URLSearchParams({
     name: identity.githubAccountLogin,
@@ -205,7 +212,7 @@ export async function createCheckoutSession(request: Request, env: Env, options:
   let lease: CheckoutLease;
   try {
     ({ lease } = await store.acquireCheckoutLease({ id: `checkout:${uuid()}`, billingAccountId: account.id,
-      productKey: `${RESIDENT_PRODUCT_KEY}${auditabilityEnabled ? ":auditability" : ""}`,
+      productKey: RESIDENT_PRODUCT_KEY,
       idempotencyKey: `ai-outfitter-checkout-${uuid()}`,
       expiresAt: now + CHECKOUT_LEASE_MS, now }));
   } catch (error) {
