@@ -35,6 +35,7 @@ jobs:
       - run: npm run test:analytics
       - run: npm run test:links
       - run: npm run test:publish
+      - run: npm run test:stripe
       - run: npm run test:search
       - run: npm run test:workflows
       - run: npm exec -- wrangler deploy --dry-run

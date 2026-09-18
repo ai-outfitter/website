@@ -1,4 +1,5 @@
 export type Account = {
+  id: number;
   login: string;
   type: "User" | "Organization";
   updatedAt?: string;
@@ -33,13 +34,21 @@ function storageForWindow(): Storage | null {
   try { return window.sessionStorage; } catch { return null; }
 }
 
+function isAccount(value: unknown): value is Account {
+  if (!value || typeof value !== "object") return false;
+  const account = value as Partial<Account>;
+  return Number.isSafeInteger(account.id) && Number(account.id) > 0
+    && typeof account.login === "string"
+    && (account.type === "User" || account.type === "Organization");
+}
+
 function isIndex(value: unknown): value is AccountIndex {
   if (!value || typeof value !== "object") return false;
   const index = value as Partial<AccountIndex>;
   return Boolean(index.user && typeof index.user === "object"
-    && (index.activeAccount === null || Boolean(index.activeAccount && typeof index.activeAccount.login === "string"))
+    && (index.activeAccount === null || isAccount(index.activeAccount))
     && Array.isArray(index.accounts)
-    && index.accounts.every((account) => account && typeof account.login === "string" && (account.type === "User" || account.type === "Organization"))
+    && index.accounts.every(isAccount)
     && typeof index.githubAppSlug === "string");
 }
 

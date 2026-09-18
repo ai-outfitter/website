@@ -25,9 +25,10 @@ describe("triggerFromWebhook", () => {
 });
 
 describe("startsRun", () => {
-  it("accepts an opened issue only from an allowlisted human actor", () => {
+  it("accepts a human-opened issue independently of the legacy global actor allowlist", () => {
     expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "User" }, bot)).toBe(true);
-    expect(startsRun({ kind: "opened", authorId: 7, authorType: "User" }, bot)).toBe(false);
+    expect(startsRun({ kind: "opened", authorId: 7, authorType: "User" }, bot)).toBe(true);
+    expect(startsRun({ kind: "opened", authorId: 7, authorType: "User" }, { ...bot, autoStartActorIds: undefined })).toBe(true);
     expect(startsRun({ kind: "opened", authorId: 8276365, authorType: "Bot" }, bot)).toBe(false);
   });
 
@@ -54,15 +55,18 @@ describe("startsRun", () => {
 });
 
 describe("subjectFromWebhook", () => {
-  const payload = { installation: { id: 7 }, repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } }, issue: { number: 3 } };
+  const payload = { installation: { id: 7 }, repository: { full_name: "acme/app", name: "app", owner: { id: 101, login: "acme" } }, issue: { number: 3 } };
 
-  it("names the issue, repository, and installation", () => {
-    expect(subjectFromWebhook(payload)).toEqual({ repository: { full_name: "acme/app", owner: { login: "acme" }, name: "app" }, issue: { number: 3 }, installationId: 7 });
+  it("names the issue, immutable owner account, repository, and installation", () => {
+    expect(subjectFromWebhook(payload)).toEqual({ repository: { full_name: "acme/app", owner: { id: 101, login: "acme" }, name: "app" }, issue: { number: 3 }, installationId: 7 });
   });
 
-  it("rejects pull requests and deliveries without an installation", () => {
+  it("rejects pull requests and deliveries without immutable positive IDs", () => {
     expect(subjectFromWebhook({ ...payload, issue: { number: 3, pull_request: {} } })).toBeNull();
     expect(subjectFromWebhook({ ...payload, installation: null })).toBeNull();
+    expect(subjectFromWebhook({ ...payload, installation: { id: 0 } })).toBeNull();
+    expect(subjectFromWebhook({ ...payload, repository: { ...payload.repository, owner: { login: "acme" } } })).toBeNull();
+    expect(subjectFromWebhook({ ...payload, repository: { ...payload.repository, owner: { id: -1, login: "acme" } } })).toBeNull();
   });
 });
 

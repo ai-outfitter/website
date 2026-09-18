@@ -28,9 +28,8 @@ function deps(overrides: Partial<WebhookDeps> & {
     installationClient: () => ({ request } as never),
     scopedToken: async () => "scoped-token",
     runnerClient: () => ({ request } as never),
+    resolveResident: async () => "luce-unsup",
     botLogin: "ai-outfitter[bot]",
-    targetOwner: "ai-outfitter",
-    triagerLogin: "luce-unsup",
     autoStartActorIds: new Set([8276365]),
     ...overrides,
   };
@@ -41,14 +40,14 @@ const labeled = {
   action: "labeled",
   label: { name: "ai-outfitter" },
   installation: { id: 42 },
-  repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } },
+  repository: { full_name: "acme/app", name: "app", owner: { id: 101, login: "acme" } },
   issue: { number: 9 },
 };
 
 const opened = {
   action: "opened",
   installation: { id: 42 },
-  repository: { full_name: "ai-outfitter/app", name: "app", owner: { login: "ai-outfitter" } },
+  repository: { full_name: "ai-outfitter/app", name: "app", owner: { id: 101, login: "ai-outfitter" } },
   issue: { number: 9, user: { id: 8276365, type: "User" } },
 };
 
@@ -74,7 +73,7 @@ describe("handleGitHubWebhook", () => {
   it("answers a ping and ignores events that start nothing", async () => {
     const { deps: d, calls } = deps();
     expect((await handleGitHubWebhook(delivery("ping", { zen: "hi" }), d)).status).toBe(200);
-    expect((await handleGitHubWebhook(delivery("issues", { ...opened, issue: { ...opened.issue, user: { id: 7, type: "User" } } }), d)).status).toBe(200);
+    expect((await handleGitHubWebhook(delivery("issues", { ...opened, issue: { ...opened.issue, user: { id: 7, type: "Bot" } } }), d)).status).toBe(200);
     expect((await handleGitHubWebhook(delivery("issues", { ...labeled, label: { name: "bug" } }), d)).status).toBe(200);
     expect((await handleGitHubWebhook(delivery("issues", { ...labeled, issue: { number: 9, pull_request: {} } }), d)).status).toBe(200);
     expect(calls).toHaveLength(0);
@@ -82,8 +81,10 @@ describe("handleGitHubWebhook", () => {
 
   it("asks the resident Luce to triage using repository-defined classification labels", async () => {
     const scopedToken = vi.fn(async () => "unused");
+    const resolveResident = vi.fn(async () => "luce-unsup");
     const { deps: d, calls } = deps({
       scopedToken,
+      resolveResident,
       labels: [
         { name: "research" },
         { name: "feature" },
@@ -99,6 +100,7 @@ describe("handleGitHubWebhook", () => {
     const response = await handleGitHubWebhook(delivery("issues", opened), d);
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ outcome: "resident-triage-requested", repository: "ai-outfitter/app", issue: 9, triager: "luce-unsup" });
+    expect(resolveResident).toHaveBeenCalledWith(101, 42);
     expect(scopedToken).not.toHaveBeenCalled();
     expect(calls.some((call) => call.route.includes("dispatches"))).toBe(false);
     const note = calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"));
@@ -111,6 +113,17 @@ describe("handleGitHubWebhook", () => {
     expect(note?.params.body).not.toContain("status:blocked");
     expect(note?.params.body).not.toContain("good first issue");
     expect(note?.params.body).not.toContain("type:*");
+  });
+
+  it("asks an entitled resident to triage regardless of the issue author's global allowlist membership", async () => {
+    const resolveResident = vi.fn(async () => "luce-unsup");
+    const { deps: d, calls } = deps({ resolveResident, autoStartActorIds: new Set([8276365]) });
+    const payload = { ...opened, issue: { ...opened.issue, user: { id: 7, type: "User" } } };
+    const response = await handleGitHubWebhook(delivery("issues", payload), d);
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({ outcome: "resident-triage-requested", triager: "luce-unsup" });
+    expect(resolveResident).toHaveBeenCalledWith(101, 42);
+    expect(calls.some((call) => call.route.startsWith("POST ") && call.route.includes("comments"))).toBe(true);
   });
 
   it("does not post a second resident wake when GitHub redelivers an opened issue", async () => {
@@ -149,20 +162,74 @@ describe("handleGitHubWebhook", () => {
     expect(note?.params.body).toContain("ask a human maintainer");
   });
 
-  it("does not auto-triage an issue outside the AI Outfitter organization", async () => {
-    const { deps: d, calls } = deps();
-    const payload = { ...opened, repository: { full_name: "acme/app", name: "app", owner: { login: "acme" } } };
-    expect((await handleGitHubWebhook(delivery("issues", payload), d)).status).toBe(200);
+  it.each(["unpaid", "suspended", "resident-not-ready"])("does not auto-triage when billing resolves %s as ineligible", async () => {
+    const resolveResident = vi.fn(async () => null);
+    const { deps: d, calls } = deps({ resolveResident });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ outcome: "ignored" });
+    expect(resolveResident).toHaveBeenCalledWith(101, 42);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("uses immutable owner identity rather than the mutable owner login", async () => {
+    const resolveResident = vi.fn(async (ownerAccountId: number, installationId: number) =>
+      ownerAccountId === 101 && installationId === 42 ? "vega-unsup" : null,
+    );
+    const { deps: d, calls } = deps({ resolveResident });
+    const payload = {
+      ...opened,
+      repository: { ...opened.repository, full_name: "renamed-owner/app", owner: { id: 101, login: "renamed-owner" } },
+    };
+    const response = await handleGitHubWebhook(delivery("issues", payload), d);
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({ outcome: "resident-triage-requested", triager: "vega-unsup" });
+    expect(calls.find((call) => call.route.startsWith("POST ") && call.route.includes("comments"))?.params.body).toContain("@vega-unsup");
+  });
+
+  it("fails closed for missing IDs, mismatched installations, and missing personas", async () => {
+    const cases: Array<{ name: string; payload: unknown; resolveResident: WebhookDeps["resolveResident"] }> = [
+      {
+        name: "missing owner account ID",
+        payload: { ...opened, repository: { ...opened.repository, owner: { login: "ai-outfitter" } } },
+        resolveResident: vi.fn(async () => "luce-unsup"),
+      },
+      {
+        name: "mismatched installation",
+        payload: { ...opened, installation: { id: 99 } },
+        resolveResident: vi.fn(async (_ownerAccountId, installationId) => installationId === 42 ? "luce-unsup" : null),
+      },
+      { name: "missing persona", payload: opened, resolveResident: vi.fn(async () => "  ") },
+      { name: "unsafe persona", payload: opened, resolveResident: vi.fn(async () => "luce\n@attacker") },
+    ];
+    for (const scenario of cases) {
+      const { deps: d, calls } = deps({ resolveResident: scenario.resolveResident });
+      const response = await handleGitHubWebhook(delivery("issues", scenario.payload), d);
+      expect(response.status, scenario.name).toBe(200);
+      expect(await response.json(), scenario.name).toEqual({ outcome: "ignored" });
+      expect(calls, scenario.name).toHaveLength(0);
+    }
+    expect(cases[0].resolveResident).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable response when entitlement resolution fails transiently", async () => {
+    const resolveResident = vi.fn(async () => { throw new Error("billing record secret"); });
+    const { deps: d, calls } = deps({ resolveResident });
+    const response = await handleGitHubWebhook(delivery("issues", opened), d);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ outcome: "resident-resolution-failed" });
     expect(calls).toHaveLength(0);
   });
 
   it("dispatches the runner with a token scoped to the one repository", async () => {
     const scopedToken = vi.fn(async () => "scoped-token");
-    const { deps: d, calls } = deps({ scopedToken });
+    const resolveResident = vi.fn(async () => { throw new Error("must not be called"); });
+    const { deps: d, calls } = deps({ scopedToken, resolveResident });
     const response = await handleGitHubWebhook(delivery("issues", labeled), d);
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ outcome: "dispatched", repository: "acme/app", issue: 9 });
     expect(scopedToken).toHaveBeenCalledWith(42, "app");
+    expect(resolveResident).not.toHaveBeenCalled();
     const dispatch = calls.find((call) => call.route.includes("dispatches"));
     expect(dispatch?.params).toEqual({
       owner: "ai-outfitter",

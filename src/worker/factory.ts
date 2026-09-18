@@ -24,7 +24,7 @@ export type Trigger =
   | { kind: "assigned"; assignee: string };
 
 export type IssueSubject = {
-  repository: { full_name: string; owner: { login: string }; name: string };
+  repository: { full_name: string; owner: { id: number; login: string }; name: string };
   issue: { number: number; pull_request?: unknown };
   installationId: number;
 };
@@ -32,7 +32,7 @@ export type IssueSubject = {
 type Payload = {
   action?: string;
   installation?: { id?: number } | null;
-  repository?: { full_name?: string; name?: string; owner?: { login?: string } };
+  repository?: { full_name?: string; name?: string; owner?: { id?: number; login?: string } };
   issue?: { number?: number; pull_request?: unknown; user?: { id?: number; type?: string } | null };
   label?: { name?: string } | null;
   assignee?: { login?: string } | null;
@@ -70,11 +70,14 @@ export function subjectFromWebhook(raw: unknown): IssueSubject | null {
   const installationId = payload.installation?.id;
   const number = payload.issue?.number;
   const fullName = payload.repository?.full_name;
+  const ownerId = payload.repository?.owner?.id;
   const owner = payload.repository?.owner?.login;
   const name = payload.repository?.name;
-  if (!installationId || !number || !fullName || !owner || !name) return null;
+  if (typeof installationId !== "number" || !Number.isSafeInteger(installationId) || installationId <= 0) return null;
+  if (typeof ownerId !== "number" || !Number.isSafeInteger(ownerId) || ownerId <= 0) return null;
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number <= 0 || !fullName || !owner || !name) return null;
   if (payload.issue?.pull_request) return null;
-  return { repository: { full_name: fullName, owner: { login: owner }, name }, issue: { number }, installationId };
+  return { repository: { full_name: fullName, owner: { id: ownerId, login: owner }, name }, issue: { number }, installationId };
 }
 
 /** The name people mention: the bot login without its `[bot]` suffix. */
@@ -87,17 +90,20 @@ function mentionPattern(botLogin: string) {
   return new RegExp(`(^|[^\\w@/])@${name}(?![\\w-])`, "i");
 }
 
-/** Whether an event starts a run. Every trigger is something a person with
- * write access does in the issue; the repository needs no setup. Labels are
- * already restricted to triage access by GitHub; a mention must come from a
- * person who owns, belongs to, or collaborates on the repository. */
+/** Whether an event starts a run. A human-opened issue is only a candidate:
+ * the webhook handler still requires an entitled resident for the immutable
+ * repository owner and installation before it causes any effect. Issue text is
+ * untrusted and the resident's triage instructions keep classification and
+ * review controls in force. Labels are already restricted to triage access by
+ * GitHub; a mention must come from a person who owns, belongs to, or
+ * collaborates on the repository. */
 export function startsRun(
   trigger: Trigger,
   options: { autoStartActorIds?: ReadonlySet<number>; botLogin: string; triggerLabel?: string; assignee?: string },
 ) {
   switch (trigger.kind) {
     case "opened":
-      return trigger.authorType === "User" && Boolean(options.autoStartActorIds?.has(trigger.authorId));
+      return trigger.authorType === "User";
     case "labeled":
       return trigger.label === (options.triggerLabel ?? TRIGGER_LABEL);
     case "assigned":

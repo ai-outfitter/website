@@ -10,6 +10,7 @@ const generated = [
   "BETTER_AUTH_SECRET",
   "GITHUB_USER_TOKEN_ENCRYPTION_KEY",
   "AGENTS_PLAN_SIGNING_KEY",
+  "BILLING_SERVICE_TOKEN",
 ];
 
 function putSecret(name, value) {
@@ -34,3 +35,4 @@ for (const name of generated) {
 
 console.log(`Generated and configured ${generated.length} application-owned secrets${environment ? ` for ${environment}` : ""}.`);
 console.log("GITHUB_CLIENT_SECRET must still be copied from the GitHub App settings with `wrangler secret put GITHUB_CLIENT_SECRET`.");
+console.log("STRIPE_WEBHOOK_SECRET must be copied from the version-pinned Stripe webhook endpoint with `wrangler secret put STRIPE_WEBHOOK_SECRET`.");

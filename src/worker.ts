@@ -1,7 +1,10 @@
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
 import { createAuth, session } from "./worker/auth";
-import { accounts, github, localGitHubToken, tokenAccounts, tokenIdentity, type Account } from "./worker/github";
+import { createCheckoutSession } from "./worker/billing";
+import { BillingStore } from "./worker/billing-store";
+import { handleStripeWebhook } from "./worker/billing-webhook";
+import { accounts, canAdministerBilling, github, localGitHubToken, tokenAccounts, tokenIdentity, type Account } from "./worker/github";
 import { configurationFreshness, repositoryConfiguration } from "./worker/configuration";
 import {
   applyPlan,
@@ -15,6 +18,12 @@ import {
 import { createPlayground, findPlayground } from "./worker/onboarding";
 import { activeAccountCookie, readActiveAccount } from "./worker/scope";
 import { handleGitHubWebhook, webhookDeps } from "./worker/webhooks";
+import { installationOctokit, provisioningOctokit } from "./worker/app";
+import { exportPendingMeterEvents, handleInferencePreflight, handleInferenceUsage } from "./worker/inference-billing";
+import { handleProvisioningCallback, handleProvisioningClaim } from "./worker/provisioning";
+import { pilotAccountAllowed, ProvisionabilityError, verifyProvisioningWorkflow } from "./worker/provisionability";
+import { dispatchPendingProvisioning } from "./worker/provisioning-dispatch";
+import { reconcileStripeSubscriptions } from "./worker/subscription-reconciliation";
 
 export { GitHubUserGrant } from "./worker/grant";
 
@@ -159,8 +168,80 @@ async function applyAccountPlan(env: Env, request: Request, login: string) {
   return json(await applyPlan(state.client, plan, body.mode));
 }
 
+async function residentCheckout(env: Env, request: Request) {
+  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
+  const state = await authenticatedState(env, request);
+  const account = state.activeAccount;
+  if (!account) throw httpError({ error: "Select a GitHub account before checkout" }, 400);
+  if (account.type !== "Organization") throw httpError({ error: "Resident subscriptions require a GitHub organization" }, 400);
+  if (!pilotAccountAllowed(account.id, env.RESIDENT_PILOT_GITHUB_ACCOUNT_IDS)) {
+    throw httpError({ error: "Resident checkout is currently limited to approved pilot organizations" }, 403);
+  }
+  if (!account.installationId) throw httpError({ error: "Install the GitHub App for this account before checkout" }, 400);
+  if (!account.repository) throw httpError({ error: "Create the organization's .agents repository before checkout" }, 409);
+  const viewer = await tokenIdentity(state.client);
+  if (!await canAdministerBilling(state.client, account, viewer.id)) {
+    throw httpError({ error: "Organization administrator access is required for billing" }, 403);
+  }
+  const workflow = env.PROVISIONING_WORKFLOW?.trim();
+  if (!workflow) throw httpError({ error: "Resident provisioning is not configured" }, 503);
+  try {
+    await verifyProvisioningWorkflow(provisioningOctokit(env, account.installationId), account.login, workflow);
+  } catch (error) {
+    if (error instanceof ProvisionabilityError) throw httpError({ error: error.message }, 409);
+    const status = Number((error as { status?: number }).status);
+    if (status === 403) throw httpError({ error: "The GitHub App needs Actions write and Contents read access before checkout" }, 409);
+    if (status === 404) throw httpError({ error: "The configured provisioning workflow is not available on main" }, 409);
+    console.error(JSON.stringify({ message: "Provisioning workflow verification failed", status: Number.isFinite(status) ? status : null }));
+    throw httpError({ error: "GitHub could not verify resident provisioning" }, 502);
+  }
+  return createCheckoutSession(request, env, {
+    identity: {
+      githubAccountId: account.id,
+      githubAccountLogin: account.login,
+      githubAccountType: account.type,
+      githubInstallationId: account.installationId,
+      githubUserId: viewer.id,
+      githubUserLogin: viewer.login,
+    },
+    store: new BillingStore(env.BILLING_DB),
+  });
+}
+
+async function checkoutStatus(env: Env, request: Request) {
+  if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
+  const sessionId = new URL(request.url).searchParams.get("session_id")?.trim();
+  if (!sessionId?.startsWith("cs_") || sessionId.length > 255) throw httpError({ error: "A valid Checkout Session is required" }, 400);
+  const state = await authenticatedState(env, request, { repositories: false });
+  const viewer = await tokenIdentity(state.client);
+  const status = await new BillingStore(env.BILLING_DB).getCheckoutStatusBySessionId(sessionId, String(viewer.id));
+  if (!status) throw httpError({ error: "Checkout Session was not found" }, 404);
+  return json({
+    checkout: status.checkoutLease.status,
+    subscription: status.subscription?.status ?? null,
+    entitlement: status.entitlement?.status ?? null,
+    resident: status.resident ? {
+      name: status.resident.agentResourceName,
+      desiredState: status.resident.desiredState,
+      observedState: status.resident.observedState,
+    } : null,
+  });
+}
+
+function paidResidentResolver(env: Env) {
+  const store = new BillingStore(env.BILLING_DB);
+  return async (githubAccountId: number, installationId: number) => {
+    const account = await store.getBillingAccountByGitHubAccountId(String(githubAccountId));
+    if (!account || account.githubInstallationId !== String(installationId)) return null;
+    const status = await store.getAccountStatus(account.id);
+    if (!status?.resident?.personaLogin) return null;
+    return await store.hasActiveResidentEntitlement(account.id, status.resident.id, "wake")
+      ? status.resident.personaLogin : null;
+  };
+}
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, context?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     try {
       if (url.pathname.startsWith("/api/auth/")) {
@@ -173,7 +254,34 @@ export default {
         return auth.handler(request);
       }
 
-      if (url.pathname === "/api/webhooks/github" && request.method === "POST") return await handleGitHubWebhook(request, webhookDeps(env));
+      if (url.pathname === "/api/webhooks/github" && request.method === "POST") {
+        return await handleGitHubWebhook(request, webhookDeps(env, paidResidentResolver(env)));
+      }
+      if (url.pathname === "/api/webhooks/stripe") {
+        return await handleStripeWebhook(request, env, {
+          store: new BillingStore(env.BILLING_DB),
+          dispatchProvisioning: async (account) => {
+            const workflow = env.PROVISIONING_WORKFLOW?.trim();
+            if (!workflow) throw new Error("Provisioning workflow is not configured");
+            await installationOctokit(env, Number(account.githubInstallationId)).request(
+              "POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
+              { owner: account.githubAccountLogin, repo: ".agents", workflow_id: workflow, ref: "main" },
+            );
+          },
+        });
+      }
+      if (url.pathname === "/api/billing/checkout") return await residentCheckout(env, request);
+      if (url.pathname === "/api/billing/status") return await checkoutStatus(env, request);
+      if (url.pathname === "/api/internal/billing/inference/preflight") return await handleInferencePreflight(request, env);
+      if (url.pathname === "/api/internal/billing/inference/usage") {
+        const response = await handleInferenceUsage(request, env);
+        if (response.ok) context?.waitUntil(exportPendingMeterEvents(env).catch((error) => {
+          console.error(JSON.stringify({ message: "Stripe meter export failed", error: error instanceof Error ? error.message : "Unexpected error" }));
+        }));
+        return response;
+      }
+      if (url.pathname === "/api/internal/provisioning/claim") return await handleProvisioningClaim(request, env);
+      if (url.pathname === "/api/internal/provisioning/callback") return await handleProvisioningCallback(request, env);
       if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
         const state = await authenticatedState(env, request);
@@ -209,6 +317,42 @@ export default {
         console.error(JSON.stringify({ message: "dashboard request failed", method: request.method, path: url.pathname, error: message }));
       }
       return json({ error: message }, status);
+    }
+  },
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    const [meterExport, subscriptionReconciliation] = await Promise.allSettled([
+      exportPendingMeterEvents(env),
+      reconcileStripeSubscriptions(env),
+    ]);
+    if (meterExport.status === "fulfilled") {
+      console.log(JSON.stringify({ message: "Stripe meter export completed", ...meterExport.value }));
+    } else {
+      console.error(JSON.stringify({
+        message: "Stripe meter export failed",
+        error: meterExport.reason instanceof Error ? meterExport.reason.message : "Unexpected error",
+      }));
+    }
+    if (subscriptionReconciliation.status === "fulfilled") {
+      console.log(JSON.stringify({
+        message: "Stripe subscription reconciliation completed",
+        ...subscriptionReconciliation.value,
+      }));
+    } else {
+      console.error(JSON.stringify({
+        message: "Stripe subscription reconciliation scan failed",
+        error: subscriptionReconciliation.reason instanceof Error
+          ? subscriptionReconciliation.reason.message
+          : "Unexpected error",
+      }));
+    }
+    try {
+      const result = await dispatchPendingProvisioning(env);
+      console.log(JSON.stringify({ message: "Resident provisioning redispatch completed", ...result }));
+    } catch (error) {
+      console.error(JSON.stringify({
+        message: "Resident provisioning redispatch scan failed",
+        error: error instanceof Error ? error.message : "Unexpected error",
+      }));
     }
   },
 } satisfies ExportedHandler<Env>;

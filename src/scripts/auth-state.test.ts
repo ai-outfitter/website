@@ -5,8 +5,8 @@ import { cachedAuthState, clearCachedAuthState, resetAuthStateForTests, resolveA
 
 const index = {
   user: { name: "Nicholas" },
-  activeAccount: { login: "ai-outfitter", type: "Organization" as const },
-  accounts: [{ login: "ai-outfitter", type: "Organization" as const }],
+  activeAccount: { id: 1, login: "ai-outfitter", type: "Organization" as const },
+  accounts: [{ id: 1, login: "ai-outfitter", type: "Organization" as const }],
   githubAppSlug: "ai-outfitter",
 };
 

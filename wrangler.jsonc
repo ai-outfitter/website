@@ -16,15 +16,35 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/api/webhooks/*", "/dashboard/*"]
+    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/api/billing/*", "/api/internal/*", "/api/webhooks/*", "/dashboard/*"]
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
     "GITHUB_APP_SLUG": "ai-outfitter",
     "GITHUB_APP_ID": "4253427",
     "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
-    "FACTORY_AUTO_START_ACTOR_IDS": "8276365"
+    "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
+    "BILLING_MARKUP_BASIS_POINTS": "2000",
+    "BILLING_HARD_SPEND_LIMIT_MICROS": "100000000",
+    "BILLING_ALERT_THRESHOLD_MICROS": "80000000",
+    "BILLING_RATE_CARD_VERSION": "2026-09-17",
+    "AUDITABILITY_CHECKOUT_ENABLED": "false",
+    "PROVISIONING_OIDC_AUDIENCE": "ai-outfitter-billing",
+    "PROVISIONING_OIDC_SUBJECT": "repo:Unsupervisedcom/.agents:ref:refs/heads/main",
+    "PROVISIONING_OIDC_WORKFLOW_REF": "Unsupervisedcom/.agents/.github/workflows/deploy.yml@refs/heads/main",
+    "PROVISIONING_OIDC_REPOSITORY_ID": "1318516359",
+    "PROVISIONING_OIDC_REPOSITORY_OWNER_ID": "36771436",
+    "PROVISIONING_WORKFLOW": "provision-resident.yml",
+    "RESIDENT_AGENT_NAME_OVERRIDES": "{\"36771436\":\"unsupervised-luce\"}",
+    "RESIDENT_PILOT_GITHUB_ACCOUNT_IDS": "36771436"
   },
+  "d1_databases": [
+    {
+      "binding": "BILLING_DB",
+      "database_name": "ai-outfitter-billing",
+      "migrations_dir": "migrations"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
@@ -37,6 +57,9 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   "env": {
     "preview": {
       "workers_dev": true,
@@ -47,8 +70,28 @@
         "GITHUB_APP_SLUG": "ai-outfitter",
         "GITHUB_APP_ID": "4253427",
         "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
-        "FACTORY_AUTO_START_ACTOR_IDS": "8276365"
+        "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
+        "BILLING_MARKUP_BASIS_POINTS": "2000",
+        "BILLING_HARD_SPEND_LIMIT_MICROS": "100000000",
+        "BILLING_ALERT_THRESHOLD_MICROS": "80000000",
+        "BILLING_RATE_CARD_VERSION": "2026-09-17",
+        "AUDITABILITY_CHECKOUT_ENABLED": "false",
+        "PROVISIONING_OIDC_AUDIENCE": "ai-outfitter-billing",
+        "PROVISIONING_OIDC_SUBJECT": "repo:Unsupervisedcom/.agents:ref:refs/heads/main",
+        "PROVISIONING_OIDC_WORKFLOW_REF": "Unsupervisedcom/.agents/.github/workflows/deploy.yml@refs/heads/main",
+        "PROVISIONING_OIDC_REPOSITORY_ID": "1318516359",
+        "PROVISIONING_OIDC_REPOSITORY_OWNER_ID": "36771436",
+        "PROVISIONING_WORKFLOW": "provision-resident.yml",
+        "RESIDENT_AGENT_NAME_OVERRIDES": "{\"36771436\":\"unsupervised-luce\"}",
+        "RESIDENT_PILOT_GITHUB_ACCOUNT_IDS": "36771436"
       },
+      "d1_databases": [
+        {
+          "binding": "BILLING_DB",
+          "database_name": "ai-outfitter-billing-preview",
+          "migrations_dir": "migrations"
+        }
+      ],
       "durable_objects": {
         "bindings": [
           { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }

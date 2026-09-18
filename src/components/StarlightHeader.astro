@@ -13,6 +13,7 @@ import AccountNav from './AccountNav.astro';
     <Search />
   </div>
   <div class="header-actions print:hidden">
+    <a class="pricing-link" href="/pricing/">Pricing</a>
     <div class="social-icons">
       <SocialIcons />
     </div>
@@ -54,6 +55,15 @@ import AccountNav from './AccountNav.astro';
       gap: 1rem;
     }
 
+    .pricing-link {
+      color: var(--site-signal-high, var(--sl-color-text-accent));
+      font-size: 0.78rem;
+      font-weight: 750;
+      letter-spacing: 0.09em;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
     .social-icons::after {
       content: '';
       height: 2rem;
@@ -87,6 +97,7 @@ import AccountNav from './AccountNav.astro';
     }
 
     @media (max-width: 30rem) {
+      .pricing-link,
       .social-icons {
         display: none;
       }

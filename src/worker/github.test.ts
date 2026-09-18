@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { accounts, localGitHubToken, sourceFreshness, tokenAccounts } from "./github";
+import { accounts, canAdministerBilling, localGitHubToken, sourceFreshness, tokenAccounts } from "./github";
 
 describe("account .agents repository discovery", () => {
   it("discovers only the exact account repository and never inspects nested directories", async () => {
     const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
-      if (route === "GET /user") return { data: { login: "octo" } };
+      if (route === "GET /user") return { data: { id: 7, login: "octo" } };
       if (route === "GET /user/installations") return { data: { installations: [
-        { id: 7, account: { login: "octo", type: "User" } },
-        { id: 8, account: { login: "acme", type: "Organization" } },
+        { id: 7, account: { id: 7, login: "octo", type: "User" } },
+        { id: 8, account: { id: 8, login: "acme", type: "Organization" } },
       ] } };
       if (route === "GET /repos/{owner}/{repo}") {
         const owner = String(input.owner);
@@ -33,14 +33,15 @@ describe("account .agents repository discovery", () => {
 
   it("lists accounts without repository discovery for navigation", async () => {
     const request = vi.fn(async (route: string) => {
-      if (route === "GET /user") return { data: { login: "octo" } };
+      if (route === "GET /user") return { data: { id: 7, login: "octo" } };
       if (route === "GET /user/installations") return { data: { installations: [
-        { id: 8, updated_at: "2026-08-31T00:00:00Z", account: { login: "acme", type: "Organization" } },
+        { id: 8, updated_at: "2026-08-31T00:00:00Z", account: { id: 8, login: "acme", type: "Organization" } },
       ] } };
       throw new Error(`Unexpected request: ${route}`);
     });
 
     expect(await accounts({ request } as never, { repositories: false })).toEqual([{
+      id: 8,
       login: "acme",
       type: "Organization",
       installationId: 8,
@@ -91,7 +92,7 @@ describe("local PAT development", () => {
   it("discovers the PAT owner and organizations with exact .agents lookups", async () => {
     const request = vi.fn(async (route: string, input: Record<string, unknown>) => {
       if (route === "GET /user") return { data: { id: 7, login: "octo", name: "Octo" } };
-      if (route === "GET /user/orgs") return { data: [{ login: "acme" }] };
+      if (route === "GET /user/orgs") return { data: [{ id: 8, login: "acme" }] };
       if (route === "GET /repos/{owner}/{repo}") {
         const owner = String(input.owner);
         if (owner === "acme") throw Object.assign(new Error("missing"), { status: 404 });
@@ -101,8 +102,8 @@ describe("local PAT development", () => {
     });
 
     await expect(tokenAccounts({ request } as never, "acme")).resolves.toEqual([
-      { login: "acme", type: "Organization", installationId: null, repository: null },
-      { login: "octo", type: "User", installationId: null, repository: {
+      { id: 8, login: "acme", type: "Organization", installationId: null, repository: null },
+      { id: 7, login: "octo", type: "User", installationId: null, repository: {
         id: 7, fullName: "octo/.agents", owner: "octo", defaultBranch: "main", private: true, canPush: true,
       } },
     ]);
@@ -112,15 +113,35 @@ describe("local PAT development", () => {
   it("lists PAT accounts without repository discovery for navigation", async () => {
     const request = vi.fn(async (route: string) => {
       if (route === "GET /user") return { data: { id: 7, login: "octo", name: "Octo" } };
-      if (route === "GET /user/orgs") return { data: [{ login: "acme" }] };
+      if (route === "GET /user/orgs") return { data: [{ id: 8, login: "acme" }] };
       throw new Error(`Unexpected request: ${route}`);
     });
 
     await expect(tokenAccounts({ request } as never, "", { repositories: false })).resolves.toEqual([
-      { login: "acme", type: "Organization", installationId: null, repository: null },
-      { login: "octo", type: "User", installationId: null, repository: null },
+      { id: 8, login: "acme", type: "Organization", installationId: null, repository: null },
+      { id: 7, login: "octo", type: "User", installationId: null, repository: null },
     ]);
     expect(request).not.toHaveBeenCalledWith("GET /repos/{owner}/{repo}", expect.anything());
+  });
+});
+
+describe("billing administration", () => {
+  it("allows only the personal account owner or an active organization admin", async () => {
+    const personal = { id: 7, login: "octo", type: "User", installationId: 7, repository: null } as const;
+    await expect(canAdministerBilling({ request: vi.fn() } as never, personal, 7)).resolves.toBe(true);
+    await expect(canAdministerBilling({ request: vi.fn() } as never, personal, 8)).resolves.toBe(false);
+
+    const organization = { id: 8, login: "acme", type: "Organization", installationId: 8, repository: null } as const;
+    const activeAdmin = { request: vi.fn(async () => ({ data: { state: "active", role: "admin" } })) };
+    const member = { request: vi.fn(async () => ({ data: { state: "active", role: "member" } })) };
+    await expect(canAdministerBilling(activeAdmin as never, organization, 7)).resolves.toBe(true);
+    await expect(canAdministerBilling(member as never, organization, 7)).resolves.toBe(false);
+  });
+
+  it("fails closed when organization membership is unavailable", async () => {
+    const organization = { id: 8, login: "acme", type: "Organization", installationId: 8, repository: null } as const;
+    const client = { request: vi.fn(async () => { throw Object.assign(new Error("missing"), { status: 404 }); }) };
+    await expect(canAdministerBilling(client as never, organization, 7)).resolves.toBe(false);
   });
 });
 

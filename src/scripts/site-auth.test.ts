@@ -36,13 +36,13 @@ describe("site authentication navigation", () => {
   it("shows every available organization and personal account", async () => {
     const fetcher = vi.fn(async () => Response.json({
       user: { name: "Nicholas" },
-      activeAccount: { login: "ai-outfitter", type: "Organization" },
+      activeAccount: { id: 1, login: "ai-outfitter", type: "Organization" },
       accounts: [
-        { login: "old", type: "Organization", updatedAt: "2026-01-01T00:00:00Z" },
-        { login: "ai-outfitter", type: "Organization", updatedAt: "2026-08-30T00:00:00Z" },
-        { login: "Unsupervisedcom", type: "Organization", updatedAt: "2026-08-31T00:00:00Z" },
-        { login: "ks.systems", type: "Organization", updatedAt: "2026-08-29T00:00:00Z" },
-        { login: "ncrmro", type: "User", updatedAt: "2026-08-31T00:00:00Z" },
+        { id: 5, login: "old", type: "Organization", updatedAt: "2026-01-01T00:00:00Z" },
+        { id: 1, login: "ai-outfitter", type: "Organization", updatedAt: "2026-08-30T00:00:00Z" },
+        { id: 2, login: "Unsupervisedcom", type: "Organization", updatedAt: "2026-08-31T00:00:00Z" },
+        { id: 3, login: "ks.systems", type: "Organization", updatedAt: "2026-08-29T00:00:00Z" },
+        { id: 4, login: "ncrmro", type: "User", updatedAt: "2026-08-31T00:00:00Z" },
       ],
       githubAppSlug: "ai-outfitter",
     }));
@@ -77,10 +77,10 @@ describe("site authentication navigation", () => {
   it("switches organization scope and signs out from the account menu", async () => {
     const index = {
       user: { name: "Nicholas" },
-      activeAccount: { login: "ai-outfitter", type: "Organization" },
+      activeAccount: { id: 1, login: "ai-outfitter", type: "Organization" },
       accounts: [
-        { login: "ai-outfitter", type: "Organization" },
-        { login: "Unsupervisedcom", type: "Organization" },
+        { id: 1, login: "ai-outfitter", type: "Organization" },
+        { id: 2, login: "Unsupervisedcom", type: "Organization" },
       ],
       githubAppSlug: "ai-outfitter",
     };
@@ -104,8 +104,8 @@ describe("site authentication navigation", () => {
 
   it("preserves the selected workflow when switching organizations", async () => {
     const index = {
-      user: {}, activeAccount: { login: "ai-outfitter", type: "Organization" },
-      accounts: [{ login: "ai-outfitter", type: "Organization" }, { login: "Unsupervisedcom", type: "Organization" }], githubAppSlug: "ai-outfitter",
+      user: {}, activeAccount: { id: 1, login: "ai-outfitter", type: "Organization" },
+      accounts: [{ id: 1, login: "ai-outfitter", type: "Organization" }, { id: 2, login: "Unsupervisedcom", type: "Organization" }], githubAppSlug: "ai-outfitter",
     };
     const fetcher = vi.fn(async (input: RequestInfo | URL) => String(input) === "/api/accounts" ? Response.json(index) : Response.json({ activeAccount: index.accounts[1] }));
     const location = locationAt("/dashboard/ai-outfitter/workflows/adversarial-review/");
@@ -117,8 +117,8 @@ describe("site authentication navigation", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const index = {
-      user: {}, activeAccount: { login: "ai-outfitter", type: "Organization" },
-      accounts: [{ login: "ai-outfitter", type: "Organization" }], githubAppSlug: "ai-outfitter",
+      user: {}, activeAccount: { id: 1, login: "ai-outfitter", type: "Organization" },
+      accounts: [{ id: 1, login: "ai-outfitter", type: "Organization" }], githubAppSlug: "ai-outfitter",
     };
     const fetcher = vi.fn()
       .mockResolvedValueOnce(Response.json(index))
