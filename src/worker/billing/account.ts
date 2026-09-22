@@ -1,3 +1,4 @@
+import { UsageBudget, type ReserveInput } from "./budget";
 import { PartnerCredit, partnerAllowance } from "./partner-credit";
 import { DurableObject } from "cloudflare:workers";
 import { CreditLedger, purchaseCents } from "./ledger";
@@ -7,16 +8,30 @@ import { stripeRequest } from "./stripe";
 export class BillingAccount extends DurableObject<Env> {
   private ledger: CreditLedger;
   private partner: PartnerCredit;
+  private budget: UsageBudget;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.partner = new PartnerCredit(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
     this.ledger = new CreditLedger(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
+    this.budget = new UsageBudget(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
   }
 
   balance(workspace: string) {
     const promotionalMicros = this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
     return { ...this.ledger.balance(), promotionalMicros };
   }
+
+  usage(workspace: string) {
+    this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
+    return this.budget.summary();
+  }
+  setSpendingPolicy(enabled: boolean, limitMicros: number | null) { this.budget.policy(enabled, limitMicros); }
+  reserve(workspace: string, input: ReserveInput) {
+    this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
+    return this.budget.reserve(input);
+  }
+  settle(id: string, actualMicros: number) { return this.budget.settle(id, actualMicros); }
+  release(id: string) { return this.budget.settle(id, 0); }
 
   async checkout(workspace: string, purchaseId: string, cents: number) {
     purchaseCents(cents);

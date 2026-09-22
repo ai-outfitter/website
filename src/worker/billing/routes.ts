@@ -64,13 +64,13 @@ async function webhook(request: Request, env: Env) {
 export async function billingRoute(request: Request, env: Env): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   const isWebhook = path === "/api/webhooks/stripe";
-  const match = path.match(/^\/api\/billing\/([^/]+)(\/checkout)?$/);
+  const match = path.match(/^\/api\/billing\/([^/]+)(\/(checkout|limits))?$/);
   if (!isWebhook && !match) return null;
   try {
     // Keep fulfilling purchased credit even when new purchases are disabled.
     if (isWebhook) return request.method === "POST" ? await webhook(request, env) : json({ error: "Method not allowed" }, 405);
-    if (request.method !== (match![2] ? "POST" : "GET")) return json({ error: "Method not allowed" }, 405);
-    if (request.method === "POST" && request.headers.get("origin") !== new URL(env.BETTER_AUTH_URL).origin) return json({ error: "Invalid origin" }, 403);
+    if (request.method !== (match![3] === "limits" ? "PUT" : match![3] === "checkout" ? "POST" : "GET")) return json({ error: "Method not allowed" }, 405);
+    if (["POST", "PUT"].includes(request.method) && request.headers.get("origin") !== new URL(env.BETTER_AUTH_URL).origin) return json({ error: "Invalid origin" }, 403);
     if (String(env.BILLING_ENABLED) !== "true") return json({ error: "Billing is not open yet" }, 503);
     if (path === "/api/billing/accounts" && request.method === "GET") {
       if (!await session(env, request.headers)) return json({ error: "Sign in required" }, 401);
@@ -88,7 +88,13 @@ export async function billingRoute(request: Request, env: Env): Promise<Response
     }
     const workspace = await billingOwner(request, env, decodeURIComponent(match![1]));
     const account = env.BILLING_ACCOUNTS.getByName(workspace);
-    if (!match![2]) return json({ workspace, ...await account.balance(workspace) });
+    if (!match![2]) return json({ workspace, ...await account.usage(workspace) });
+    if (match![3] === "limits") {
+      const input = JSON.parse(await limitedText(request, 4096));
+      if (!input || typeof input.enabled !== "boolean" || (input.limitMicros !== null && (!Number.isSafeInteger(input.limitMicros) || input.limitMicros < 0 || input.limitMicros > 1_000_000_000_000))) return json({ error: "Provide an explicit spending limit or null for uncapped usage" }, 400);
+      await account.setSpendingPolicy(input.enabled, input.limitMicros);
+      return json({ workspace, ...await account.usage(workspace) });
+    }
     let input: { purchaseId?: unknown; cents?: unknown };
     try {
       input = JSON.parse(await limitedText(request, 4096));

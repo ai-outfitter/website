@@ -9,7 +9,7 @@ import { stripeSignature } from "./stripe-webhook";
 const checkout = vi.fn(async () => ({ url: "https://checkout.stripe.com/c/pay" }));
 const reconcile = vi.fn();
 const balance = vi.fn(async () => ({ paidMicros: 10_000_000, currency: "usd" }));
-const getByName = vi.fn(() => ({ checkout, reconcile, balance }));
+const getByName = vi.fn(() => ({ checkout, reconcile, balance, usage: balance, setSpendingPolicy: vi.fn() }));
 const env = { BETTER_AUTH_URL: "https://example.com", BILLING_ENABLED: "true", STRIPE_LIVE_MODE: "false", STRIPE_SECRET_KEY: "sk_test_fake", STRIPE_WEBHOOK_SECRET: "whsec_fake", BILLING_ACCOUNTS: { getByName } } as unknown as Env;
 const purchaseId = "00000000-0000-4000-8000-000000000001";
 function buy(origin = "https://example.com", cents = 1000) {

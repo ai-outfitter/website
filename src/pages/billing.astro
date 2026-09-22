@@ -12,6 +12,14 @@ import SiteShell from "../layouts/SiteShell.astro";
       <label>Credit in USD <input id="billing-amount" type="number" min="5" max="1000" step="0.01" value="20" required /></label>
       <button id="billing-buy" type="submit" disabled>Buy credit</button>
     </form>
+    <form id="spending-form" hidden>
+      <h2>Monthly paid usage</h2>
+      <label><input id="spending-enabled" type="checkbox" /> Enable paid inference</label>
+      <label><input id="spending-uncapped" type="checkbox" /> Allow uncapped paid usage</label>
+      <label>Monthly maximum in USD <input id="spending-limit" type="number" min="0" step="0.01" value="20" /></label>
+      <p>Free partner credit is additional. Uncapped usage still requires prepaid credit.</p>
+      <button type="submit">Save spending limit</button>
+    </form>
     <p>Payment confirmation can take a moment. Returning from Checkout does not confirm that credit has arrived.</p>
     <a href="/dashboard/">Back to dashboard</a>
   </main>
