@@ -22,6 +22,14 @@ HTTPS service-host allowlist configured independently. The browser cannot set
 those values. Inference additionally requires the hosted gateway and account
 credit/spending policy to be enabled.
 
+## Owner onboarding
+
+The account menu links to `/residents/`. Choose a personal or owner organization
+account, name the manager and engineer, select installed repositories, and enable
+issue triage. Refresh shows independent readiness for both residents. Owned
+accounts remain selectable after App removal, and the disable action remains
+available when service settings cannot load. The server always rechecks ownership.
+
 ## Owner API
 
 - `GET /api/residents` lists the signed-in user and active owner organizations,
