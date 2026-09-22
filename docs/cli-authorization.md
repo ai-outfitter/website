@@ -29,7 +29,8 @@ membership permission prevents organization spending.
   Organization access loss returns 403; changing explicitly to personal remains
   possible. There is no automatic payer fallback.
 - `POST /api/cli/logout` revokes the device's access and refresh credentials.
-  Refresh expired access first. Logout does not require current organization
+  The last issued access token can revoke even after access expiry. Logout
+  remains available while the feature is disabled, without current organization
   access or an available GitHub API.
 
 The gateway imports `authenticateCli(request, env)` from `worker/cli-auth`. It

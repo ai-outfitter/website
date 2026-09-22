@@ -68,6 +68,16 @@ describe("CLI device credentials", () => {
     vi.advanceTimersByTime(30 * 86400_000);
     expect(await device.exchange(refreshed.refresh!, true)).toEqual({ error: "invalid_grant" });
   });
+  it("allows the last expired access credential to revoke without refreshing", async () => {
+    vi.useFakeTimers(); const { device } = fixture(); const secret = randomSecret();
+    await device.create(secret); device.approve(user, workspace);
+    const tokens = await device.exchange(secret);
+    vi.advanceTimersByTime(900_001);
+    expect(await device.authenticate(tokens.access!)).toBeNull();
+    expect(await device.revoke(randomSecret())).toBe(false);
+    expect(await device.revoke(tokens.access!)).toBe(true);
+    expect(await device.exchange(tokens.refresh!, true)).toEqual({ error: "invalid_grant" });
+  });
   it("switches only with valid access and revokes the full device session", async () => {
     const { device } = fixture(); const secret = randomSecret();
     await device.create(secret); device.approve(user, workspace);
