@@ -34,6 +34,26 @@ describe("CLI authorization boundary", () => {
     emailVerified = false;
     expect((await authenticateCli(request("/api/cli/me"), env)).user.email).toBe("fallback@example.com");
   });
+  it("keeps optional email failures separate from identity and membership authorization", async () => {
+    const original = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation(async (route: string) => {
+      if (route === "GET /user/emails") throw Object.assign(new Error("temporarily unavailable"), { status: 503 });
+      return original(route);
+    });
+    expect((await authenticateCli(request("/api/cli/me"), env)).user.email).toBe("fallback@example.com");
+    device.email.mockRejectedValueOnce(new Error("optional profile unavailable"));
+    expect((await authenticateCli(request("/api/cli/me"), env)).user).toEqual({ id: "github:1" });
+    mocks.request.mockImplementation(async (route: string) => {
+      if (route === "GET /user") throw Object.assign(new Error("identity unavailable"), { status: 503 });
+      return original(route);
+    });
+    expect((await handleCli(request("/api/cli/me"), env)).status).toBe(503);
+    mocks.request.mockImplementation(async (route: string) => {
+      if (route === "GET /user/memberships/orgs") throw Object.assign(new Error("membership unavailable"), { status: 503 });
+      return original(route);
+    });
+    expect((await handleCli(request("/api/cli/me"), env)).status).toBe(503);
+  });
   it("allows owners and explicitly allowed active members only", async () => {
     selected = org;
     expect((await handleCli(request("/api/cli/me"), env)).status).toBe(403);

@@ -67,8 +67,11 @@ async function contextFor(env: Env, id: number) {
   try {
     const emails = (await client.request("GET /user/emails")).data;
     email = emails.find((item) => item.verified && item.primary)?.email ?? emails.find((item) => item.verified)?.email;
-  } catch (error) { if (![403, 404].includes(Number((error as { status?: number }).status))) throw error; }
-  email ??= await env.CLI_DEVICES.getByName(userId).email();
+  } catch { /* Email enriches analytics; its availability does not authorize inference. */ }
+  if (!email) {
+    try { email = await env.CLI_DEVICES.getByName(userId).email(); }
+    catch { /* Optional account email may also be temporarily unavailable. */ }
+  }
   return { user: { id: userId, ...(email ? { email } : {}) }, workspaces, client };
 }
 function bearer(request: Request) {
