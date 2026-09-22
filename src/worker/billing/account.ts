@@ -1,3 +1,4 @@
+import { AutomaticTopups, type TopupSettings } from "./topups";
 import { UsageBudget, type ReserveInput } from "./budget";
 import { PartnerCredit, partnerAllowance } from "./partner-credit";
 import { DurableObject } from "cloudflare:workers";
@@ -9,11 +10,13 @@ export class BillingAccount extends DurableObject<Env> {
   private ledger: CreditLedger;
   private partner: PartnerCredit;
   private budget: UsageBudget;
+  private topups: AutomaticTopups;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.partner = new PartnerCredit(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
     this.ledger = new CreditLedger(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
     this.budget = new UsageBudget(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
+    this.topups = new AutomaticTopups(ctx.storage.sql, (path, body, key) => stripeRequest(stripeKey(this.env), path, body, key), this.ledger, (workspace, payment) => this.reconcilePayment(workspace, payment));
   }
 
   balance(workspace: string) {
@@ -26,9 +29,54 @@ export class BillingAccount extends DurableObject<Env> {
     return this.budget.summary();
   }
   setSpendingPolicy(enabled: boolean, limitMicros: number | null) { this.budget.policy(enabled, limitMicros); }
-  reserve(workspace: string, input: ReserveInput) {
-    this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
-    return this.budget.reserve(input);
+  async reserve(workspace: string, input: ReserveInput) {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const customer = await this.ctx.storage.get<string>("stripeCustomer");
+      this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
+      let result;
+      try { result = this.budget.reserve(input); }
+      catch (error) {
+        if (!(error instanceof Error) || error.message !== "insufficient_credit" || !customer) throw error;
+        await this.topups.maybeRefill(workspace, customer, this.budget.summary(), input.maximumMicros, this.env.TOPUPS_ENABLED === "true");
+        // Payment I/O can cross UTC midnight; the new allowance takes precedence over paid credit.
+        this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
+        return this.budget.reserve(input);
+      }
+      // Low-balance replenishment follows an admitted paid request. Never charge for free inference.
+      if (customer && result.paidMicros > 0 && result.status === "reserved") {
+        const summary = this.budget.summary();
+        await this.topups.maybeRefill(workspace, customer, summary, summary.promotionalMicros + 1, this.env.TOPUPS_ENABLED === "true").catch(() => { /* An admitted request must retain its reservation even if payment setup fails. */ });
+      }
+      return result;
+    });
+  }
+  topupStatus() { return this.topups.status(); }
+  async setupTopups(workspace: string, actor: string, input: TopupSettings) {
+    if (this.env.TOPUPS_ENABLED !== "true") throw new Error("Automatic topups disabled");
+    return this.ctx.blockConcurrencyWhile(async () => {
+      return this.topups.setup(workspace, await this.customer(workspace), actor, input, new URL(this.env.BETTER_AUTH_URL).origin);
+    });
+  }
+  async confirmTopups(workspace: string, session: string) {
+    if (this.env.TOPUPS_ENABLED !== "true") throw new Error("Automatic topups disabled");
+    return this.ctx.blockConcurrencyWhile(async () => this.topups.finishSetup(workspace, await this.customer(workspace), session));
+  }
+  disableTopups(actor: string) { return this.topups.disable(actor); }
+  async reconcileTopups(workspace: string) {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      await this.topups.refreshPending(workspace, false);
+      return this.topups.status();
+    });
+  }
+  private async customer(workspace: string) {
+    let customer = await this.ctx.storage.get<string>("stripeCustomer");
+    if (!customer) {
+      const result = await stripeRequest(stripeKey(this.env), "customers", new URLSearchParams({ "metadata[outfitter_workspace]": workspace }), `customer:${workspace}`);
+      if (typeof result.id !== "string" || !result.id.startsWith("cus_")) throw new Error("Invalid payment customer");
+      customer = result.id;
+      await this.ctx.storage.put("stripeCustomer", customer);
+    }
+    return customer!;
   }
   settle(id: string, actualMicros: number) { return this.budget.settle(id, actualMicros); }
   release(id: string) { return this.budget.settle(id, 0); }
@@ -37,13 +85,7 @@ export class BillingAccount extends DurableObject<Env> {
     purchaseCents(cents);
     return this.ctx.blockConcurrencyWhile(async () => {
       const secret = stripeKey(this.env);
-      let customer = await this.ctx.storage.get<string>("stripeCustomer");
-      if (!customer) {
-        const result = await stripeRequest(secret, "customers", new URLSearchParams({ "metadata[outfitter_workspace]": workspace }), `customer:${workspace}`);
-        if (typeof result.id !== "string" || !result.id.startsWith("cus_")) throw new Error("Invalid payment customer");
-        customer = result.id;
-        await this.ctx.storage.put("stripeCustomer", customer);
-      }
+      const customer = await this.customer(workspace);
       this.ledger.begin(purchaseId, cents, customer!);
       const existing = await this.ctx.storage.get<{ url: string; expires: number }>(`checkout:${purchaseId}`);
       if (existing) {
@@ -73,8 +115,9 @@ export class BillingAccount extends DurableObject<Env> {
   }
 
   async reconcile(workspace: string, paymentId: string) {
-    // Fetch current Stripe state while serialized: delivery order cannot restore a disputed payment.
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => this.reconcilePayment(workspace, paymentId));
+  }
+  private async reconcilePayment(workspace: string, paymentId: string) {
       const payment = await stripeRequest(stripeKey(this.env), `payment_intents/${encodeURIComponent(paymentId)}?expand[]=latest_charge`);
       if (payment.metadata?.outfitter_workspace !== workspace || payment.currency !== "usd") throw new Error("Payment workspace mismatch");
       if (payment.status !== "succeeded") return;
@@ -90,6 +133,5 @@ export class BillingAccount extends DurableObject<Env> {
         id: payment.metadata.outfitter_purchase, payment: payment.id, customer: payment.customer,
         receivedCents: payment.amount_received, refundedCents: charge.amount_refunded, disputed,
       });
-    });
   }
 }

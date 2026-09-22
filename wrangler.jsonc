@@ -34,6 +34,7 @@
     "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
     "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
     "BILLING_ENABLED": "false",
+    "TOPUPS_ENABLED": "false",
     "STRIPE_LIVE_MODE": "false"
   },
   "durable_objects": {
@@ -78,6 +79,7 @@
         "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
         "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
         "BILLING_ENABLED": "false",
+        "TOPUPS_ENABLED": "false",
         "STRIPE_LIVE_MODE": "false"
       },
       "durable_objects": {

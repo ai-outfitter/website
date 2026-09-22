@@ -1,3 +1,4 @@
+import { topupSettings } from "./topups";
 import { session } from "../auth";
 import { github } from "../github";
 import { purchaseCents } from "./ledger";
@@ -64,14 +65,16 @@ async function webhook(request: Request, env: Env) {
 export async function billingRoute(request: Request, env: Env): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   const isWebhook = path === "/api/webhooks/stripe";
-  const match = path.match(/^\/api\/billing\/([^/]+)(\/(checkout|limits))?$/);
+  const match = path.match(/^\/api\/billing\/([^/]+)(\/(checkout|limits|topups|topups\/setup|topups\/confirm|topups\/reconcile))?$/);
   if (!isWebhook && !match) return null;
   try {
     // Keep fulfilling purchased credit even when new purchases are disabled.
     if (isWebhook) return request.method === "POST" ? await webhook(request, env) : json({ error: "Method not allowed" }, 405);
-    if (request.method !== (match![3] === "limits" ? "PUT" : match![3] === "checkout" ? "POST" : "GET")) return json({ error: "Method not allowed" }, 405);
-    if (["POST", "PUT"].includes(request.method) && request.headers.get("origin") !== new URL(env.BETTER_AUTH_URL).origin) return json({ error: "Invalid origin" }, 403);
-    if (String(env.BILLING_ENABLED) !== "true") return json({ error: "Billing is not open yet" }, 503);
+    const action = match![3];
+    const expected = action === "topups" ? ["GET", "DELETE"] : action?.startsWith("topups/") || action === "checkout" ? ["POST"] : action === "limits" ? ["PUT"] : ["GET"];
+    if (!expected.includes(request.method)) return json({ error: "Method not allowed" }, 405);
+    if (["POST", "PUT", "DELETE"].includes(request.method) && request.headers.get("origin") !== new URL(env.BETTER_AUTH_URL).origin) return json({ error: "Invalid origin" }, 403);
+    if (String(env.BILLING_ENABLED) !== "true" && request.method !== "GET" && !(action === "topups" && request.method === "DELETE") && action !== "topups/reconcile") return json({ error: "Billing is not open yet" }, 503);
     if (path === "/api/billing/accounts" && request.method === "GET") {
       if (!await session(env, request.headers)) return json({ error: "Sign in required" }, 401);
       const client = await github(env, request);
@@ -88,6 +91,22 @@ export async function billingRoute(request: Request, env: Env): Promise<Response
     }
     const workspace = await billingOwner(request, env, decodeURIComponent(match![1]));
     const account = env.BILLING_ACCOUNTS.getByName(workspace);
+    if (action?.startsWith("topups")) {
+      // Disabling and read-only reconciliation remain available after the feature closes.
+      if (action === "topups" && request.method === "GET") return json({ featureEnabled: env.TOPUPS_ENABLED === "true", ...await account.topupStatus() });
+      if (action === "topups/reconcile") return json(await account.reconcileTopups(workspace));
+      const actor = `github:${(await session(env, request.headers))!.user.githubUserId}`;
+      if (action === "topups" && request.method === "DELETE") return json(await account.disableTopups(actor));
+      if (env.TOPUPS_ENABLED !== "true") return json({ error: "Automatic topups are not open yet" }, 503);
+      let input;
+      try { input = JSON.parse(await limitedText(request, 4096)); } catch { return json({ error: "Invalid topup settings" }, 400); }
+      if (action === "topups/setup") {
+        try { topupSettings(input); } catch { return json({ error: "Consent, whole-cent threshold, and $5–$1,000 amount greater than threshold are required" }, 400); }
+        return json(await account.setupTopups(workspace, actor, input));
+      }
+      if (!input || typeof input.session !== "string" || !/^cs_[A-Za-z0-9_]+$/.test(input.session)) return json({ error: "A setup session is required" }, 400);
+      return json(await account.confirmTopups(workspace, input.session));
+    }
     if (!match![2]) return json({ workspace, ...await account.usage(workspace) });
     if (match![3] === "limits") {
       const input = JSON.parse(await limitedText(request, 4096));

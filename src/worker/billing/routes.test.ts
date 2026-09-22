@@ -75,3 +75,33 @@ describe("Stripe fulfillment", () => {
     expect((await billingRoute(await delivery(), env))?.status).toBe(503);
   });
 });
+
+describe("automatic topup owner endpoints", () => {
+  const setupTopups = vi.fn(async () => ({ url: "https://checkout.stripe.com/c/setup" }));
+  const disableTopups = vi.fn(async () => ({ enabled: false }));
+  const confirmTopups = vi.fn(async () => ({ enabled: true }));
+  function action(path: string, method = "POST", body: unknown = {}, origin = "https://example.com") {
+    return new Request(`https://example.com/api/billing/alice/topups${path}`, { method, headers: { origin }, body: JSON.stringify(body) });
+  }
+  it("requires feature enablement and explicit consent before saving a card", async () => {
+    const enabled = { ...env, TOPUPS_ENABLED: "true", BILLING_ACCOUNTS: { getByName: () => ({ setupTopups }) } } as unknown as Env;
+    expect((await billingRoute(action("/setup", "POST", { thresholdCents: 500, amountCents: 2000, consent: true }), env))?.status).toBe(503);
+    expect((await billingRoute(action("/setup", "POST", { thresholdCents: 500, amountCents: 2000 }), enabled))?.status).toBe(400);
+    expect((await billingRoute(action("/setup", "POST", { thresholdCents: 500, amountCents: 2000, consent: true }), enabled))?.status).toBe(200);
+    expect(setupTopups).toHaveBeenCalledWith("user:42", "github:42", { thresholdCents: 500, amountCents: 2000, consent: true });
+  });
+  it("allows revocation after feature or billing closure and still rejects CSRF/nonowners", async () => {
+    const disabled = { ...env, BILLING_ENABLED: "false", TOPUPS_ENABLED: "false", BILLING_ACCOUNTS: { getByName: () => ({ disableTopups }) } } as unknown as Env;
+    expect((await billingRoute(action("", "DELETE"), disabled))?.status).toBe(200);
+    expect(disableTopups).toHaveBeenCalledWith("github:42");
+    expect((await billingRoute(action("", "DELETE", {}, "https://evil.example"), disabled))?.status).toBe(403);
+    mocks.session.mockResolvedValue({ user: { githubUserId: 5 } });
+    expect((await billingRoute(action("", "DELETE"), disabled))?.status).toBe(403);
+  });
+  it("requires explicit authenticated POST to verify a saved card", async () => {
+    const enabled = { ...env, TOPUPS_ENABLED: "true", BILLING_ACCOUNTS: { getByName: () => ({ confirmTopups }) } } as unknown as Env;
+    expect((await billingRoute(new Request("https://example.com/api/billing/alice/topups/confirm?session=cs_test"), enabled))?.status).toBe(405);
+    expect((await billingRoute(action("/confirm", "POST", { session: "cs_test" }), enabled))?.status).toBe(200);
+    expect(confirmTopups).toHaveBeenCalledWith("user:42", "cs_test");
+  });
+});
