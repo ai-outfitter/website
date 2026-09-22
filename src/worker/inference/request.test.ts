@@ -19,6 +19,24 @@ function setup() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("durable generation reconciliation", () => {
+  it("records internal Spark token usage without charging customers", async () => {
+    const { instance, billing, input, state } = setup();
+    await instance.begin({ ...input, provider: "spark", maximumMicros: 0 });
+    await instance.observe({ id: "spark-id", promptTokens: 50, completionTokens: 7, cost: 99 });
+    await instance.complete();
+    expect(billing.settle).toHaveBeenCalledExactlyOnceWith("request-1", 0);
+    expect(state()).toMatchObject({ provider: "spark", promptTokens: 50, completionTokens: 7, status: "settled", cost: 0 });
+  });
+  it("clears a zero-priced interrupted Spark hold without consulting OpenRouter", async () => {
+    const { instance, billing, input, state } = setup();
+    await instance.begin({ ...input, provider: "spark", maximumMicros: 0 });
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await instance.alarm();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(billing.settle).toHaveBeenCalledWith("request-1", 0);
+    expect(state().completionTokens).toBeUndefined();
+  });
   it("persists the request before reserving and rejects reused dispatch IDs", async () => {
     const { instance, billing, storage, input } = setup();
     await instance.begin(input);

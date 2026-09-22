@@ -171,6 +171,7 @@ export default {
     try {
       const inference = await inferenceRoute(request, {
         enabled: String(env.INFERENCE_ENABLED) === "true", models: env.INFERENCE_MODELS, openRouterKey: env.OPENROUTER_API_KEY,
+        spark: { enabled: String(env.SPARK_ENABLED) === "true", users: env.SPARK_INTERNAL_USERS, models: env.SPARK_MODELS, baseUrl: env.SPARK_BASE_URL, apiKey: env.SPARK_API_KEY },
       }, {
         authorize: (value) => authenticateCli(value, env),
         recorder: (id) => env.INFERENCE_REQUESTS.getByName(id),

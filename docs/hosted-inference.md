@@ -64,3 +64,32 @@ lookup retries and missing cost, denied budgets, allowlist/cost-mode rejection,
 workspace attribution, account markup, and disabled-route behavior are covered
 by the inference tests. These are local tests; paid production and live provider
 acceptance remain deployment gates.
+
+## Internal DGX Spark
+
+Spark is a separate disabled-by-default adapter: set `SPARK_ENABLED=true` and
+`SPARK_INTERNAL_USERS` to a comma-separated list of stable `github:<numeric-id>`
+user IDs. This is a user entitlement, never an organization-wide grant. Both
+model discovery and invocation enforce it; guessed model IDs remain forbidden.
+
+Set `SPARK_BASE_URL` and `SPARK_API_KEY` as Worker secrets. The endpoint must be an
+authenticated HTTPS OpenAI-compatible `/v1` URL reachable from the Worker. A raw
+Tailscale-only address will need an approved reachable proxy/service first; this
+change does not create a tunnel or publish an internal endpoint.
+
+`SPARK_MODELS` is a JSON array with the same model fields as above. IDs must start
+with `spark/`, `upstream` must match the actual served model name, `provider` is
+`spark`, and all five pricing fields must be zero. Context and output allowances
+must match the running model. Spark does not receive OpenRouter routing options.
+Public model configuration cannot use the reserved `spark/` namespace.
+
+Internal requests reserve and settle zero customer cost while recording account,
+user, model, generation ID and any reported prompt/completion token counts. Missing
+token usage stays unknown, including interrupted streams. Spark reconciliation
+never queries OpenRouter, and neither provider falls back to the other.
+
+Before enabling: verify the real endpoint's model name and context limits, complete
+a tool-using streamed request as an internal user, inspect its zero-priced account
+record, and prove a non-entitled user cannot discover or invoke that same model.
+These live endpoint checks remain required; local adapter tests do not establish
+DGX connectivity.
