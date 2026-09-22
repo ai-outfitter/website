@@ -44,3 +44,13 @@ No card is required. Removing an account revokes unused promotional credit on
 its next request. Grants renew on access in each UTC calendar month, never
 accumulate, and amount changes apply next month. Re-enrolling a revoked account
 in the same month does not issue a second grant. Paid credit is unchanged.
+
+## Usage budgets
+
+`PUT /api/billing/:login/limits` is owner-only and accepts
+`{enabled:boolean,limitMicros:number|null}`. Null explicitly chooses uncapped;
+paid usage defaults disabled. The cap applies to paid usage including markup.
+Reservations atomically hold free credit first, then paid credit, including
+concurrent requests. Settlement releases unused holds exactly once. Unknown
+costs stay reserved. In-flight usage belongs to its admission UTC month;
+unused promotional reservations never roll into a later month's grant.
