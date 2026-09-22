@@ -34,6 +34,26 @@ describe("CLI authorization boundary", () => {
     emailVerified = false;
     expect((await authenticateCli(request("/api/cli/me"), env)).user.email).toBe("fallback@example.com");
   });
+  it("keeps optional email failures separate from identity and membership authorization", async () => {
+    const original = mocks.request.getMockImplementation()!;
+    mocks.request.mockImplementation(async (route: string) => {
+      if (route === "GET /user/emails") throw Object.assign(new Error("temporarily unavailable"), { status: 503 });
+      return original(route);
+    });
+    expect((await authenticateCli(request("/api/cli/me"), env)).user.email).toBe("fallback@example.com");
+    device.email.mockRejectedValueOnce(new Error("optional profile unavailable"));
+    expect((await authenticateCli(request("/api/cli/me"), env)).user).toEqual({ id: "github:1" });
+    mocks.request.mockImplementation(async (route: string) => {
+      if (route === "GET /user") throw Object.assign(new Error("identity unavailable"), { status: 503 });
+      return original(route);
+    });
+    expect((await handleCli(request("/api/cli/me"), env)).status).toBe(503);
+    mocks.request.mockImplementation(async (route: string) => {
+      if (route === "GET /user/memberships/orgs") throw Object.assign(new Error("membership unavailable"), { status: 503 });
+      return original(route);
+    });
+    expect((await handleCli(request("/api/cli/me"), env)).status).toBe(503);
+  });
   it("allows owners and explicitly allowed active members only", async () => {
     selected = org;
     expect((await handleCli(request("/api/cli/me"), env)).status).toBe(403);
@@ -73,6 +93,17 @@ describe("CLI authorization boundary", () => {
     mocks.session.mockResolvedValue(null);
     expect((await handleCli(request("/api/cli/approve", "POST", { user_code: "a".repeat(20), action: "approve" }, "https://example.com"), env)).status).toBe(401);
     expect((await handleCli(request("/api/cli/token", "POST", { value: "x".repeat(5000) }), env)).status).toBe(413);
+  });
+  it("keeps authenticated logout available when sign-in is disabled", async () => {
+    selected = org;
+    const disabled = { ...env, CLI_AUTH_ENABLED: "false" };
+    expect((await handleCli(request("/api/cli/logout", "POST"), disabled)).status).toBe(204);
+    expect(device.revoke).toHaveBeenCalledWith("b".repeat(64));
+    expect(mocks.request).not.toHaveBeenCalled();
+    device.revoke.mockResolvedValueOnce(false);
+    expect((await handleCli(request("/api/cli/logout", "POST"), disabled)).status).toBe(401);
+    expect((await handleCli(new Request("https://example.com/api/cli/logout", { method: "POST" }), disabled)).status).toBe(401);
+    expect((await handleCli(request("/api/cli/me"), disabled)).status).toBe(404);
   });
   it("revokes without requiring a still-accessible organization", async () => {
     selected = org;
