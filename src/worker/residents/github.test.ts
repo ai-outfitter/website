@@ -8,7 +8,7 @@ vi.mock("../app", () => ({ installationOctokit: () => ({ request: deps.installat
 import { ownerOptions, triageGitHubToken } from "./github";
 const workspace = { id: "org:12", login: "team", type: "Organization" as const };
 const env = { GITHUB_APP_ID: "app", GITHUB_APP_PRIVATE_KEY: "private" } as unknown as Env;
-const config = { workspace, installationId: 42, repositories: [{ id: 101, fullName: "team/app" }], enabled: true, credentialVersion: "v", revision: "r", projectManagerName: "Mira", engineerName: "Eli" };
+const config = { workspace, installationId: 42, repositories: [{ id: 101, fullName: "team/app" }], enabled: true, credentialVersion: "v", revision: "r", generation: 1, deploymentFingerprint: "f", projectManagerName: "Mira", engineerName: "Eli" };
 beforeEach(() => {
   vi.clearAllMocks(); deps.session.mockResolvedValue({ user: { githubUserId: 1 } });
   deps.userRequest.mockImplementation(async (route) => {

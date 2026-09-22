@@ -11,7 +11,7 @@ export async function verifyInstallation(env: Env, workspace: Workspace, install
   const { data } = await app(env).request("GET /app/installations/{installation_id}", { installation_id: installationId });
   if (!data.account || String(data.account.id) !== workspace.id.split(":")[1] || data.suspended_at || !("login" in data.account) || data.account.login.toLowerCase() !== workspace.login.toLowerCase()) residentFailure("Installation access is unavailable", 403);
 }
-export async function ownerOptions(request: Request, env: Env, login: string) {
+export async function ownerWorkspace(request: Request, env: Env, login: string) {
   const current = await session(env, request.headers);
   if (!current?.user.githubUserId) residentFailure("Sign in required", 401);
   const client = await github(env, request);
@@ -23,10 +23,14 @@ export async function ownerOptions(request: Request, env: Env, login: string) {
     if (membership.role !== "admin" || membership.state !== "active") residentFailure("Organization owner required", 403);
   } else residentFailure("Unsupported account", 403);
   const workspace: Workspace = { id: `${owner.type === "User" ? "user" : "org"}:${owner.id}`, login: owner.login, type: owner.type as "User" | "Organization" };
+  return { workspace, client, ownerId: owner.id };
+}
+export async function ownerOptions(request: Request, env: Env, login: string) {
+  const { workspace, client, ownerId } = await ownerWorkspace(request, env, login);
   let installationId: number | undefined;
   for (let page = 1; ; page++) {
     const data = (await client.request("GET /user/installations", { page, per_page: 100 })).data.installations;
-    const installation = data.find((item) => item.account?.id === owner.id);
+    const installation = data.find((item) => item.account?.id === ownerId);
     if (installation) { installationId = installation.id; break; }
     if (data.length < 100) break;
   }
@@ -36,7 +40,7 @@ export async function ownerOptions(request: Request, env: Env, login: string) {
   const repositories: SelectedRepository[] = [];
   for (let page = 1; ; page++) {
     const batch = (await installation.request("GET /installation/repositories", { page, per_page: 100 })).data.repositories;
-    for (const repo of batch) if (repo.owner.id === owner.id && !repo.archived && !repo.disabled && Number.isSafeInteger(Number(repo.id))) repositories.push({ id: Number(repo.id), fullName: repo.full_name });
+    for (const repo of batch) if (repo.owner.id === ownerId && !repo.archived && !repo.disabled && Number.isSafeInteger(Number(repo.id))) repositories.push({ id: Number(repo.id), fullName: repo.full_name });
     if (batch.length < 100) break;
   }
   return { workspace, installationId, repositories };

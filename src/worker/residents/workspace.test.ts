@@ -7,7 +7,7 @@ vi.mock("./operator", () => operator);
 import { ResidentWorkspace } from "./workspace";
 import { residentToken, parseResidentToken } from "./credentials";
 import { sanitizedStatus, validateEnrollment, type Enrollment } from "./contracts";
-const ready = { state: "ready", agents: [{ role: "project-manager", name: "Mira", ready: true }, { role: "engineer", name: "Eli", ready: true }] };
+const ready = { generation: 1, state: "ready", agents: [{ role: "project-manager", name: "Mira", ready: true }, { role: "engineer", name: "Eli", ready: true }] };
 const enrollment: Enrollment = { workspace: { id: "org:12", login: "team", type: "Organization" }, installationId: 42, repositories: [{ id: 101, fullName: "team/app" }], projectManagerName: "Mira", engineerName: "Eli" };
 const task = { id: "triage:org:12:101:9", repository: enrollment.repositories[0], issueNumber: 9, availableLabels: ["bug"], message: "Triage only" };
 const secret = btoa("a".repeat(32));
@@ -18,14 +18,14 @@ function setup() {
     get: async <T>(key: string) => structuredClone(values.get(key)) as T | undefined,
     put: async (key: string, value: unknown) => { values.set(key, structuredClone(value)); },
     delete: async (key: string) => values.delete(key),
-    list: async ({ prefix, limit = Infinity }: { prefix: string; limit?: number }) => new Map([...values].filter(([key]) => key.startsWith(prefix)).slice(0, limit)),
+    list: async ({ prefix, startAfter, limit = Infinity }: { prefix: string; startAfter?: string; limit?: number }) => new Map([...values].filter(([key]) => key.startsWith(prefix) && (!startAfter || key > startAfter)).sort(([a], [b]) => a.localeCompare(b)).slice(0, limit)),
     setAlarm: vi.fn(async () => {}), deleteAlarm: vi.fn(async () => {}),
   };
   const storage = { ...baseStorage, transaction: <T>(fn: (txn: typeof baseStorage) => Promise<T>): Promise<T> => { const result = tail.then(() => fn(baseStorage)); tail = result.then(() => {}, () => {}); return result; } };
-  const instance = new ResidentWorkspace({ storage } as unknown as DurableObjectState, { RESIDENTS_ENABLED: "true", RESIDENT_CREDENTIAL_SECRET: secret } as unknown as Env);
+  const instance = new ResidentWorkspace({ storage } as unknown as DurableObjectState, { RESIDENTS_ENABLED: "true", BETTER_AUTH_URL: "https://outfitter.test", RESIDENT_CREDENTIAL_SECRET: secret } as unknown as Env);
   return { instance, storage, values };
 }
-beforeEach(() => { vi.clearAllMocks(); access.verifyRepositoryScope.mockResolvedValue(undefined); operator.provisionResidents.mockResolvedValue(ready); operator.residentStatus.mockResolvedValue(ready); operator.sendTriage.mockResolvedValue(undefined); });
+beforeEach(() => { vi.clearAllMocks(); access.verifyRepositoryScope.mockResolvedValue(undefined); operator.provisionResidents.mockImplementation(async (_env, config) => ({ ...ready, generation: config.generation })); operator.residentStatus.mockResolvedValue(ready); operator.sendTriage.mockResolvedValue(undefined); });
 
 describe("resident workspace", () => {
   it("preserves stable credentials and desired revision on enrollment retries", async () => {
@@ -34,6 +34,7 @@ describe("resident workspace", () => {
     await instance.enroll(enrollment); const second = await instance.configuration();
     expect(second?.credentialVersion).toBe(first?.credentialVersion);
     expect(second?.revision).toBe(first?.revision);
+    expect(second?.generation).toBe(first?.generation);
     expect(JSON.stringify(await instance.status())).not.toContain(first!.credentialVersion);
   });
   it("authenticates role-bound tokens, revokes on disable and rotates on re-enable", async () => {
@@ -99,12 +100,30 @@ describe("resident workspace", () => {
     expect(operator.provisionResidents).toHaveBeenCalledTimes(2);
     expect(operator.provisionResidents.mock.calls[1][1].engineerName).toBe("Ada");
   });
+  it("increments generations for changes and refuses stale readiness", async () => {
+    const { instance } = setup(); await instance.enroll(enrollment);
+    await instance.enroll({ ...enrollment, engineerName: "Ada" });
+    expect((await instance.configuration())?.generation).toBe(2);
+    operator.residentStatus.mockResolvedValue({ ...ready, generation: 1 });
+    expect(await instance.status()).toMatchObject({ state: "provisioning", agents: [{ ready: false }, { ready: false }] });
+    await instance.disable(); await instance.enroll(enrollment);
+    expect((await instance.configuration())?.generation).toBe(4);
+  });
+  it("advances past twenty failing queued tasks to reach healthy later tasks", async () => {
+    const { instance } = setup(); await instance.enroll(enrollment);
+    operator.sendTriage.mockRejectedValue(new Error("unavailable"));
+    for (let i = 1; i <= 25; i++) await instance.enqueue(42, { ...task, id: `task-${String(i).padStart(2, "0")}`, issueNumber: i });
+    operator.sendTriage.mockClear();
+    operator.sendTriage.mockImplementation(async (_env, _workspace, input) => { if (input.issueNumber <= 20) throw new Error("still unavailable"); });
+    await instance.alarm(); await instance.alarm();
+    expect(operator.sendTriage.mock.calls.some((call) => call[2].issueNumber === 25)).toBe(true);
+  });
   it("does not accept shell syntax in display names or foreign repository names", () => {
     expect(() => validateEnrollment({ ...enrollment, engineerName: "$(printenv)" })).toThrow();
     expect(() => validateEnrollment({ ...enrollment, repositories: [{ id: 1, fullName: "other/app" }] })).toThrow();
   });
   it("strips operator diagnostics and rejects contradictory readiness", () => {
-    expect(JSON.stringify(sanitizedStatus({ state: "failed", agents: ready.agents.map((agent) => ({ ...agent, ready: false, reason: "Bearer private-token" })) }))).not.toContain("private-token");
+    expect(JSON.stringify(sanitizedStatus({ generation: 1, state: "failed", agents: ready.agents.map((agent) => ({ ...agent, ready: false, reason: "Bearer private-token" })) }))).not.toContain("private-token");
     expect(() => sanitizedStatus({ ...ready, agents: ready.agents.map((agent) => ({ ...agent, ready: false })) })).toThrow();
   });
 });

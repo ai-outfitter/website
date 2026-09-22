@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { randomSecret } from "../cli-state";
+import { digest, randomSecret } from "../cli-state";
 import { validateEnrollment, type Enrollment, type ResidentConfiguration, type TriageTask } from "./contracts";
 import { verifyResidentToken } from "./credentials";
 import { verifyRepositoryScope } from "./github";
@@ -11,12 +11,13 @@ export class ResidentWorkspace extends DurableObject<Env> {
   configuration() { return this.ctx.storage.get<ResidentConfiguration>("configuration"); }
   async enroll(input: Enrollment) {
     validateEnrollment(input);
+    const deploymentFingerprint = await digest(JSON.stringify({ origin: new URL(this.env.BETTER_AUTH_URL).origin, key: this.env.RESIDENT_CREDENTIAL_SECRET }));
     const config = await this.ctx.storage.transaction(async (txn) => {
       const old = await txn.get<ResidentConfiguration>("configuration");
       if (old && old.workspace.id !== input.workspace.id) throw new Error("Workspace collision");
       // Exact retries preserve the desired revision and tokens. Re-enabling rotates credentials.
-      const same = old?.enabled && JSON.stringify({ workspace: old.workspace, installationId: old.installationId, repositories: old.repositories, projectManagerName: old.projectManagerName, engineerName: old.engineerName }) === JSON.stringify(input);
-      const value: ResidentConfiguration = { ...input, enabled: true, credentialVersion: old?.enabled ? old.credentialVersion : randomSecret(16), revision: same ? old.revision : crypto.randomUUID() };
+      const same = old?.enabled && old.deploymentFingerprint === deploymentFingerprint && JSON.stringify({ workspace: old.workspace, installationId: old.installationId, repositories: old.repositories, projectManagerName: old.projectManagerName, engineerName: old.engineerName }) === JSON.stringify(input);
+      const value: ResidentConfiguration = { ...input, enabled: true, credentialVersion: old?.enabled && old.deploymentFingerprint === deploymentFingerprint ? old.credentialVersion : randomSecret(16), revision: same ? old.revision : crypto.randomUUID(), generation: same ? old.generation : (old?.generation ?? 0) + 1, deploymentFingerprint };
       await txn.put("configuration", value);
       await txn.put("provisionPending", true);
       return value;
@@ -27,7 +28,7 @@ export class ResidentWorkspace extends DurableObject<Env> {
   async disable() {
     await this.ctx.storage.transaction(async (txn) => {
       const config = await txn.get<ResidentConfiguration>("configuration");
-      if (config) await txn.put("configuration", { ...config, enabled: false, credentialVersion: randomSecret(16), revision: crypto.randomUUID() });
+      if (config) await txn.put("configuration", { ...config, enabled: false, credentialVersion: randomSecret(16), revision: crypto.randomUUID(), generation: config.generation + 1 });
       await txn.put("provisionPending", false);
     });
     return { enabled: false };
@@ -40,11 +41,11 @@ export class ResidentWorkspace extends DurableObject<Env> {
   async status() {
     const config = await this.configuration();
     if (!config) return { enrolled: false };
-    const { credentialVersion: _secretVersion, ...visible } = config;
+    const { credentialVersion: _secretVersion, deploymentFingerprint: _fingerprint, ...visible } = config;
     if (!config.enabled) return { enrolled: true, ...visible, state: "disabled", agents: [] };
     try {
       const status = await residentStatus(this.env, config.workspace.id);
-      if (await this.ctx.storage.get("provisionPending")) return { enrolled: true, ...visible, state: "provisioning", agents: status.agents.map((agent) => ({ ...agent, ready: false })) };
+      if (status.generation !== config.generation || await this.ctx.storage.get("provisionPending")) return { enrolled: true, ...visible, state: "provisioning", agents: status.agents.map((agent) => ({ ...agent, ready: false })) };
       return { enrolled: true, ...visible, ...status };
     }
     catch { return { enrolled: true, ...visible, state: "failed", agents: [], reason: "Resident operator unavailable; retry after checking its connection" }; }
@@ -60,6 +61,7 @@ export class ResidentWorkspace extends DurableObject<Env> {
     if (!claimed) return { enrolled: true, state: "provisioning", agents: [] };
     try {
       const status = await provisionResidents(this.env, config);
+      if (status.generation !== config.generation) throw new Error("Operator generation mismatch");
       const current = await this.ctx.storage.transaction(async (txn) => {
         const latest = await txn.get<ResidentConfiguration>("configuration");
         await txn.delete("provisionLease");
@@ -124,8 +126,13 @@ export class ResidentWorkspace extends DurableObject<Env> {
     if (!config?.enabled) return;
     await this.ctx.storage.setAlarm(Date.now() + 60_000);
     if (await this.ctx.storage.get("provisionPending")) await this.reconcile(config);
-    const tasks = await this.ctx.storage.list({ prefix: "pending:", limit: 20 });
-    for (const [key] of tasks) await this.deliver(`task:${key.slice("pending:".length)}`);
+    const cursor = await this.ctx.storage.get<string>("pendingCursor");
+    let tasks = await this.ctx.storage.list({ prefix: "pending:", startAfter: cursor, limit: 20 });
+    if (!tasks.size && cursor) tasks = await this.ctx.storage.list({ prefix: "pending:", limit: 20 });
+    for (const [key] of tasks) {
+      await this.deliver(`task:${key.slice("pending:".length)}`);
+      await this.ctx.storage.put("pendingCursor", key);
+    }
     await this.ctx.storage.transaction(async (txn) => {
       const pending = await txn.list({ prefix: "pending:", limit: 1 });
       if (!pending.size && !await txn.get("provisionPending")) await txn.deleteAlarm();

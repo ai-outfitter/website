@@ -3,7 +3,7 @@ import { boundedText } from "../inference/stream";
 import { record } from "../inference/models";
 import { residentJson, residentFailure, validateEnrollment } from "./contracts";
 import { parseResidentToken } from "./credentials";
-import { ownerOptions, triageGitHubToken, verifyInstallation } from "./github";
+import { ownerOptions, ownerWorkspace, triageGitHubToken, verifyInstallation } from "./github";
 
 async function readInput(request: Request) {
   try { const value: unknown = JSON.parse(await boundedText(request, 16_384)); if (record(value)) return value; }
@@ -28,6 +28,13 @@ export async function residentRoute(request: Request, env: Env): Promise<Respons
   const path = new URL(request.url).pathname;
   if (!path.startsWith("/api/residents/")) return null;
   try {
+    const disable = path.match(/^\/api\/residents\/([^/]+)$/);
+    // Owners can always revoke enrollment, including during feature closure or App removal.
+    if (request.method === "DELETE" && disable) {
+      if (request.headers.get("origin") !== new URL(env.BETTER_AUTH_URL).origin) residentFailure("Invalid origin", 403);
+      const { workspace } = await ownerWorkspace(request, env, decodeURIComponent(disable[1]));
+      return residentJson(await env.RESIDENT_WORKSPACES.getByName(workspace.id).disable());
+    }
     if (String(env.RESIDENTS_ENABLED) !== "true") return residentJson({ error: "Resident triage is not enabled yet" }, 503);
     if (path === "/api/residents/github-token") {
       if (request.method !== "POST") residentFailure("Method not allowed", 405);
@@ -42,7 +49,6 @@ export async function residentRoute(request: Request, env: Env): Promise<Respons
     const options = await ownerOptions(request, env, decodeURIComponent(match[1]));
     const store = env.RESIDENT_WORKSPACES.getByName(options.workspace.id);
     if (request.method === "GET") return residentJson({ ...options, status: await store.status() });
-    if (request.method === "DELETE") return residentJson(await store.disable());
     const input = await readInput(request);
     if (Object.keys(input).some((key) => !["repository_ids", "projectManagerName", "engineerName"].includes(key)) || !Array.isArray(input.repository_ids) || !input.repository_ids.length || input.repository_ids.some((id) => !Number.isSafeInteger(id)) || new Set(input.repository_ids).size !== input.repository_ids.length || typeof input.projectManagerName !== "string" || typeof input.engineerName !== "string") residentFailure("Select repositories and name both residents");
     const selected = options.repositories.filter((repo) => (input.repository_ids as unknown[]).includes(repo.id));

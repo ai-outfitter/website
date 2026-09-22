@@ -15,7 +15,7 @@ export async function provisionResidents(env: Env, config: ResidentConfiguration
   const origin = new URL(env.BETTER_AUTH_URL);
   if (origin.protocol !== "https:" || !env.RESIDENT_CREDENTIAL_SECRET) throw new Error("Resident service unavailable");
   const [projectManagerToken, engineerToken, taskToken] = await Promise.all(["project-manager", "engineer", "task"].map((role) => residentToken(env.RESIDENT_CREDENTIAL_SECRET!, config.workspace.id, role as "project-manager" | "engineer" | "task", config.credentialVersion)));
-  const response = await callOperator(env, config.workspace.id, "PUT", { workspace: config.workspace, installationId: config.installationId, repositories: config.repositories, projectManagerName: config.projectManagerName, engineerName: config.engineerName, serviceBaseUrl: origin.origin, projectManagerToken, engineerToken, taskToken });
+  const response = await callOperator(env, config.workspace.id, "PUT", { generation: config.generation, workspace: config.workspace, installationId: config.installationId, repositories: config.repositories, projectManagerName: config.projectManagerName, engineerName: config.engineerName, serviceBaseUrl: origin.origin, projectManagerToken, engineerToken, taskToken });
   if (!response.ok) { await response.body?.cancel(); throw new Error("Resident provisioning failed"); }
   return sanitizedStatus(JSON.parse(await boundedText(response, 65_536)));
 }

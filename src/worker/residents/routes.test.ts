@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const github = vi.hoisted(() => ({ ownerOptions: vi.fn(), triageGitHubToken: vi.fn(), verifyInstallation: vi.fn() }));
+const github = vi.hoisted(() => ({ ownerOptions: vi.fn(), ownerWorkspace: vi.fn(), triageGitHubToken: vi.fn(), verifyInstallation: vi.fn() }));
 vi.mock("./github", () => github);
 vi.mock("../cli-auth", () => ({ authenticateCli: vi.fn(async () => ({ user: { id: "github:1" }, workspace: { id: "user:1" } })) }));
 import { authenticateInference, residentRoute } from "./routes";
@@ -12,12 +12,19 @@ function setup() {
   return { store, namespace, env: { RESIDENTS_ENABLED: "true", RESIDENT_WORKSPACES: namespace, BETTER_AUTH_URL: "https://outfitter.test" } as unknown as Env };
 }
 const request = (path: string, method = "GET", body?: unknown, origin = "https://outfitter.test") => new Request(`https://outfitter.test${path}`, { method, headers: { origin, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-beforeEach(() => { vi.clearAllMocks(); github.ownerOptions.mockResolvedValue({ workspace, installationId: 42, repositories: config.repositories }); github.verifyInstallation.mockResolvedValue(undefined); github.triageGitHubToken.mockResolvedValue({ token: "scoped", expires_at: "later" }); });
+beforeEach(() => { vi.clearAllMocks(); github.ownerWorkspace.mockResolvedValue({ workspace }); github.ownerOptions.mockResolvedValue({ workspace, installationId: 42, repositories: config.repositories }); github.verifyInstallation.mockResolvedValue(undefined); github.triageGitHubToken.mockResolvedValue({ token: "scoped", expires_at: "later" }); });
 
 describe("resident API authorization", () => {
   it("keeps disabled APIs unavailable", async () => {
     const { env } = setup(); expect((await residentRoute(request("/api/residents/team"), { ...env, RESIDENTS_ENABLED: "false" } as unknown as Env))?.status).toBe(503);
     expect(github.ownerOptions).not.toHaveBeenCalled();
+  });
+  it("allows owner revocation while disabled without installation discovery", async () => {
+    const { env, store } = setup(); github.ownerOptions.mockRejectedValue(new Error("installation removed"));
+    const result = await residentRoute(request("/api/residents/team", "DELETE"), { ...env, RESIDENTS_ENABLED: "false" } as unknown as Env);
+    expect(result?.status).toBe(200); expect(store.disable).toHaveBeenCalledOnce(); expect(github.ownerOptions).not.toHaveBeenCalled();
+    github.ownerWorkspace.mockRejectedValue(new Response(null, { status: 403 }));
+    expect((await residentRoute(request("/api/residents/team", "DELETE"), env))?.status).toBe(403);
   });
   it("requires same-origin ownership and derives all enrollment scope server-side", async () => {
     const { env, store, namespace } = setup();

@@ -31,6 +31,8 @@ credit/spending policy to be enabled.
   `engineerName`. Requires the authenticated account/org owner and same-origin
   request. Repository IDs and installation ownership are checked against GitHub.
 - `DELETE /api/residents/{login}` stops new triage and revokes role credentials.
+  Owner revocation remains available while the feature is closed or installation
+  access is lost; it does not depend on installation discovery.
   Persistent operator resources remain available for subsequent re-enrollment.
   Already minted GitHub installation tokens remain valid until their normal expiry
   or GitHub-side revocation; disabling blocks fresh tokens immediately.
@@ -38,7 +40,10 @@ credit/spending policy to be enabled.
 Names are display strings only; the operator derives resource identities from the
 stable numeric workspace and role. Exact enrollment retries retain identity and
 credentials. Re-enabling rotates credentials. Provisioning retries are durable
-and serialized so an older desired state cannot overtake a newer one.
+and serialized. Each changed enrollment has a monotonic generation; the operator
+fences every resource mutation by that generation. Independent status must report
+the same generation before the website reports readiness. Credential-key or service
+origin changes also advance the generation on re-enrollment.
 
 ## Resident access
 
@@ -62,7 +67,8 @@ triggers; they do not fall through to the legacy software-factory handler.
 
 The stable task ID is `triage:<workspace>:<repository-id>:<issue-number>`. A durable
 outbox keeps the first task payload, filters workflow-control labels, and retries
-with that exact ID and payload. Every attempt revalidates the live installation and
+with that exact ID and payload. A persisted round-robin cursor prevents unavailable
+earlier tasks from starving later ones. Every attempt revalidates the live installation and
 repository. A changed enrollment revision cancels its earlier pending tasks,
 including disable/re-enable and installation replacement. The operator sends only to the manager; Channels'
 principal/message-ID deduplication completes the retry boundary. The issue body is
