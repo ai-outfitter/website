@@ -3,7 +3,7 @@ import { UsageBudget, type ReserveInput } from "./budget";
 import { PartnerCredit, partnerAllowance } from "./partner-credit";
 import { DurableObject } from "cloudflare:workers";
 import { CreditLedger, purchaseCents } from "./ledger";
-import { stripeRequest } from "./stripe";
+import { stripeKey, stripeRequest } from "./stripe";
 
 /** One object per stable GitHub account ID. Never keyed by a mutable login. */
 export class BillingAccount extends DurableObject<Env> {
@@ -16,7 +16,7 @@ export class BillingAccount extends DurableObject<Env> {
     this.partner = new PartnerCredit(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
     this.ledger = new CreditLedger(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
     this.budget = new UsageBudget(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
-    this.topups = new AutomaticTopups(ctx.storage.sql, (path, body, key) => stripeRequest(this.env.STRIPE_SECRET_KEY ?? "", path, body, key), this.ledger, (workspace, payment) => this.reconcilePayment(workspace, payment));
+    this.topups = new AutomaticTopups(ctx.storage.sql, (path, body, key) => stripeRequest(stripeKey(this.env), path, body, key), this.ledger, (workspace, payment) => this.reconcilePayment(workspace, payment));
   }
 
   balance(workspace: string) {
@@ -69,7 +69,7 @@ export class BillingAccount extends DurableObject<Env> {
   private async customer(workspace: string) {
     let customer = await this.ctx.storage.get<string>("stripeCustomer");
     if (!customer) {
-      const result = await stripeRequest(this.env.STRIPE_SECRET_KEY ?? "", "customers", new URLSearchParams({ "metadata[outfitter_workspace]": workspace }), `customer:${workspace}`);
+      const result = await stripeRequest(stripeKey(this.env), "customers", new URLSearchParams({ "metadata[outfitter_workspace]": workspace }), `customer:${workspace}`);
       if (typeof result.id !== "string" || !result.id.startsWith("cus_")) throw new Error("Invalid payment customer");
       customer = result.id;
       await this.ctx.storage.put("stripeCustomer", customer);
@@ -82,7 +82,7 @@ export class BillingAccount extends DurableObject<Env> {
   async checkout(workspace: string, purchaseId: string, cents: number) {
     purchaseCents(cents);
     return this.ctx.blockConcurrencyWhile(async () => {
-      const secret = this.env.STRIPE_SECRET_KEY ?? "";
+      const secret = stripeKey(this.env);
       const customer = await this.customer(workspace);
       this.ledger.begin(purchaseId, cents, customer!);
       const existing = await this.ctx.storage.get<{ url: string; expires: number }>(`checkout:${purchaseId}`);
@@ -116,14 +116,14 @@ export class BillingAccount extends DurableObject<Env> {
     return this.ctx.blockConcurrencyWhile(() => this.reconcilePayment(workspace, paymentId));
   }
   private async reconcilePayment(workspace: string, paymentId: string) {
-      const payment = await stripeRequest(this.env.STRIPE_SECRET_KEY ?? "", `payment_intents/${encodeURIComponent(paymentId)}?expand[]=latest_charge`);
+      const payment = await stripeRequest(stripeKey(this.env), `payment_intents/${encodeURIComponent(paymentId)}?expand[]=latest_charge`);
       if (payment.metadata?.outfitter_workspace !== workspace || payment.currency !== "usd") throw new Error("Payment workspace mismatch");
       if (payment.status !== "succeeded") return;
       const charge = payment.latest_charge;
       if (!charge || typeof charge !== "object" || typeof charge.disputed !== "boolean") throw new Error("Payment charge unavailable");
       let disputed = charge.disputed;
       if (disputed) {
-        const disputes = await stripeRequest(this.env.STRIPE_SECRET_KEY ?? "", `disputes?charge=${encodeURIComponent(charge.id)}&limit=100`);
+        const disputes = await stripeRequest(stripeKey(this.env), `disputes?charge=${encodeURIComponent(charge.id)}&limit=100`);
         if (!Array.isArray(disputes.data) || disputes.data.length === 0 || disputes.has_more) throw new Error("Dispute status unavailable");
         disputed = disputes.data.some((item: { status: string }) => item.status !== "won" && item.status !== "warning_closed");
       }

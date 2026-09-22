@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ session: vi.fn(), request: vi.fn(), stripe: vi.fn() }));
 vi.mock("../auth", () => ({ session: mocks.session }));
 vi.mock("../github", () => ({ github: async () => ({ request: mocks.request }) }));
-vi.mock("./stripe", () => ({ stripeRequest: mocks.stripe }));
+vi.mock("./stripe", async (original) => ({ ...await original<typeof import("./stripe")>(), stripeRequest: mocks.stripe }));
 import { billingRoute } from "./routes";
 import { stripeSignature } from "./stripe-webhook";
 

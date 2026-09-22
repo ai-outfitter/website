@@ -6,7 +6,7 @@ vi.mock("./stripe", async (original) => ({ ...await original<typeof import("./st
 const { BillingAccount } = await import("./account");
 let setupId: string, charges: number, payment: Record<string, any>;
 beforeEach(() => {
-  charges = 0;
+  charges = 0; mock.stripe.mockClear();
   mock.stripe.mockImplementation(async (_secret: string, path: string, body?: URLSearchParams) => {
     if (path === "customers") return { id: "cus_test" };
     if (path === "checkout/sessions") { setupId = body!.get("setup_intent_data[metadata][outfitter_setup]")!; return { id: "cs_test", url: "https://checkout.stripe.com/c/setup" }; }
@@ -22,12 +22,12 @@ beforeEach(() => {
     throw Error(path);
   });
 });
-function fixture() {
+function fixture(overrides: Partial<Env> = {}) {
   const db = new DatabaseSync(":memory:");
   const sql = { exec(query: string, ...args: never[]) { const rows = db.prepare(query).all(...args); return { toArray: () => rows, one: () => rows[0] }; } } as unknown as SqlStorage;
   const values = new Map(); let gate = Promise.resolve();
   const ctx = { storage: { sql, get: async (key: string) => values.get(key), put: async (key: string, value: unknown) => { values.set(key, value); }, transactionSync: <T>(fn: () => T) => { db.exec("BEGIN"); try { const result = fn(); db.exec("COMMIT"); return result; } catch (e) { db.exec("ROLLBACK"); throw e; } } }, blockConcurrencyWhile: <T>(fn: () => Promise<T>) => { const result = gate.then(fn); gate = result.then(() => {}, () => {}); return result; } };
-  const env = { TOPUPS_ENABLED: "true", STRIPE_SECRET_KEY: "test", BETTER_AUTH_URL: "https://example.com" } as Env;
+  const env = { TOPUPS_ENABLED: "true", STRIPE_SECRET_KEY: "sk_test_fake", BETTER_AUTH_URL: "https://example.com", ...overrides } as Env;
   return new BillingAccount(ctx as unknown as DurableObjectState, env);
 }
 describe("account automatic topup admission", () => {
@@ -43,6 +43,12 @@ describe("account automatic topup admission", () => {
     expect(account.usage("user:42").paidMicros).toBe(19_999_800);
     account.settle("a", 50); account.release("b");
     expect(account.usage("user:42")).toMatchObject({ paidMicros: 19_999_950, paidUsedMicros: 50 });
+  });
+  it("rejects accidental live keys before setup or checkout can contact Stripe", async () => {
+    const account = fixture({ STRIPE_SECRET_KEY: "sk_live_fake" });
+    await expect(account.setupTopups("user:42", "github:42", { thresholdCents: 500, amountCents: 2000, consent: true })).rejects.toThrow("configured mode");
+    await expect(account.checkout("user:42", "00000000-0000-4000-8000-000000000001", 2000)).rejects.toThrow("configured mode");
+    expect(mock.stripe).not.toHaveBeenCalled();
   });
   it("does not charge when the monthly cap cannot admit the request", async () => {
     const account = fixture(); account.setSpendingPolicy(true, 1);
