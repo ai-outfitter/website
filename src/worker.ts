@@ -1,8 +1,11 @@
+import { authenticateInference, residentRoute } from "./worker/residents/routes";
+import { residentWebhook } from "./worker/residents/webhook";
+export { ResidentWorkspace } from "./worker/residents/workspace";
 import { inferenceRoute } from "./worker/inference/gateway";
 export { InferenceRequest } from "./worker/inference/request";
 import { billingRoute } from "./worker/billing/routes";
 export { BillingAccount } from "./worker/billing/account";
-import { authenticateCli, handleCli } from "./worker/cli-auth";
+import { handleCli } from "./worker/cli-auth";
 export { CliDevice } from "./worker/cli-device";
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
@@ -172,12 +175,14 @@ export default {
       const inference = await inferenceRoute(request, {
         enabled: String(env.INFERENCE_ENABLED) === "true", models: env.INFERENCE_MODELS, openRouterKey: env.OPENROUTER_API_KEY,
       }, {
-        authorize: (value) => authenticateCli(value, env),
+        authorize: (value) => authenticateInference(value, env),
         recorder: (id) => env.INFERENCE_REQUESTS.getByName(id),
         usage: (workspace) => env.BILLING_ACCOUNTS.getByName(workspace).usage(workspace),
         fetch,
       });
       if (inference) return inference;
+      const residents = await residentRoute(request, env);
+      if (residents) return residents;
       const billing = await billingRoute(request, env);
       if (billing) return billing;
       if (url.pathname.startsWith("/api/cli/") || url.pathname === "/cli/authorize") return handleCli(request, env);
@@ -191,7 +196,11 @@ export default {
         return auth.handler(request);
       }
 
-      if (url.pathname === "/api/webhooks/github" && request.method === "POST") return await handleGitHubWebhook(request, webhookDeps(env));
+      if (url.pathname === "/api/webhooks/github" && request.method === "POST") {
+        const residents = await residentWebhook(request.clone(), env);
+        if (residents) return residents;
+        return await handleGitHubWebhook(request, webhookDeps(env));
+      }
       if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
         const state = await authenticatedState(env, request);
