@@ -31,13 +31,15 @@ export class BillingAccount extends DurableObject<Env> {
   setSpendingPolicy(enabled: boolean, limitMicros: number | null) { this.budget.policy(enabled, limitMicros); }
   async reserve(workspace: string, input: ReserveInput) {
     return this.ctx.blockConcurrencyWhile(async () => {
-      this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
       const customer = await this.ctx.storage.get<string>("stripeCustomer");
+      this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
       let result;
       try { result = this.budget.reserve(input); }
       catch (error) {
         if (!(error instanceof Error) || error.message !== "insufficient_credit" || !customer) throw error;
         await this.topups.maybeRefill(workspace, customer, this.budget.summary(), input.maximumMicros, this.env.TOPUPS_ENABLED === "true");
+        // Payment I/O can cross UTC midnight; the new allowance takes precedence over paid credit.
+        this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
         return this.budget.reserve(input);
       }
       // Low-balance replenishment follows an admitted paid request. Never charge for free inference.
