@@ -1,0 +1,57 @@
+---
+import SiteShell from "../layouts/SiteShell.astro";
+---
+<SiteShell title="Resident issue triage | Outfitter" description="Set up named residents to triage your project's new GitHub issues.">
+  <main class="residents">
+    <p class="preview">Design partner preview</p>
+    <h1>Resident issue triage</h1>
+    <p>Your project manager classifies new issues and posts a suggested plan. Your engineer is reserved for later implementation workflows.</p>
+    <p>Issue triage does not create branches, push commits, or open pull requests.</p>
+    <p id="resident-message" role="status" aria-live="polite">Loading your accounts…</p>
+    <p id="resident-sign-in" hidden><a href="/dashboard/">Sign in with GitHub to continue</a></p>
+    <section id="resident-account-panel" hidden>
+      <label>Account <select id="resident-account" required></select></label>
+      <p>Only the personal account owner or an organization owner can enable residents.</p>
+      <form id="resident-form" hidden>
+        <fieldset>
+          <legend>Name your residents</legend>
+          <label>Project manager <input id="resident-manager" maxlength="63" value="Project Manager" required /></label>
+          <label>Engineer <input id="resident-engineer" maxlength="63" value="Engineer" required /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Repositories to triage</legend>
+          <div id="resident-repositories"></div>
+          <p>Choose repositories where the Outfitter GitHub App is installed.</p>
+        </fieldset>
+        <p>Inference uses this account's credit and spending limits. <a href="/billing/">Manage inference credit</a>.</p>
+        <button id="resident-enable" type="submit">Enable issue triage</button>
+      </form>
+      <section id="resident-status-panel" hidden aria-labelledby="resident-state">
+        <h2 id="resident-state">Resident status</h2>
+        <ul id="resident-agents"></ul>
+        <p id="resident-readiness"></p>
+      </section>
+      <button id="resident-refresh" type="button">Refresh status</button>
+      <button id="resident-disable" type="button" hidden>Disable issue triage</button>
+    </section>
+    <p><a href="/dashboard/">Back to dashboard</a></p>
+  </main>
+</SiteShell>
+<style>
+  .residents { max-width: 48rem; margin: 4rem auto; padding: 1.5rem; }
+  .preview { color: var(--site-signal-high); text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; }
+  form, fieldset { display: grid; gap: 1rem; margin-block: 1.5rem; }
+  fieldset { border: 1px solid var(--site-line); padding: 1.2rem; }
+  form[hidden], section[hidden], p[hidden], button[hidden] { display: none; }
+  label { display: grid; gap: .4rem; }
+  select, input, button { font: inherit; padding: .65rem; }
+  #resident-repositories { display: grid; gap: .7rem; max-height: 22rem; overflow: auto; }
+  #resident-repositories :global(label) { display: flex; align-items: center; gap: .65rem; }
+  #resident-repositories :global(input) { flex: 0 0 auto; }
+  #resident-status-panel { margin-block: 2rem; }
+  #resident-disable { margin-left: .6rem; }
+</style>
+<script>
+  import { startResidentPage } from "../scripts/resident-page";
+  void startResidentPage();
+</script>
