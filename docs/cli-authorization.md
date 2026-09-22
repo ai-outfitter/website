@@ -71,3 +71,10 @@ acceptance checks. Before enabling, verify GitHub callback configuration, requir
 permissions, sign-in/approval, model requests, refresh after restart, and logout
 against an internal account. This slice does not send analytics; the CLI must
 apply telemetry consent before identifying this account.
+
+## Website analytics identity
+
+`GET /api/cli/identity` authenticates the browser session and returns the same
+`github:<id>` and account email as CLI `/me`. The website identifies only when
+analytics is enabled, honors DNT and SDK opt-out, and resets identity on logout
+or user switching. Late requests cannot restore a logged-out identity.
