@@ -82,9 +82,9 @@ export class AutomaticTopups {
     const paidNeeded = Math.max(0, maximumMicros - summary.promotionalMicros);
     const remaining = summary.paidLimitMicros === null ? Infinity : summary.paidLimitMicros - summary.paidUsedMicros - summary.paidReservedMicros;
     const eligible = featureEnabled && state.enabled && Boolean(state.method) && summary.paidEnabled && paidNeeded > 0 && summary.paidMicros >= 0 && remaining >= paidNeeded;
-    if (state.pending) { await this.refreshPending(workspace, eligible); return; }
-    if (!eligible || summary.paidMicros + state.amountCents * 10_000 < paidNeeded) return;
-    if (summary.paidMicros >= state.thresholdCents * 10_000 && summary.paidMicros >= paidNeeded) return;
+    const needsRefill = summary.paidMicros < state.thresholdCents * 10_000 || summary.paidMicros < paidNeeded;
+    if (state.pending) { await this.refreshPending(workspace, eligible && needsRefill); return; }
+    if (!eligible || !needsRefill || summary.paidMicros + state.amountCents * 10_000 < paidNeeded) return;
     const attempt: Attempt = { id: crypto.randomUUID(), created: Date.now(), cents: state.amountCents, customer, method: state.method! };
     this.ledger.begin(attempt.id, attempt.cents, customer);
     state.pending = attempt; state.status = "pending"; this.write(state);

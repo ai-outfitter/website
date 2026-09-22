@@ -116,6 +116,24 @@ describe("automatic credit purchases", () => {
     expect(f.requests()).toBe(1); expect(f.ledger.balance().paidMicros).toBe(20_000_000); expect(f.topups.status().enabled).toBe(false);
     expect(f.db.prepare("SELECT action FROM topup_consents ORDER BY id").all()).toEqual([{ action: "authorize" }, { action: "revoke" }]);
   });
+  it("does not submit an unknown attempt after manual credit removes the need to refill", async () => {
+    const f = fixture(); await f.enable(); f.setNetworkError(true);
+    await f.topups.maybeRefill(workspace, "cus_test", f.budget.summary(), 100, true);
+    // Model a request that failed before reaching Stripe: the recorded attempt is still unknown.
+    f.payments.clear(); f.setNetworkError(false);
+    const id = "00000000-0000-4000-8000-000000000001";
+    f.ledger.begin(id, 10_000, "cus_test");
+    f.ledger.reconcile({ id, payment: "pi_manual", customer: "cus_test", receivedCents: 10_000, refundedCents: 0, disputed: false });
+    await f.topups.maybeRefill(workspace, "cus_test", f.budget.summary(), 100, true);
+    expect(f.requests()).toBe(1);
+    expect(f.topups.status()).toMatchObject({ pending: true, status: "reconciliation_required" });
+    expect(f.ledger.balance().paidMicros).toBe(100_000_000);
+    // A later genuine shortage may retry the original durable key while it remains safe.
+    await f.topups.maybeRefill(workspace, "cus_test", { ...f.budget.summary(), paidMicros: 0 }, 100, true);
+    expect(f.requests()).toBe(2);
+    expect(f.payments.size).toBe(1);
+    expect(f.topups.status().pending).toBe(false);
+  });
   it("does not credit processing payments or replace an unresolved attempt", async () => {
     const f = fixture(); await f.enable(); f.setOutcome("processing");
     await f.topups.maybeRefill(workspace, "cus_test", f.budget.summary(), 100, true);
