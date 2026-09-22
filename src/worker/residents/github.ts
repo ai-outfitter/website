@@ -11,6 +11,21 @@ export async function verifyInstallation(env: Env, workspace: Workspace, install
   const { data } = await app(env).request("GET /app/installations/{installation_id}", { installation_id: installationId });
   if (!data.account || String(data.account.id) !== workspace.id.split(":")[1] || data.suspended_at || !("login" in data.account) || data.account.login.toLowerCase() !== workspace.login.toLowerCase()) residentFailure("Installation access is unavailable", 403);
 }
+/** Owner account discovery remains available without any App installation. */
+export async function ownerAccounts(request: Request, env: Env) {
+  const current = await session(env, request.headers);
+  if (!current?.user.githubUserId) residentFailure("Sign in required", 401);
+  const client = await github(env, request);
+  const viewer = (await client.request("GET /user")).data;
+  if (Number(viewer.id) !== current.user.githubUserId) residentFailure("Identity mismatch", 403);
+  const accounts = [{ login: viewer.login, type: "User" }];
+  for (let page = 1; ; page++) {
+    const batch = (await client.request("GET /user/memberships/orgs", { state: "active", per_page: 100, page })).data;
+    for (const item of batch) if (item.state === "active" && item.role === "admin") accounts.push({ login: item.organization.login, type: "Organization" });
+    if (batch.length < 100) break;
+  }
+  return { accounts };
+}
 export async function ownerWorkspace(request: Request, env: Env, login: string) {
   const current = await session(env, request.headers);
   if (!current?.user.githubUserId) residentFailure("Sign in required", 401);

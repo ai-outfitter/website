@@ -3,7 +3,7 @@ import { boundedText } from "../inference/stream";
 import { record } from "../inference/models";
 import { residentJson, residentFailure, validateEnrollment } from "./contracts";
 import { parseResidentToken } from "./credentials";
-import { ownerOptions, ownerWorkspace, triageGitHubToken, verifyInstallation } from "./github";
+import { ownerOptions, ownerWorkspace, ownerAccounts, triageGitHubToken, verifyInstallation } from "./github";
 
 async function readInput(request: Request) {
   try { const value: unknown = JSON.parse(await boundedText(request, 16_384)); if (record(value)) return value; }
@@ -26,8 +26,9 @@ export async function authenticateInference(request: Request, env: Env) {
 }
 export async function residentRoute(request: Request, env: Env): Promise<Response | null> {
   const path = new URL(request.url).pathname;
-  if (!path.startsWith("/api/residents/")) return null;
+  if (path !== "/api/residents" && !path.startsWith("/api/residents/")) return null;
   try {
+    if (path === "/api/residents") return request.method === "GET" ? residentJson(await ownerAccounts(request, env)) : residentJson({ error: "Method not allowed" }, 405);
     const disable = path.match(/^\/api\/residents\/([^/]+)$/);
     // Owners can always revoke enrollment, including during feature closure or App removal.
     if (request.method === "DELETE" && disable) {

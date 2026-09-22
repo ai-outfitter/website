@@ -5,7 +5,7 @@ vi.mock("@octokit/auth-app", () => ({ createAppAuth: () => deps.authenticate }))
 vi.mock("../auth", () => ({ session: deps.session }));
 vi.mock("../github", () => ({ github: async () => ({ request: deps.userRequest }) }));
 vi.mock("../app", () => ({ installationOctokit: () => ({ request: deps.installationRequest }) }));
-import { ownerOptions, triageGitHubToken } from "./github";
+import { ownerAccounts, ownerOptions, triageGitHubToken } from "./github";
 const workspace = { id: "org:12", login: "team", type: "Organization" as const };
 const env = { GITHUB_APP_ID: "app", GITHUB_APP_PRIVATE_KEY: "private" } as unknown as Env;
 const config = { workspace, installationId: 42, repositories: [{ id: 101, fullName: "team/app" }], enabled: true, credentialVersion: "v", revision: "r", generation: 1, deploymentFingerprint: "f", projectManagerName: "Mira", engineerName: "Eli" };
@@ -22,6 +22,15 @@ beforeEach(() => {
   deps.authenticate.mockResolvedValue({ token: "scoped", expiresAt: "later" });
 });
 describe("resident GitHub ownership and credentials", () => {
+  it("discovers owners without installation APIs, including an uninstalled organization", async () => {
+    deps.userRequest.mockImplementation(async (route) => route === "GET /user" ? { data: { id: 1, login: "alice" } } : { data: [
+      { role: "admin", state: "active", organization: { login: "uninstalled" } },
+      { role: "member", state: "active", organization: { login: "member-only" } },
+      { role: "admin", state: "pending", organization: { login: "pending" } },
+    ] });
+    expect(await ownerAccounts(new Request("https://outfitter"), env)).toEqual({ accounts: [{ login: "alice", type: "User" }, { login: "uninstalled", type: "Organization" }] });
+    expect(deps.appRequest).not.toHaveBeenCalled(); expect(deps.installationRequest).not.toHaveBeenCalled();
+  });
   it("offers only repositories in the owner's verified installation", async () => { expect(await ownerOptions(new Request("https://outfitter"), env, "team")).toEqual({ workspace, installationId: 42, repositories: [{ id: 101, fullName: "team/app" }] }); });
   it("rejects active non-owner org members", async () => { deps.userRequest.mockImplementation(async (route) => route === "GET /users/{username}" ? { data: { id: 12, login: "team", type: "Organization" } } : { data: { role: "member", state: "active" } }); await expect(ownerOptions(new Request("https://outfitter"), env, "team")).rejects.toMatchObject({ status: 403 }); });
   it("rejects installations transferred to another owner or suspended", async () => { deps.appRequest.mockResolvedValueOnce({ data: { account: { id: 99, login: "team" } } }); await expect(ownerOptions(new Request("https://outfitter"), env, "team")).rejects.toMatchObject({ status: 403 }); deps.appRequest.mockResolvedValueOnce({ data: { account: { id: 12, login: "team" }, suspended_at: "now" } }); await expect(triageGitHubToken(env, config, 101)).rejects.toMatchObject({ status: 403 }); });

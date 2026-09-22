@@ -24,6 +24,9 @@ credit/spending policy to be enabled.
 
 ## Owner API
 
+- `GET /api/residents` lists the signed-in user and active owner organizations,
+  independently of installation existence and the resident feature flag.
+
 - `GET /api/residents/{login}` returns owner-authorized installation/repository
   choices plus independent operator readiness. Stale or pending provisioning is
   not reported ready. Neither role tokens nor operator diagnostics are returned.

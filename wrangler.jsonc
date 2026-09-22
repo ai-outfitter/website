@@ -28,7 +28,8 @@
       "/api/cli/*",
       "/cli/authorize",
       "/v1/*",
-      "/api/residents/*"
+      "/api/residents/*",
+      "/api/residents"
     ]
   },
   "vars": {
