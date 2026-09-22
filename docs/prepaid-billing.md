@@ -1,7 +1,7 @@
 # Prepaid purchases
 
 This slice accepts USD credit purchases for a GitHub user or organization.
-It does not yet enable inference, monthly grants, top-ups, or residents.
+It does not yet enable inference, top-ups, or residents.
 
 - `GET /api/billing/accounts` lists the signed-in user and organizations they own.
 - `GET /api/billing/:login` returns the account's paid balance in microdollars.
@@ -35,3 +35,12 @@ committed atomically in the account's SQLite-backed Durable Object.
 
 Run `devenv shell -- npm run test:worker` and `devenv shell -- npm run check`.
 Ledger tests execute real SQLite, including rollback after a duplicate payment ID.
+
+## Design partners
+
+Operator configuration `PARTNER_ALLOWANCES` is a JSON mapping from stable account
+IDs to monthly USD microdollars, for example `{"org:42":20000000}` for $20.
+No card is required. Removing an account revokes unused promotional credit on
+its next request. Grants renew on access in each UTC calendar month, never
+accumulate, and amount changes apply next month. Re-enrolling a revoked account
+in the same month does not issue a second grant. Paid credit is unchanged.

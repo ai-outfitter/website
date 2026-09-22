@@ -13,10 +13,10 @@ async function loadBalance() {
   balance.textContent = "";
   try {
     const response = await fetch(`/api/billing/${encodeURIComponent(account.value)}`);
-    const data = await response.json() as { error?: string; paidMicros: number };
+    const data = await response.json() as { error?: string; paidMicros: number; promotionalMicros: number };
     if (current !== generation) return;
     if (!response.ok) throw new Error(data.error ?? "Cannot load balance");
-    balance.textContent = `Available credit: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(data.paidMicros / 1_000_000)}`;
+    balance.textContent = `Available credit: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((data.paidMicros + data.promotionalMicros) / 1_000_000)}`;
     status.textContent = "";
     buy.disabled = false;
   } catch (error) { if (current === generation) status.textContent = error instanceof Error ? error.message : "Cannot load balance"; }
