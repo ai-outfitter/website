@@ -1,3 +1,5 @@
+import { handleCli } from "./worker/cli-auth";
+export { CliDevice } from "./worker/cli-device";
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
 import { createAuth, session } from "./worker/auth";
@@ -163,6 +165,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
+      if (url.pathname.startsWith("/api/cli/") || url.pathname === "/cli/authorize") return handleCli(request, env);
       if (url.pathname.startsWith("/api/auth/")) {
         const auth = createAuth(env);
         if (request.method === "POST" && url.pathname.endsWith("/sign-out")) {

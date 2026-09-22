@@ -16,9 +16,10 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/api/webhooks/*", "/dashboard/*"]
+    "run_worker_first": ["/api/auth/*", "/api/cli/*", "/cli/authorize", "/api/accounts", "/api/accounts/*", "/api/webhooks/*", "/dashboard/*"]
   },
   "vars": {
+    "CLI_AUTH_ENABLED": "false",
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
     "GITHUB_APP_SLUG": "ai-outfitter",
     "GITHUB_APP_ID": "4253427",
@@ -27,11 +28,13 @@
   },
   "durable_objects": {
     "bindings": [
-      { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
+      { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" },
+      { "name": "CLI_DEVICES", "class_name": "CliDevice" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["GitHubUserGrant"] }
+    { "tag": "v1", "new_sqlite_classes": ["GitHubUserGrant"] },
+    { "tag": "cli-auth-v1", "new_sqlite_classes": ["CliDevice"] }
   ],
   "observability": {
     "enabled": true,
@@ -43,6 +46,7 @@
       "preview_urls": false,
       "routes": [],
       "vars": {
+        "CLI_AUTH_ENABLED": "false",
         "BETTER_AUTH_URL": "https://ai-outfitter.com",
         "GITHUB_APP_SLUG": "ai-outfitter",
         "GITHUB_APP_ID": "4253427",
@@ -51,7 +55,8 @@
       },
       "durable_objects": {
         "bindings": [
-          { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
+          { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" },
+          { "name": "CLI_DEVICES", "class_name": "CliDevice" }
         ]
       }
     }
