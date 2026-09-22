@@ -1,11 +1,16 @@
 import { record } from "./models";
 
-export interface GenerationObservation { id?: string; cost?: number }
+export interface GenerationObservation { id?: string; cost?: number; promptTokens?: number; completionTokens?: number }
 export function observation(value: unknown): GenerationObservation {
   if (!record(value)) return {};
   const id = typeof value.id === "string" && /^[\w-]{1,200}$/.test(value.id) ? value.id : undefined;
   const cost = record(value.usage) && typeof value.usage.cost === "number" && Number.isFinite(value.usage.cost) && value.usage.cost >= 0 ? value.usage.cost : undefined;
-  return { id, cost };
+  const result: GenerationObservation = { id, cost };
+  if (record(value.usage)) {
+    if (Number.isSafeInteger(value.usage.prompt_tokens) && Number(value.usage.prompt_tokens) >= 0) result.promptTokens = Number(value.usage.prompt_tokens);
+    if (Number.isSafeInteger(value.usage.completion_tokens) && Number(value.usage.completion_tokens) >= 0) result.completionTokens = Number(value.usage.completion_tokens);
+  }
+  return result;
 }
 /** Incremental SSE parser: UTF-8, CRLF, and event boundaries may span network chunks. */
 export class UsageParser {

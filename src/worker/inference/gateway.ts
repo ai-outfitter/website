@@ -1,3 +1,4 @@
+import { sparkModels, sparkEndpoint, type SparkConfiguration } from "./spark";
 import { configuration, completionBody, InferenceError, maximumMicros, publicModel, record, type Rate } from "./models";
 import { boundedText, observation, UsageParser, type GenerationObservation } from "./stream";
 
@@ -6,7 +7,7 @@ export interface Identity {
   workspace: { id: string; login: string; type: "User" | "Organization" };
 }
 export interface RequestRecord {
-  id: string; workspace: string; userId: string; model: string; maximumMicros: number; rate: Rate;
+  id: string; workspace: string; userId: string; model: string; maximumMicros: number; rate: Rate; provider?: "openrouter" | "spark";
 }
 export interface Recorder {
   begin(value: RequestRecord): Promise<unknown>;
@@ -24,6 +25,7 @@ export interface GatewayConfiguration {
   enabled: boolean;
   models: string;
   openRouterKey?: string;
+  spark?: SparkConfiguration;
 }
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "cache-control": "no-store" } });
 export const failure = (code: string, status: number, message: string) => json({ error: { code, message } }, status);
@@ -42,21 +44,29 @@ export async function inferenceRoute(request: Request, settings: GatewayConfigur
     }
     const config = configuration(settings.models);
     const rate = config.accounts?.[identity.workspace.id] ?? config.rate;
-    if (path === "/v1/models") return json({ object: "list", data: config.models.map((model) => publicModel(model, rate)) });
+    if (config.models.some((model) => model.id.startsWith("spark/"))) throw new Error("Spark namespace is internal only");
+    const internalModels = sparkModels(settings.spark, identity.user.id);
+    const internalRate = { version: "internal-spark-v1", markupBps: 0 };
+    if (path === "/v1/models") return json({ object: "list", data: [...config.models.map((model) => publicModel(model, rate)), ...internalModels.map((model) => publicModel(model, internalRate))] });
     let input: unknown;
     try { input = JSON.parse(await boundedText(request, 262_144)); }
     catch { throw new InferenceError("invalid_request", 400, "Provide a JSON body no larger than 256 KiB"); }
-    const model = config.models.find((item) => record(input) && item.id === input.model);
+    const internal = record(input) && typeof input.model === "string" && input.model.startsWith("spark/");
+    const model = (internal ? internalModels : config.models).find((item) => record(input) && item.id === input.model);
     if (!model) throw new InferenceError("model_not_allowed", 403, "Model is not available to this account");
     const { body, output } = completionBody(input, model);
-    if (!settings.openRouterKey) return failure("unavailable", 503, "Inference provider unavailable");
+    const endpoint = internal ? sparkEndpoint(settings.spark!) : "https://openrouter.ai/api/v1/chat/completions";
+    const key = internal ? settings.spark?.apiKey : settings.openRouterKey;
+    if (!key) return failure("unavailable", 503, "Inference provider unavailable");
+    const appliedRate = internal ? internalRate : rate;
+    const { provider: _provider, ...sparkBody } = body;
     const id = crypto.randomUUID();
     const recorder = deps.recorder(id);
-    await recorder.begin({ id, workspace: identity.workspace.id, userId: identity.user.id, model: model.id, maximumMicros: maximumMicros(model, output, rate), rate });
+    await recorder.begin({ id, workspace: identity.workspace.id, userId: identity.user.id, model: model.id, maximumMicros: internal ? 0 : maximumMicros(model, output, appliedRate), rate: appliedRate, provider: internal ? "spark" : "openrouter" });
     // Once dispatched, transport errors are ambiguous: leave the hold for reconciliation.
-    const upstream = await deps.fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST", headers: { authorization: `Bearer ${settings.openRouterKey}`, "content-type": "application/json" },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(300_000), redirect: "error",
+    const upstream = await deps.fetch(endpoint, {
+      method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify(internal ? sparkBody : body), signal: AbortSignal.timeout(300_000), redirect: "error",
     });
     if (!upstream.ok) {
       // Provider rejection before generation is authoritative for these statuses only.

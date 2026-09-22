@@ -40,7 +40,10 @@
     "STRIPE_LIVE_MODE": "false",
     "CLI_AUTH_ENABLED": "false",
     "INFERENCE_ENABLED": "false",
-    "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}"
+    "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}",
+    "SPARK_ENABLED": "false",
+    "SPARK_INTERNAL_USERS": "",
+    "SPARK_MODELS": "[]"
   },
   "durable_objects": {
     "bindings": [
@@ -107,7 +110,10 @@
         "STRIPE_LIVE_MODE": "false",
         "CLI_AUTH_ENABLED": "false",
         "INFERENCE_ENABLED": "false",
-        "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}"
+        "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}",
+        "SPARK_ENABLED": "false",
+        "SPARK_INTERNAL_USERS": "",
+        "SPARK_MODELS": "[]"
       },
       "durable_objects": {
         "bindings": [

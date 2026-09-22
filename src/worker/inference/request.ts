@@ -7,6 +7,8 @@ export interface PendingRequest extends RequestRecord {
   status: "pending" | "reserved" | "settled" | "denied";
   generationId?: string;
   cost?: number;
+  promptTokens?: number;
+  completionTokens?: number;
   attempts: number;
 }
 
@@ -42,7 +44,11 @@ export class InferenceRequest extends DurableObject<Env> {
       if (!state || state.status === "settled" || state.status === "denied") return;
       if (value.id && state.generationId && value.id !== state.generationId) throw new Error("Generation changed during response");
       if (value.id) state.generationId = value.id;
-      if (value.cost !== undefined) {
+      for (const field of ["promptTokens", "completionTokens"] as const) {
+        const count = value[field];
+        if (count !== undefined && Number.isSafeInteger(count) && count >= 0) state[field] = count;
+      }
+      if (value.cost !== undefined && state.provider !== "spark") {
         chargeMicros(value.cost, state.rate);
         state.cost = value.cost;
       }
@@ -53,6 +59,7 @@ export class InferenceRequest extends DurableObject<Env> {
   async complete() {
     const state = await this.ctx.storage.get<PendingRequest>("request");
     if (!state || state.status === "settled" || state.status === "denied") return;
+    if (state.provider === "spark") state.cost = 0;
     if (state.cost === undefined) return; // Missing accounting is unresolved, never free.
     await this.env.BILLING_ACCOUNTS.getByName(state.workspace).settle(state.id, chargeMicros(state.cost, state.rate));
     await this.ctx.storage.put("request", { ...state, status: "settled" });
@@ -75,6 +82,11 @@ export class InferenceRequest extends DurableObject<Env> {
     await this.ctx.storage.setAlarm(Date.now() + (state.attempts < 60 ? 60_000 : 86_400_000));
     await this.ctx.storage.put("request", { ...state, attempts: state.attempts + 1 });
     try {
+      if (state.provider === "spark") {
+        // Internal zero-price traffic still retains request identity and any observed token usage.
+        await this.complete();
+        return;
+      }
       if (state.cost !== undefined) { await this.complete(); return; }
       if (!state.generationId || !this.env.OPENROUTER_API_KEY) {
         console.warn(JSON.stringify({ event: "inference_reconciliation_required", requestId: state.id, reason: "missing_generation" }));
