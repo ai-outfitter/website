@@ -26,7 +26,8 @@
       "/dashboard/*",
       "/api/billing/*",
       "/api/cli/*",
-      "/cli/authorize"
+      "/cli/authorize",
+      "/v1/*"
     ]
   },
   "vars": {
@@ -37,7 +38,9 @@
     "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
     "BILLING_ENABLED": "false",
     "STRIPE_LIVE_MODE": "false",
-    "CLI_AUTH_ENABLED": "false"
+    "CLI_AUTH_ENABLED": "false",
+    "INFERENCE_ENABLED": "false",
+    "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}"
   },
   "durable_objects": {
     "bindings": [
@@ -52,6 +55,10 @@
       {
         "name": "CLI_DEVICES",
         "class_name": "CliDevice"
+      },
+      {
+        "name": "INFERENCE_REQUESTS",
+        "class_name": "InferenceRequest"
       }
     ]
   },
@@ -73,6 +80,12 @@
       "new_sqlite_classes": [
         "CliDevice"
       ]
+    },
+    {
+      "tag": "inference-v1",
+      "new_sqlite_classes": [
+        "InferenceRequest"
+      ]
     }
   ],
   "observability": {
@@ -92,7 +105,9 @@
         "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
         "BILLING_ENABLED": "false",
         "STRIPE_LIVE_MODE": "false",
-        "CLI_AUTH_ENABLED": "false"
+        "CLI_AUTH_ENABLED": "false",
+        "INFERENCE_ENABLED": "false",
+        "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}"
       },
       "durable_objects": {
         "bindings": [
@@ -107,6 +122,10 @@
           {
             "name": "CLI_DEVICES",
             "class_name": "CliDevice"
+          },
+          {
+            "name": "INFERENCE_REQUESTS",
+            "class_name": "InferenceRequest"
           }
         ]
       }

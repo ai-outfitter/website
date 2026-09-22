@@ -1,6 +1,8 @@
+import { inferenceRoute } from "./worker/inference/gateway";
+export { InferenceRequest } from "./worker/inference/request";
 import { billingRoute } from "./worker/billing/routes";
 export { BillingAccount } from "./worker/billing/account";
-import { handleCli } from "./worker/cli-auth";
+import { authenticateCli, handleCli } from "./worker/cli-auth";
 export { CliDevice } from "./worker/cli-device";
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
@@ -167,6 +169,15 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
+      const inference = await inferenceRoute(request, {
+        enabled: String(env.INFERENCE_ENABLED) === "true", models: env.INFERENCE_MODELS, openRouterKey: env.OPENROUTER_API_KEY,
+      }, {
+        authorize: (value) => authenticateCli(value, env),
+        recorder: (id) => env.INFERENCE_REQUESTS.getByName(id),
+        usage: (workspace) => env.BILLING_ACCOUNTS.getByName(workspace).usage(workspace),
+        fetch,
+      });
+      if (inference) return inference;
       const billing = await billingRoute(request, env);
       if (billing) return billing;
       if (url.pathname.startsWith("/api/cli/") || url.pathname === "/cli/authorize") return handleCli(request, env);

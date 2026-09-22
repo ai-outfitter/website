@@ -1,4 +1,5 @@
 interface Env {
+  OPENROUTER_API_KEY?: string;
   PARTNER_ALLOWANCES?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
