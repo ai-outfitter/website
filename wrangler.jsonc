@@ -24,7 +24,9 @@
       "/api/accounts/*",
       "/api/webhooks/*",
       "/dashboard/*",
-      "/api/billing/*"
+      "/api/billing/*",
+      "/api/cli/*",
+      "/cli/authorize"
     ]
   },
   "vars": {
@@ -34,7 +36,8 @@
     "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
     "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
     "BILLING_ENABLED": "false",
-    "STRIPE_LIVE_MODE": "false"
+    "STRIPE_LIVE_MODE": "false",
+    "CLI_AUTH_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [
@@ -45,6 +48,10 @@
       {
         "name": "BILLING_ACCOUNTS",
         "class_name": "BillingAccount"
+      },
+      {
+        "name": "CLI_DEVICES",
+        "class_name": "CliDevice"
       }
     ]
   },
@@ -59,6 +66,12 @@
       "tag": "v2",
       "new_sqlite_classes": [
         "BillingAccount"
+      ]
+    },
+    {
+      "tag": "cli-auth-v1",
+      "new_sqlite_classes": [
+        "CliDevice"
       ]
     }
   ],
@@ -78,7 +91,8 @@
         "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
         "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
         "BILLING_ENABLED": "false",
-        "STRIPE_LIVE_MODE": "false"
+        "STRIPE_LIVE_MODE": "false",
+        "CLI_AUTH_ENABLED": "false"
       },
       "durable_objects": {
         "bindings": [
@@ -89,6 +103,10 @@
           {
             "name": "BILLING_ACCOUNTS",
             "class_name": "BillingAccount"
+          },
+          {
+            "name": "CLI_DEVICES",
+            "class_name": "CliDevice"
           }
         ]
       }

@@ -1,5 +1,7 @@
 import { billingRoute } from "./worker/billing/routes";
 export { BillingAccount } from "./worker/billing/account";
+import { handleCli } from "./worker/cli-auth";
+export { CliDevice } from "./worker/cli-device";
 import workflows from "./generated/workflow-catalog.json";
 import { dashboardRoute } from "./dashboard/routes";
 import { createAuth, session } from "./worker/auth";
@@ -167,6 +169,7 @@ export default {
     try {
       const billing = await billingRoute(request, env);
       if (billing) return billing;
+      if (url.pathname.startsWith("/api/cli/") || url.pathname === "/cli/authorize") return handleCli(request, env);
       if (url.pathname.startsWith("/api/auth/")) {
         const auth = createAuth(env);
         if (request.method === "POST" && url.pathname.endsWith("/sign-out")) {

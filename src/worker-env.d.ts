@@ -2,6 +2,8 @@ interface Env {
   PARTNER_ALLOWANCES?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  CLI_AUTH_ENABLED?: string;
+  CLI_DEVICES: DurableObjectNamespace<import("./worker/cli-device").CliDevice>;
   ASSETS: Fetcher;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
