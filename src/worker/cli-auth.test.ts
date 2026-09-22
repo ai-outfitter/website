@@ -94,6 +94,17 @@ describe("CLI authorization boundary", () => {
     expect((await handleCli(request("/api/cli/approve", "POST", { user_code: "a".repeat(20), action: "approve" }, "https://example.com"), env)).status).toBe(401);
     expect((await handleCli(request("/api/cli/token", "POST", { value: "x".repeat(5000) }), env)).status).toBe(413);
   });
+  it("keeps authenticated logout available when sign-in is disabled", async () => {
+    selected = org;
+    const disabled = { ...env, CLI_AUTH_ENABLED: "false" };
+    expect((await handleCli(request("/api/cli/logout", "POST"), disabled)).status).toBe(204);
+    expect(device.revoke).toHaveBeenCalledWith("b".repeat(64));
+    expect(mocks.request).not.toHaveBeenCalled();
+    device.revoke.mockResolvedValueOnce(false);
+    expect((await handleCli(request("/api/cli/logout", "POST"), disabled)).status).toBe(401);
+    expect((await handleCli(new Request("https://example.com/api/cli/logout", { method: "POST" }), disabled)).status).toBe(401);
+    expect((await handleCli(request("/api/cli/me"), disabled)).status).toBe(404);
+  });
   it("revokes without requiring a still-accessible organization", async () => {
     selected = org;
     expect((await handleCli(request("/api/cli/logout", "POST"), env)).status).toBe(204);

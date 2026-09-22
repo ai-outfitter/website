@@ -95,9 +95,10 @@ export async function authenticateCli(request: Request, env: Env) {
 
 export async function handleCli(request: Request, env: Env): Promise<Response> {
   try {
-    enabled(env);
     const url = new URL(request.url);
     const route = url.pathname;
+    // Existing devices must remain revocable while new sign-ins and spending are closed.
+    if (!(route === "/api/cli/logout" && request.method === "POST")) enabled(env);
     if (route === "/cli/authorize" && request.method === "GET") return approvalPage(url);
     if (["/api/cli/device", "/api/cli/token", "/api/cli/approve"].includes(route)) {
       const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
