@@ -88,7 +88,7 @@ export async function billingRoute(request: Request, env: Env): Promise<Response
     }
     const workspace = await billingOwner(request, env, decodeURIComponent(match![1]));
     const account = env.BILLING_ACCOUNTS.getByName(workspace);
-    if (!match![2]) return json({ workspace, ...await account.balance() });
+    if (!match![2]) return json({ workspace, ...await account.balance(workspace) });
     let input: { purchaseId?: unknown; cents?: unknown };
     try {
       input = JSON.parse(await limitedText(request, 4096));

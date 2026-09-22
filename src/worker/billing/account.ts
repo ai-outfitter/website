@@ -1,3 +1,4 @@
+import { PartnerCredit, partnerAllowance } from "./partner-credit";
 import { DurableObject } from "cloudflare:workers";
 import { CreditLedger, purchaseCents } from "./ledger";
 import { stripeRequest } from "./stripe";
@@ -5,12 +6,17 @@ import { stripeRequest } from "./stripe";
 /** One object per stable GitHub account ID. Never keyed by a mutable login. */
 export class BillingAccount extends DurableObject<Env> {
   private ledger: CreditLedger;
+  private partner: PartnerCredit;
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.partner = new PartnerCredit(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
     this.ledger = new CreditLedger(ctx.storage.sql, (fn) => ctx.storage.transactionSync(fn));
   }
 
-  balance() { return this.ledger.balance(); }
+  balance(workspace: string) {
+    const promotionalMicros = this.partner.renew(partnerAllowance(this.env.PARTNER_ALLOWANCES, workspace));
+    return { ...this.ledger.balance(), promotionalMicros };
+  }
 
   async checkout(workspace: string, purchaseId: string, cents: number) {
     purchaseCents(cents);
