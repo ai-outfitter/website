@@ -70,7 +70,12 @@ export class CliDevice extends DurableObject<Env> {
   async revoke(secret: string) {
     const hash = await digest(secret);
     const state = this.#read();
-    if (!accessAllowed(state, hash, Date.now())) return false;
+    // The last issued token may revoke its own session after access expiry; it cannot spend.
+    if (!state?.user || !state.accessHash || state.accessHash.length !== hash.length) return false;
+    // Fixed-length digest comparison, with no await between checking and revoking.
+    let difference = 0;
+    for (let index = 0; index < hash.length; index++) difference |= state.accessHash.charCodeAt(index) ^ hash.charCodeAt(index);
+    if (difference !== 0) return false;
     this.ctx.storage.sql.exec("DELETE FROM state");
     return true;
   }

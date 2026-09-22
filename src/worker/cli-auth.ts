@@ -67,8 +67,11 @@ async function contextFor(env: Env, id: number) {
   try {
     const emails = (await client.request("GET /user/emails")).data;
     email = emails.find((item) => item.verified && item.primary)?.email ?? emails.find((item) => item.verified)?.email;
-  } catch (error) { if (![403, 404].includes(Number((error as { status?: number }).status))) throw error; }
-  email ??= await env.CLI_DEVICES.getByName(userId).email();
+  } catch { /* Email enriches analytics; its availability does not authorize inference. */ }
+  if (!email) {
+    try { email = await env.CLI_DEVICES.getByName(userId).email(); }
+    catch { /* Optional account email may also be temporarily unavailable. */ }
+  }
   return { user: { id: userId, ...(email ? { email } : {}) }, workspaces, client };
 }
 function bearer(request: Request) {
@@ -92,9 +95,10 @@ export async function authenticateCli(request: Request, env: Env) {
 
 export async function handleCli(request: Request, env: Env): Promise<Response> {
   try {
-    enabled(env);
     const url = new URL(request.url);
     const route = url.pathname;
+    // Existing devices must remain revocable while new sign-ins and spending are closed.
+    if (!(route === "/api/cli/logout" && request.method === "POST")) enabled(env);
     if (route === "/cli/authorize" && request.method === "GET") return approvalPage(url);
     if (["/api/cli/device", "/api/cli/token", "/api/cli/approve"].includes(route)) {
       const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
