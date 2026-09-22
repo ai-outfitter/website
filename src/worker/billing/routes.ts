@@ -2,7 +2,7 @@ import { session } from "../auth";
 import { github } from "../github";
 import { purchaseCents } from "./ledger";
 import { parseStripeEvent, verifyStripeWebhookSignature } from "./stripe-webhook";
-import { stripeRequest } from "./stripe";
+import { stripeKey, stripeRequest } from "./stripe";
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "cache-control": "no-store" } });
 
@@ -50,11 +50,11 @@ async function webhook(request: Request, env: Env) {
   const object = event.data.object;
   let paymentId: unknown = event.type === "payment_intent.succeeded" ? object.id : object.payment_intent;
   if (!paymentId && typeof object.charge === "string") {
-    const charge = await stripeRequest(env.STRIPE_SECRET_KEY, `charges/${encodeURIComponent(object.charge)}`);
+    const charge = await stripeRequest(stripeKey(env), `charges/${encodeURIComponent(object.charge)}`);
     paymentId = charge.payment_intent;
   }
   if (typeof paymentId !== "string" || !/^pi_[A-Za-z0-9]+$/.test(paymentId)) return json({ received: true });
-  const payment = await stripeRequest(env.STRIPE_SECRET_KEY, `payment_intents/${paymentId}`);
+  const payment = await stripeRequest(stripeKey(env), `payment_intents/${paymentId}`);
   const workspace = payment.metadata?.outfitter_workspace;
   if (typeof workspace !== "string" || !/^(user|org):[1-9]\d*$/.test(workspace)) return json({ received: true });
   await env.BILLING_ACCOUNTS.getByName(workspace).reconcile(workspace, paymentId);

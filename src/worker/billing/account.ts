@@ -1,7 +1,7 @@
 import { PartnerCredit, partnerAllowance } from "./partner-credit";
 import { DurableObject } from "cloudflare:workers";
 import { CreditLedger, purchaseCents } from "./ledger";
-import { stripeRequest } from "./stripe";
+import { stripeKey, stripeRequest } from "./stripe";
 
 /** One object per stable GitHub account ID. Never keyed by a mutable login. */
 export class BillingAccount extends DurableObject<Env> {
@@ -21,7 +21,7 @@ export class BillingAccount extends DurableObject<Env> {
   async checkout(workspace: string, purchaseId: string, cents: number) {
     purchaseCents(cents);
     return this.ctx.blockConcurrencyWhile(async () => {
-      const secret = this.env.STRIPE_SECRET_KEY ?? "";
+      const secret = stripeKey(this.env);
       let customer = await this.ctx.storage.get<string>("stripeCustomer");
       if (!customer) {
         const result = await stripeRequest(secret, "customers", new URLSearchParams({ "metadata[outfitter_workspace]": workspace }), `customer:${workspace}`);
@@ -60,14 +60,14 @@ export class BillingAccount extends DurableObject<Env> {
   async reconcile(workspace: string, paymentId: string) {
     // Fetch current Stripe state while serialized: delivery order cannot restore a disputed payment.
     return this.ctx.blockConcurrencyWhile(async () => {
-      const payment = await stripeRequest(this.env.STRIPE_SECRET_KEY ?? "", `payment_intents/${encodeURIComponent(paymentId)}?expand[]=latest_charge`);
+      const payment = await stripeRequest(stripeKey(this.env), `payment_intents/${encodeURIComponent(paymentId)}?expand[]=latest_charge`);
       if (payment.metadata?.outfitter_workspace !== workspace || payment.currency !== "usd") throw new Error("Payment workspace mismatch");
       if (payment.status !== "succeeded") return;
       const charge = payment.latest_charge;
       if (!charge || typeof charge !== "object" || typeof charge.disputed !== "boolean") throw new Error("Payment charge unavailable");
       let disputed = charge.disputed;
       if (disputed) {
-        const disputes = await stripeRequest(this.env.STRIPE_SECRET_KEY ?? "", `disputes?charge=${encodeURIComponent(charge.id)}&limit=100`);
+        const disputes = await stripeRequest(stripeKey(this.env), `disputes?charge=${encodeURIComponent(charge.id)}&limit=100`);
         if (!Array.isArray(disputes.data) || disputes.data.length === 0 || disputes.has_more) throw new Error("Dispute status unavailable");
         disputed = disputes.data.some((item: { status: string }) => item.status !== "won" && item.status !== "warning_closed");
       }
