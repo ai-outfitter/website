@@ -1,4 +1,7 @@
 interface Env {
+  RESIDENT_OPERATOR_URL?: string;
+  RESIDENT_OPERATOR_TOKEN?: string;
+  RESIDENT_CREDENTIAL_SECRET?: string;
   OPENROUTER_API_KEY?: string;
   PARTNER_ALLOWANCES?: string;
   STRIPE_SECRET_KEY?: string;

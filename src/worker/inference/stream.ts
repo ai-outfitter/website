@@ -45,7 +45,7 @@ export class UsageParser {
     await this.observe(observation(JSON.parse(text)));
   }
 }
-export async function boundedText(response: Response | Request, maximum: number) {
+export async function boundedText(response: Pick<Response, "body">, maximum: number) {
   const reader = response.body?.getReader();
   if (!reader) return "";
   const decoder = new TextDecoder();

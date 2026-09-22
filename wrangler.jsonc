@@ -27,7 +27,8 @@
       "/api/billing/*",
       "/api/cli/*",
       "/cli/authorize",
-      "/v1/*"
+      "/v1/*",
+      "/api/residents/*"
     ]
   },
   "vars": {
@@ -40,7 +41,8 @@
     "STRIPE_LIVE_MODE": "false",
     "CLI_AUTH_ENABLED": "false",
     "INFERENCE_ENABLED": "false",
-    "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}"
+    "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}",
+    "RESIDENTS_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [
@@ -59,6 +61,10 @@
       {
         "name": "INFERENCE_REQUESTS",
         "class_name": "InferenceRequest"
+      },
+      {
+        "name": "RESIDENT_WORKSPACES",
+        "class_name": "ResidentWorkspace"
       }
     ]
   },
@@ -86,6 +92,12 @@
       "new_sqlite_classes": [
         "InferenceRequest"
       ]
+    },
+    {
+      "tag": "resident-workspaces-v1",
+      "new_sqlite_classes": [
+        "ResidentWorkspace"
+      ]
     }
   ],
   "observability": {
@@ -107,7 +119,8 @@
         "STRIPE_LIVE_MODE": "false",
         "CLI_AUTH_ENABLED": "false",
         "INFERENCE_ENABLED": "false",
-        "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}"
+        "INFERENCE_MODELS": "{\"models\":[],\"rate\":{\"version\":\"initial\",\"markupBps\":0}}",
+        "RESIDENTS_ENABLED": "false"
       },
       "durable_objects": {
         "bindings": [
@@ -126,6 +139,10 @@
           {
             "name": "INFERENCE_REQUESTS",
             "class_name": "InferenceRequest"
+          },
+          {
+            "name": "RESIDENT_WORKSPACES",
+            "class_name": "ResidentWorkspace"
           }
         ]
       }
