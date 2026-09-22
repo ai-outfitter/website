@@ -3,7 +3,9 @@
   "name": "ai-outfitter-website",
   "account_id": "52b3dd3372a05fd2be0eb0f8ec36f9d3",
   "compatibility_date": "2026-08-31",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "main": "src/worker.ts",
   "workers_dev": false,
   "routes": [
@@ -16,22 +18,49 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/auth/*", "/api/accounts", "/api/accounts/*", "/api/webhooks/*", "/dashboard/*"]
+    "run_worker_first": [
+      "/api/auth/*",
+      "/api/accounts",
+      "/api/accounts/*",
+      "/api/webhooks/*",
+      "/dashboard/*",
+      "/api/billing/*"
+    ]
   },
   "vars": {
     "BETTER_AUTH_URL": "https://ai-outfitter.com",
     "GITHUB_APP_SLUG": "ai-outfitter",
     "GITHUB_APP_ID": "4253427",
     "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
-    "FACTORY_AUTO_START_ACTOR_IDS": "8276365"
+    "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
+    "BILLING_ENABLED": "false",
+    "STRIPE_LIVE_MODE": "false"
   },
   "durable_objects": {
     "bindings": [
-      { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
+      {
+        "name": "GITHUB_USER_GRANTS",
+        "class_name": "GitHubUserGrant"
+      },
+      {
+        "name": "BILLING_ACCOUNTS",
+        "class_name": "BillingAccount"
+      }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["GitHubUserGrant"] }
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "GitHubUserGrant"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "BillingAccount"
+      ]
+    }
   ],
   "observability": {
     "enabled": true,
@@ -47,11 +76,20 @@
         "GITHUB_APP_SLUG": "ai-outfitter",
         "GITHUB_APP_ID": "4253427",
         "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
-        "FACTORY_AUTO_START_ACTOR_IDS": "8276365"
+        "FACTORY_AUTO_START_ACTOR_IDS": "8276365",
+        "BILLING_ENABLED": "false",
+        "STRIPE_LIVE_MODE": "false"
       },
       "durable_objects": {
         "bindings": [
-          { "name": "GITHUB_USER_GRANTS", "class_name": "GitHubUserGrant" }
+          {
+            "name": "GITHUB_USER_GRANTS",
+            "class_name": "GitHubUserGrant"
+          },
+          {
+            "name": "BILLING_ACCOUNTS",
+            "class_name": "BillingAccount"
+          }
         ]
       }
     }
