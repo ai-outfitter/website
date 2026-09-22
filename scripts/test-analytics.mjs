@@ -51,7 +51,7 @@ for (const [pageType, path] of pages) {
   assert.equal((script.match(/posthog\.init\(/g) ?? []).length, 1);
   assert.match(script, /phc_v9FGDjtEC7h9UvLxHdJKaHFtFfMN7UZwpJ2weRTFoqvz/);
   assert.match(script, /api_host:\s*['"]https:\/\/us\.i\.posthog\.com['"]/);
-  assert.match(script, /person_profiles:\s*['"]never['"]/);
+  assert.match(script, /person_profiles:\s*['"]identified_only['"]/);
   assert.match(script, /respect_dnt:\s*true/);
   assert.match(script, /autocapture:\s*false/);
   assert.match(script, /capture_pageview:\s*false/);

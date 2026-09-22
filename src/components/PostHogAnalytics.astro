@@ -19,7 +19,7 @@
     disable_surveys: true,
     // Mask known advertising and personal query parameters without removing the page path.
     mask_personal_data_properties: true,
-    person_profiles: 'never',
+    person_profiles: 'identified_only',
     respect_dnt: true,
   });
   window.__outfitterAnalytics.initialized = true;
@@ -34,5 +34,17 @@
   if (!window.__outfitterAnalytics.listening) {
     document.addEventListener('astro:page-load', captureOutfitterPageview);
     window.__outfitterAnalytics.listening = true;
+  }
+</script>
+
+<script>
+  import { webIdentity, type AnalyticsIdentityClient } from "../scripts/identified-analytics";
+  import { cachedAuthState, type AuthState } from "../scripts/auth-state";
+  const analytics = (window as unknown as { posthog: AnalyticsIdentityClient }).posthog;
+  if (analytics) {
+    const handle = webIdentity(analytics, fetch, () => navigator.doNotTrack === "1");
+    document.addEventListener("outfitter:auth-state", (event) => { void handle((event as CustomEvent<AuthState>).detail); });
+    const current = cachedAuthState();
+    if (current) void handle(current);
   }
 </script>

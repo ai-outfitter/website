@@ -156,6 +156,10 @@ export async function handleCli(request: Request, env: Env): Promise<Response> {
       if (!await env.CLI_DEVICES.getByName(token.id).revoke(token.secret)) fail("unauthorized", 401);
       return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
     }
+    if (route === "/api/cli/identity" && request.method === "GET") {
+      const context = await contextFor(env, await browserUser(request, env));
+      return reply({ user: context.user, workspaces: context.workspaces });
+    }
     if (route === "/api/cli/me" && request.method === "GET") return reply(await authenticateCli(request, env));
     if (route === "/api/cli/workspace" && request.method === "PUT") {
       const token = bearer(request);
