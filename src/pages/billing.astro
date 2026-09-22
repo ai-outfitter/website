@@ -20,6 +20,17 @@ import SiteShell from "../layouts/SiteShell.astro";
       <p>Free partner credit is additional. Uncapped usage still requires prepaid credit.</p>
       <button type="submit">Save spending limit</button>
     </form>
+    <form id="topup-form" hidden>
+      <h2>Automatic credit purchases</h2>
+      <p id="topup-status" role="status"></p>
+      <label>Buy credit when available paid balance is below USD <input id="topup-threshold" type="number" min="0" max="999.99" step="0.01" value="5" required /></label>
+      <label>Purchase amount in USD <input id="topup-amount" type="number" min="5" max="1000" step="0.01" value="20" required /></label>
+      <label><input id="topup-consent" type="checkbox" required /> I authorize Outfitter to save my card and charge this purchase amount automatically when my selected account needs credit, until I disable automatic purchases.</label>
+      <p>Monthly usage limits apply to inference consumed, not card charges. Credit purchases may exceed the month's remaining usage limit. Pending charges may complete after disabling.</p>
+      <button id="topup-save" type="submit">Save card and enable automatic purchases</button>
+      <button id="topup-disable" type="button">Disable automatic purchases</button>
+      <button id="topup-reconcile" type="button">Check pending payment</button>
+    </form>
     <p>Payment confirmation can take a moment. Returning from Checkout does not confirm that credit has arrived.</p>
     <a href="/dashboard/">Back to dashboard</a>
   </main>
