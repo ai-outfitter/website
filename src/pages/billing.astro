@@ -1,0 +1,28 @@
+---
+import SiteShell from "../layouts/SiteShell.astro";
+---
+<SiteShell title="Inference credit | Outfitter" description="Manage your Outfitter inference credit.">
+  <main class="billing">
+    <h1>Inference credit</h1>
+    <p>Choose your personal account or an organization you own. Purchased credit stays with that account.</p>
+    <p id="billing-status" role="status">Loading your accounts…</p>
+    <form id="billing-form" hidden>
+      <label>Account <select id="billing-account" required></select></label>
+      <p id="billing-balance"></p>
+      <label>Credit in USD <input id="billing-amount" type="number" min="5" max="1000" step="0.01" value="20" required /></label>
+      <button id="billing-buy" type="submit" disabled>Buy credit</button>
+    </form>
+    <p>Payment confirmation can take a moment. Returning from Checkout does not confirm that credit has arrived.</p>
+    <a href="/dashboard/">Back to dashboard</a>
+  </main>
+</SiteShell>
+<style>
+  .billing { max-width: 44rem; margin: 4rem auto; padding: 1.5rem; }
+  form { display: grid; gap: 1rem; margin-block: 2rem; }
+  form[hidden] { display: none; }
+  label { display: grid; gap: .5rem; }
+  select, input, button { font: inherit; padding: .7rem; }
+</style>
+<script>
+  import "../scripts/billing-page";
+</script>
