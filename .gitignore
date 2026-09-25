@@ -30,3 +30,5 @@ devenv.local.nix
 .env.*
 !.env
 !.env.example
+
+.beta-secrets.json

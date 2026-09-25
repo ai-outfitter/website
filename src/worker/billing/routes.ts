@@ -26,13 +26,22 @@ export async function limitedText(request: Request, maximum: number) {
   return new TextDecoder().decode(bytes);
 }
 
-export async function billingOwner(request: Request, env: Env, login: string) {
+export type BillingIdentity = (request: Request, env: Env) => Promise<{
+  githubUserId: number;
+  client: Awaited<ReturnType<typeof github>>;
+}>;
+
+const signedInIdentity: BillingIdentity = async (request, env) => {
   const current = await session(env, request.headers);
   if (!current) throw new Response("Sign in required", { status: 401 });
-  const client = await github(env, request);
+  return { githubUserId: current.user.githubUserId, client: await github(env, request) };
+};
+
+export async function billingOwner(request: Request, env: Env, login: string, identity: BillingIdentity = signedInIdentity) {
+  const { githubUserId, client } = await identity(request, env);
   const { data: owner } = await client.request("GET /users/{username}", { username: login });
   if (owner.type === "User") {
-    if (owner.id !== current.user.githubUserId) throw new Response("Account owner required", { status: 403 });
+    if (owner.id !== githubUserId) throw new Response("Account owner required", { status: 403 });
   } else if (owner.type === "Organization") {
     const { data: membership } = await client.request("GET /user/memberships/orgs/{org}", { org: login });
     if (membership.state !== "active" || membership.role !== "admin") throw new Response("Organization owner required", { status: 403 });
@@ -61,7 +70,7 @@ async function webhook(request: Request, env: Env) {
   return json({ received: true });
 }
 
-export async function billingRoute(request: Request, env: Env): Promise<Response | null> {
+export async function billingRoute(request: Request, env: Env, identity: BillingIdentity = signedInIdentity): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   const isWebhook = path === "/api/webhooks/stripe";
   const match = path.match(/^\/api\/billing\/([^/]+)(\/checkout)?$/);
@@ -73,8 +82,7 @@ export async function billingRoute(request: Request, env: Env): Promise<Response
     if (request.method === "POST" && request.headers.get("origin") !== new URL(env.BETTER_AUTH_URL).origin) return json({ error: "Invalid origin" }, 403);
     if (String(env.BILLING_ENABLED) !== "true") return json({ error: "Billing is not open yet" }, 503);
     if (path === "/api/billing/accounts" && request.method === "GET") {
-      if (!await session(env, request.headers)) return json({ error: "Sign in required" }, 401);
-      const client = await github(env, request);
+      const { client } = await identity(request, env);
       const { data: viewer } = await client.request("GET /user");
       const accounts = [{ login: viewer.login, type: "User" }];
       for (let page = 1; ; page++) {
@@ -86,7 +94,7 @@ export async function billingRoute(request: Request, env: Env): Promise<Response
       }
       return json({ accounts });
     }
-    const workspace = await billingOwner(request, env, decodeURIComponent(match![1]));
+    const workspace = await billingOwner(request, env, decodeURIComponent(match![1]), identity);
     const account = env.BILLING_ACCOUNTS.getByName(workspace);
     if (!match![2]) return json({ workspace, ...await account.balance() });
     let input: { purchaseId?: unknown; cents?: unknown };

@@ -92,6 +92,45 @@
           }
         ]
       }
+    },
+    "beta": {
+      "name": "ai-outfitter-website-beta",
+      "main": "src/beta-worker.ts",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [
+        {
+          "pattern": "beta.ai-outfitter.com",
+          "custom_domain": true
+        }
+      ],
+      "assets": {
+        "binding": "ASSETS",
+        "directory": "./dist",
+        "not_found_handling": "404-page",
+        "run_worker_first": true
+      },
+      "vars": {
+        "BETTER_AUTH_URL": "https://beta.ai-outfitter.com",
+        "GITHUB_APP_SLUG": "ai-outfitter",
+        "GITHUB_APP_ID": "4253427",
+        "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
+        "FACTORY_AUTO_START_ACTOR_IDS": "",
+        "BILLING_ENABLED": "true",
+        "STRIPE_LIVE_MODE": "false"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "GITHUB_USER_GRANTS",
+            "class_name": "GitHubUserGrant"
+          },
+          {
+            "name": "BILLING_ACCOUNTS",
+            "class_name": "BillingAccount"
+          }
+        ]
+      }
     }
   }
 }
