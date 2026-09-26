@@ -1,6 +1,8 @@
-# Beta prepaid billing
+# Beta website and sandbox billing
 
-`https://beta.ai-outfitter.com/billing/` stages the merged prepaid purchase slice.
+`https://beta.ai-outfitter.com/` serves the full website. `/dashboard/` uses
+the shared dashboard routes for repository configuration, sources, workflows,
+account switching, and read-only plan previews. `/billing/` stages prepaid credit.
 Deploy with `devenv shell -- node scripts/beta.mjs deploy` after running
 `npm run check:precommit` and `npm exec -- wrangler deploy --env beta --dry-run`.
 The beta entry point and its Durable Object namespaces are separate from production.
@@ -19,10 +21,12 @@ and rerun configure to revoke previous beta access.
 This is a single-operator staging identity, not customer login. Every authorized
 request uses the read-only token's GitHub identity. Personal ownership and active
 organization-owner checks still execute against GitHub. The token must allow
-reading the user and organization memberships. GitHub writes and other APIs are
-unavailable in this beta entry point. `GET /api/accounts` supplies the navigation
-with the token owner and a sandbox indicator; the navigation hides unsupported
-account-management actions. It does not prove OAuth, multiple-user
+reading the user and organization memberships. The dashboard also includes the
+configured ai-outfitter account; repository reads still require GitHub access,
+and this does not grant organization billing permission. GitHub writes, GitHub
+webhooks, and OAuth endpoints are blocked. Account selection and plan previews
+require the beta origin. `GET /api/accounts` supplies the normal account menu
+with a sandbox indicator; OAuth sign-out and installation actions are hidden. It does not prove OAuth, multiple-user
 sessions, inference, or resident behavior.
 
 Only sandbox Stripe keys are accepted. The signed Stripe webhook is the sole

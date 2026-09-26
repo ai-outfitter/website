@@ -32,6 +32,7 @@ if (mode === 'deploy') {
   const path = resolve(root, '.beta-secrets.json');
   const secrets = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
   secrets.BETA_ACCESS_PASSWORD ||= randomBytes(32).toString('base64url');
+  secrets.AGENTS_PLAN_SIGNING_KEY ||= randomBytes(32).toString('hex');
   secrets.BETA_GITHUB_TOKEN = source.GH_TOKEN_RO;
   if (source.STRIPE_TEST_SECRET_KEY) {
     if (!/^(sk|rk)_test_/.test(source.STRIPE_TEST_SECRET_KEY)) throw new Error('A sandbox Stripe key is required');

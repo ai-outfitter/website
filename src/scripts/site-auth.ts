@@ -52,17 +52,12 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   const { loading, link, menu, trigger, options, addOrganization, signOut } = elements(document);
   if (!link || !menu || !trigger || !options || !addOrganization || !signOut) return;
   if (loading) loading.hidden = true;
-  if (index.beta === true) {
-    link.textContent = `${index.activeAccount?.login ?? index.user.name ?? "Account"} · sandbox`;
-    link.href = "/billing/";
-    link.hidden = false;
-    menu.hidden = true;
-    return;
-  }
   link.hidden = true;
   menu.hidden = false;
   const account = index.activeAccount;
-  trigger.textContent = account?.login ?? index.user.name ?? "Account";
+  trigger.textContent = (account?.login ?? index.user.name ?? "Account") + (index.beta ? " · sandbox" : "");
+  addOrganization.hidden = index.beta === true;
+  signOut.hidden = index.beta === true;
   trigger.setAttribute("aria-label", account
     ? `Active ${account.type === "Organization" ? "organization" : "account"}: ${account.login}`
     : "GitHub account options");

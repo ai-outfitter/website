@@ -1,5 +1,24 @@
 import { timingSafeEqual } from "node:crypto";
 import { Octokit } from "@octokit/core";
+import { createWorker } from "./worker";
+import { tokenAccounts, tokenIdentity } from "./worker/github";
+import { readActiveAccount } from "./worker/scope";
+
+function readOnlyClient(env: Env) {
+  const client = new Octokit({ auth: env.BETA_GITHUB_TOKEN });
+  client.hook.before("request", (options) => {
+    if (options.method !== "GET") throw new Error("Beta GitHub access is read-only");
+  });
+  return client;
+}
+const site = createWorker(async (env, request, options = {}) => {
+  const client = readOnlyClient(env);
+  const user = await tokenIdentity(client);
+  const accounts = await tokenAccounts(client, "ai-outfitter", options);
+  for (const account of accounts) if (account.repository) account.repository.canPush = false;
+  const active = await readActiveAccount(request.headers, accounts, user.login, env.AGENTS_PLAN_SIGNING_KEY);
+  return { client, user, accounts, activeAccount: accounts.find(account => account.login === active) ?? null };
+});
 import { billingRoute, type BillingIdentity } from "./worker/billing/routes";
 export { BillingAccount } from "./worker/billing/account";
 export { GitHubUserGrant } from "./worker/grant";
@@ -25,27 +44,21 @@ export default {
     if (!env.BETA_ACCESS_PASSWORD || !env.BETA_GITHUB_TOKEN) return json("Beta credentials unavailable", 503);
     if (!await authorized(request, env.BETA_ACCESS_PASSWORD)) return new Response("Beta access required", { status: 401, headers: { "www-authenticate": 'Basic realm="Outfitter sandbox", charset="UTF-8"', "cache-control": "no-store" } });
     const identity: BillingIdentity = async () => {
-      const client = new Octokit({ auth: env.BETA_GITHUB_TOKEN });
-      client.hook.before("request", (options) => {
-        if (options.method !== "GET") throw new Error("Beta GitHub access is read-only");
-      });
+      const client = readOnlyClient(env);
       const { data: viewer } = await client.request("GET /user");
       return { githubUserId: Number(viewer.id), client };
     };
-    if (url.pathname === "/api/accounts" && request.method === "GET") {
-      try {
-        const { client } = await identity(request, env);
-        const { data: viewer } = await client.request("GET /user");
-        const account = { login: viewer.login, type: "User", installationId: null, repository: null };
-        return Response.json({ user: { name: viewer.login }, activeAccount: account, accounts: [account], githubAppSlug: env.GITHUB_APP_SLUG, beta: true }, { headers: { "cache-control": "no-store" } });
-      } catch { return json("Beta GitHub identity unavailable", 503); }
-    }
     const billing = await billingRoute(request, env, identity);
     if (billing) return billing;
-    if (url.pathname.startsWith("/api/")) return json("This beta stages prepaid billing only", 404);
-    if (!["GET", "HEAD"].includes(request.method)) return json("Method not allowed", 405);
-    if (url.pathname === "/") return Response.redirect(`${url.origin}/billing/`, 302);
-    const response = await env.ASSETS.fetch(request);
+    if (url.pathname.startsWith("/api/")) {
+      const read = request.method === "GET" && (url.pathname === "/api/accounts" || /^\/api\/accounts\/[^/]+\/(configuration(?:\/freshness)?|playground)$/.test(url.pathname));
+      const select = request.method === "PUT" && url.pathname === "/api/accounts/active";
+      const preview = request.method === "POST" && /^\/api\/accounts\/[^/]+\/plans$/.test(url.pathname);
+      if (!read && !select && !preview) return json("Beta GitHub access is read-only", 403);
+      if ((select || preview) && request.headers.get("origin") !== url.origin) return json("Invalid origin", 403);
+    } else if (!["GET", "HEAD"].includes(request.method)) return json("Method not allowed", 405);
+    const response = await site.fetch(request, env);
+    if (url.pathname === "/api/accounts" && response.ok) return Response.json({ ...await response.json() as object, beta: true }, { headers: { "cache-control": "no-store" } });
     const headers = new Headers(response.headers);
     headers.set("cache-control", "private, no-store");
     headers.set("x-robots-tag", "noindex, nofollow");
