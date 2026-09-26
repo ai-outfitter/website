@@ -52,6 +52,13 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   const { loading, link, menu, trigger, options, addOrganization, signOut } = elements(document);
   if (!link || !menu || !trigger || !options || !addOrganization || !signOut) return;
   if (loading) loading.hidden = true;
+  if (index.beta === true) {
+    link.textContent = `${index.activeAccount?.login ?? index.user.name ?? "Account"} · sandbox`;
+    link.href = "/billing/";
+    link.hidden = false;
+    menu.hidden = true;
+    return;
+  }
   link.hidden = true;
   menu.hidden = false;
   const account = index.activeAccount;

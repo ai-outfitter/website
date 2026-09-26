@@ -32,6 +32,14 @@ export default {
       const { data: viewer } = await client.request("GET /user");
       return { githubUserId: Number(viewer.id), client };
     };
+    if (url.pathname === "/api/accounts" && request.method === "GET") {
+      try {
+        const { client } = await identity(request, env);
+        const { data: viewer } = await client.request("GET /user");
+        const account = { login: viewer.login, type: "User", installationId: null, repository: null };
+        return Response.json({ user: { name: viewer.login }, activeAccount: account, accounts: [account], githubAppSlug: env.GITHUB_APP_SLUG, beta: true }, { headers: { "cache-control": "no-store" } });
+      } catch { return json("Beta GitHub identity unavailable", 503); }
+    }
     const billing = await billingRoute(request, env, identity);
     if (billing) return billing;
     if (url.pathname.startsWith("/api/")) return json("This beta stages prepaid billing only", 404);

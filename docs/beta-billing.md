@@ -20,7 +20,9 @@ This is a single-operator staging identity, not customer login. Every authorized
 request uses the read-only token's GitHub identity. Personal ownership and active
 organization-owner checks still execute against GitHub. The token must allow
 reading the user and organization memberships. GitHub writes and other APIs are
-unavailable in this beta entry point. It does not prove OAuth, multiple-user
+unavailable in this beta entry point. `GET /api/accounts` supplies the navigation
+with the token owner and a sandbox indicator; the navigation hides unsupported
+account-management actions. It does not prove OAuth, multiple-user
 sessions, inference, or resident behavior.
 
 Only sandbox Stripe keys are accepted. The signed Stripe webhook is the sole

@@ -26,6 +26,17 @@ describe("site authentication navigation", () => {
       </nav>`;
   });
 
+  it("renders the sandbox identity without unsupported account actions", async () => {
+    const account = { login: "ncrmro", type: "User" };
+    const fetcher = vi.fn(async () => Response.json({ user: { name: "ncrmro" }, activeAccount: account, accounts: [account], githubAppSlug: "ai-outfitter", beta: true }));
+    await startSiteAuth(document, fetcher as typeof fetch, locationAt("/billing/"), false);
+    expect(document.querySelector<HTMLElement>("#site-auth-loading")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLAnchorElement>("#site-auth")?.textContent).toBe("ncrmro · sandbox");
+    expect(document.querySelector<HTMLAnchorElement>("#site-auth")?.getAttribute("href")).toBe("/billing/");
+    expect(document.querySelector<HTMLAnchorElement>("#site-auth")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLDetailsElement>("#site-account")?.hidden).toBe(true);
+  });
+
   it("keeps the sign-in link when no session exists", async () => {
     const fetcher = vi.fn(async () => Response.json({ error: "Sign in required" }, { status: 401 }));
     await startSiteAuth(document, fetcher as typeof fetch, locationAt(), false);
