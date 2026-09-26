@@ -38,3 +38,31 @@ balance, replay the webhook, and perform partial refunds to verify reversals.
 Also test personal-account denial and organization-member denial. Record payment
 and event IDs, response statuses, and balance deltas; never record credentials or
 card details. Missing sandbox keys leave checkout unavailable.
+
+## Continuous staging
+
+Pushes to `beta` run the complete CI suite and deploy only the beta Worker.
+Pushes to `main` deploy production; pull requests retain their isolated previews.
+Deployments are serialized per branch. Worker secrets remain in Cloudflare;
+CI never copies local credentials or production Stripe keys into beta.
+
+Keep `beta` as an integration branch, never merge it wholesale into `main`.
+Merge main into beta as production PRs land. To stage an unmerged PR, merge its
+head branch into beta in dependency order and push beta. Record the included
+PRs and the deployed commit in the staging test results. Keep each original
+PR independently reviewable against its intended base. Revert an integration
+merge to remove a staged slice; do not reset billing storage as a code rollback.
+
+Stage partner allowances and usage budgets next, then CLI authorization and the
+gateway; top-ups need budgets, and Spark needs the gateway. Merge the required
+configuration and migrations into beta explicitly: the current beta adapter
+allows dashboard and billing APIs only. CLI device authorization and gateway
+acceptance require their real authentication flows, not the operator PAT.
+Enabling those slices must include beta routes, required secrets, model config,
+and positive/negative tests. Deploying their code alone is not acceptance.
+
+Sandbox keys are needed for purchase/reversal/top-up acceptance. Grants and
+budget tests can proceed independently. The CLI provider is tested from its
+own PR build against beta after authorization and gateway are staged. Resident
+triage requires the separate operator/profile deployments and GitHub event
+credentials; the website beta branch does not deploy those repositories.
