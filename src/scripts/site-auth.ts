@@ -55,7 +55,9 @@ function renderAccountMenu(document: Document, index: AccountIndex, fetcher: typ
   link.hidden = true;
   menu.hidden = false;
   const account = index.activeAccount;
-  trigger.textContent = account?.login ?? index.user.name ?? "Account";
+  trigger.textContent = (account?.login ?? index.user.name ?? "Account") + (index.beta ? " · sandbox" : "");
+  addOrganization.hidden = index.beta === true;
+  signOut.hidden = index.beta === true;
   trigger.setAttribute("aria-label", account
     ? `Active ${account.type === "Organization" ? "organization" : "account"}: ${account.login}`
     : "GitHub account options");

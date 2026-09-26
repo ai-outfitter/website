@@ -1,4 +1,6 @@
 interface Env {
+  BETA_ACCESS_PASSWORD?: string;
+  BETA_GITHUB_TOKEN?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   ASSETS: Fetcher;

@@ -7,6 +7,7 @@ export type Account = {
 };
 
 export type AccountIndex = {
+  beta?: boolean;
   user: { name?: string };
   activeAccount: Account | null;
   accounts: Account[];

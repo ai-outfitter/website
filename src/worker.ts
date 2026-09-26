@@ -101,8 +101,9 @@ function allowedAccount(values: Account[], login: string) {
   return account;
 }
 
+export function createWorker(stateFor: typeof authenticatedState = authenticatedState) {
 async function accountIndex(env: Env, request: Request) {
-  const state = await authenticatedState(env, request, { repositories: false });
+  const state = await stateFor(env, request, { repositories: false });
   return json({
     user: state.user,
     activeAccount: state.activeAccount,
@@ -112,13 +113,13 @@ async function accountIndex(env: Env, request: Request) {
 }
 
 async function accountConfiguration(env: Env, request: Request, login: string) {
-  const state = await authenticatedState(env, request);
+  const state = await stateFor(env, request);
   const account = allowedAccount(state.accounts, login);
   return json(await repositoryConfiguration(state.client, login, account.repository, catalog));
 }
 
 async function accountSourceFreshness(env: Env, request: Request, login: string) {
-  const state = await authenticatedState(env, request);
+  const state = await stateFor(env, request);
   const account = allowedAccount(state.accounts, login);
   if (!account.repository) throw httpError({ error: "No .agents repository exists" }, 404);
   const configuration = await repositoryConfiguration(state.client, login, account.repository, catalog);
@@ -126,7 +127,7 @@ async function accountSourceFreshness(env: Env, request: Request, login: string)
 }
 
 async function accountPlayground(env: Env, request: Request, login: string) {
-  const state = await authenticatedState(env, request);
+  const state = await stateFor(env, request);
   const account = allowedAccount(state.accounts, login);
   if (request.method === "GET") {
     const playground = await findPlayground(state.client, login);
@@ -137,7 +138,7 @@ async function accountPlayground(env: Env, request: Request, login: string) {
 }
 
 async function createPlan(env: Env, request: Request, login: string) {
-  const state = await authenticatedState(env, request);
+  const state = await stateFor(env, request);
   const account = allowedAccount(state.accounts, login);
   const body = await bodyRecord(request);
   const plan = await buildPlan(state.client, {
@@ -150,7 +151,7 @@ async function createPlan(env: Env, request: Request, login: string) {
 }
 
 async function applyAccountPlan(env: Env, request: Request, login: string) {
-  const state = await authenticatedState(env, request);
+  const state = await stateFor(env, request);
   const account = allowedAccount(state.accounts, login);
   const body = await bodyRecord(request);
   if (body.mode !== "pull-request" && body.mode !== "direct") throw new Error("Invalid apply mode");
@@ -161,7 +162,7 @@ async function applyAccountPlan(env: Env, request: Request, login: string) {
   return json(await applyPlan(state.client, plan, body.mode));
 }
 
-export default {
+return {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
@@ -180,7 +181,7 @@ export default {
       if (url.pathname === "/api/webhooks/github" && request.method === "POST") return await handleGitHubWebhook(request, webhookDeps(env));
       if (url.pathname === "/api/accounts" && request.method === "GET") return await accountIndex(env, request);
       if (url.pathname === "/api/accounts/active" && request.method === "PUT") {
-        const state = await authenticatedState(env, request);
+        const state = await stateFor(env, request);
         const body = await bodyRecord(request);
         if (typeof body.login !== "string") throw new Error("An account login is required");
         const account = allowedAccount(state.accounts, body.login);
@@ -216,3 +217,7 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+}
+
+export default createWorker();
