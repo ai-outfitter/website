@@ -34,6 +34,11 @@ if (mode === 'deploy') {
   secrets.BETA_ACCESS_PASSWORD ||= randomBytes(32).toString('base64url');
   secrets.AGENTS_PLAN_SIGNING_KEY ||= randomBytes(32).toString('hex');
   secrets.BETA_GITHUB_TOKEN = source.GH_TOKEN_RO;
+  secrets.BETTER_AUTH_SECRET ||= randomBytes(32).toString('base64url');
+  secrets.GITHUB_USER_TOKEN_ENCRYPTION_KEY ||= randomBytes(32).toString('base64url');
+  if (source.BETA_GITHUB_CLIENT_SECRET) secrets.GITHUB_CLIENT_SECRET = source.BETA_GITHUB_CLIENT_SECRET;
+  if (source.SPARK_AUTHORIZATION) secrets.SPARK_AUTHORIZATION = source.SPARK_AUTHORIZATION;
+  if (source.SPARK_BASE_URL) secrets.SPARK_BASE_URL = source.SPARK_BASE_URL;
   if (source.STRIPE_TEST_SECRET_KEY) {
     if (!/^(sk|rk)_test_/.test(source.STRIPE_TEST_SECRET_KEY)) throw new Error('A sandbox Stripe key is required');
     if (secrets.STRIPE_SECRET_KEY && secrets.STRIPE_SECRET_KEY !== source.STRIPE_TEST_SECRET_KEY) throw new Error('Changing Stripe keys requires explicit sandbox account and webhook reconciliation');

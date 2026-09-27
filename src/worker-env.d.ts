@@ -26,3 +26,13 @@ interface Env {
   LOCAL_DEV_PORT?: string;
   GITHUB_USER_GRANTS: DurableObjectNamespace<import("./worker/grant").GitHubUserGrant>;
 }
+
+interface Env {
+  INTERNAL_INFERENCE_ENABLED?: string;
+  INTERNAL_USERS?: string;
+  INTERNAL_DEVICES: DurableObjectNamespace<import("./worker/internal-device").InternalDevice>;
+  INTERNAL_INFERENCE_LIMIT: DurableObjectNamespace<import("./worker/internal-inference").InternalInferenceLimit>;
+  SPARK_BASE_URL?: string;
+  SPARK_AUTHORIZATION?: string;
+  SPARK_MODEL?: string;
+}
