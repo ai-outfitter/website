@@ -1,3 +1,8 @@
+import { handleInternalAuth } from "./worker/internal-auth";
+import { internalInference } from "./worker/internal-inference";
+import { internalInferencePage } from "./worker/internal-inference-page";
+export { InternalDevice } from "./worker/internal-device";
+export { InternalInferenceLimit } from "./worker/internal-inference";
 import { timingSafeEqual } from "node:crypto";
 import { Octokit } from "@octokit/core";
 import { createWorker } from "./worker";
@@ -38,6 +43,20 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.origin !== "https://beta.ai-outfitter.com" || env.BETTER_AUTH_URL !== url.origin || String(env.STRIPE_LIVE_MODE) !== "false") return json("Invalid beta configuration", 503);
+    // These routes use individual session/bearer authentication, never the shared PAT.
+    if (url.pathname.startsWith("/api/cli/") || url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/internal/") || url.pathname.startsWith("/v1/")) {
+      const headers = new Headers(request.headers);
+      if (/^Basic /i.test(headers.get("authorization") ?? "")) headers.delete("authorization");
+      const individual = new Request(request, { headers });
+      if (url.pathname.startsWith("/api/auth/")) {
+        if (!["GET", "HEAD"].includes(request.method) && request.headers.get("origin") !== url.origin) return json("Invalid origin", 403);
+        return site.fetch(individual, env);
+      }
+      if (url.pathname.startsWith("/api/cli/") || url.pathname === "/internal/authorize") return handleInternalAuth(individual, env);
+      if (url.pathname === "/internal/inference" && request.method === "GET") return internalInferencePage();
+      if (url.pathname.startsWith("/v1/")) return internalInference(individual, env);
+      return json("Not found", 404);
+    }
     if (env.STRIPE_SECRET_KEY && !/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY)) return json("Sandbox Stripe key required", 503);
     // Stripe authenticates through its signature; it cannot use browser Basic auth.
     if (url.pathname === "/api/webhooks/stripe") return (await billingRoute(request, env))!;

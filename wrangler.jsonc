@@ -117,7 +117,10 @@
         "GITHUB_CLIENT_ID": "Iv23lipcbgzyqZYb1kNX",
         "FACTORY_AUTO_START_ACTOR_IDS": "",
         "BILLING_ENABLED": "true",
-        "STRIPE_LIVE_MODE": "false"
+        "STRIPE_LIVE_MODE": "false",
+        "INTERNAL_INFERENCE_ENABLED": "true",
+        "INTERNAL_USERS": "github:8276365",
+        "SPARK_MODEL": "GLM-5.3-Flash-EXL3"
       },
       "durable_objects": {
         "bindings": [
@@ -128,9 +131,38 @@
           {
             "name": "BILLING_ACCOUNTS",
             "class_name": "BillingAccount"
+          },
+          {
+            "name": "INTERNAL_DEVICES",
+            "class_name": "InternalDevice"
+          },
+          {
+            "name": "INTERNAL_INFERENCE_LIMIT",
+            "class_name": "InternalInferenceLimit"
           }
         ]
-      }
+      },
+      "migrations": [
+        {
+          "tag": "v1",
+          "new_sqlite_classes": [
+            "GitHubUserGrant"
+          ]
+        },
+        {
+          "tag": "v2",
+          "new_sqlite_classes": [
+            "BillingAccount"
+          ]
+        },
+        {
+          "tag": "v3-internal-spark",
+          "new_sqlite_classes": [
+            "InternalDevice",
+            "InternalInferenceLimit"
+          ]
+        }
+      ]
     }
   }
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("cloudflare:workers", () => ({ DurableObject: class { constructor(public ctx: DurableObjectState, public env: Env) {} } }));
 vi.mock("./worker/billing/account", () => ({ BillingAccount: class {} }));
 vi.mock("./worker/grant", () => ({ GitHubUserGrant: class {} }));
 vi.mock("./worker/github", async (original) => ({
@@ -11,6 +12,10 @@ const asset = vi.fn(async (_request: Request) => new Response("page"));
 const env = { BETTER_AUTH_URL: "https://beta.ai-outfitter.com", STRIPE_LIVE_MODE: "false", BILLING_ENABLED: "true", AGENTS_PLAN_SIGNING_KEY: "test-signing-key", GITHUB_APP_SLUG: "ai-outfitter", BETA_ACCESS_PASSWORD: "test-password", BETA_GITHUB_TOKEN: "fake", ASSETS: { fetch: asset } } as unknown as Env;
 const request = (path = "/billing/", password?: string) => new Request(`https://beta.ai-outfitter.com${path}`, { headers: password ? { authorization: `Basic ${btoa(`beta:${password}`)}` } : {} });
 describe("beta isolation", () => {
+  it("rejects cross-origin auth mutations before touching user grants", async () => {
+    const response = await worker.fetch(new Request('https://beta.ai-outfitter.com/api/auth/sign-out', { method: 'POST', headers: { origin: 'https://other.example', cookie: 'session=fake' } }), env);
+    expect(response.status).toBe(403);
+  });
   it("serves dashboard deep links and an authenticated account menu", async () => {
     const page = await worker.fetch(request('/dashboard/alice/', 'test-password'), env);
     expect(page.status).toBe(200);
