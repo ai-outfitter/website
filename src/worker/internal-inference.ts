@@ -67,7 +67,7 @@ export async function internalInference(request: Request, env: Env): Promise<Res
     }
     stage = "upstream";
     const upstream = await fetch(`${base.href}/chat/completions`, {
-      method: "POST", redirect: "error", signal: abort.signal,
+      method: "POST", redirect: "manual", signal: abort.signal,
       headers: { authorization: env.SPARK_AUTHORIZATION, "content-type": "application/json" }, body: JSON.stringify(payload),
     });
     if (!upstream.ok || !upstream.body) { await upstream.body?.cancel(); await cleanup(); return reply("Spark request failed", 502); }
