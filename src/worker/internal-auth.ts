@@ -130,8 +130,39 @@ function approvalPage(url: URL) {
   const nonce = randomSecret();
   const code = (url.searchParams.get("user_code") ?? "").replace(/[^a-fA-F0-9-]/g, "").slice(0, 24);
   return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorize Outfitter CLI</title><body><main><h1>Authorize Outfitter CLI</h1><p>Only approve a code shown by a CLI you just started. Approval permits access to internal DGX Spark inference.</p><button id="signin">Sign in with GitHub</button><form id="approval"><label>Code from your CLI <input name="user_code" required value="${code}" autocomplete="off"></label><button name="action" value="approve">Approve this CLI</button><button name="action" value="deny">Deny</button></form><p id="status" role="status"></p></main><script nonce="${nonce}">
-const status=document.getElementById('status');
-document.getElementById('signin').onclick=async()=>{try{const r=await fetch('/api/auth/sign-in/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:'github',callbackURL:location.href})});const v=await r.json();if(r.ok&&v.url)location.assign(v.url);else status.textContent='Sign-in failed. Try again.';}catch{status.textContent='Sign-in unavailable.';}};
-document.getElementById('approval').onsubmit=async(e)=>{e.preventDefault();const f=new FormData(e.target);try{const r=await fetch('/api/cli/approve',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({user_code:f.get('user_code'),action:e.submitter.value})});status.textContent=r.ok?'Confirmation saved. Return to your CLI.':r.status===401?'Sign in with GitHub, then confirm again.':'Code expired, already used, or invalid. Start CLI login again.';}catch{status.textContent='Confirmation unavailable. Try again.';}};
+const status=document.getElementById('status'),signin=document.getElementById('signin'),form=document.getElementById('approval'),input=form.elements.user_code;
+const buttons=[...form.querySelectorAll('button')];
+buttons.forEach(button=>button.disabled=true);
+async function checkIdentity(){
+  status.textContent='Checking sign-in…';
+  try{
+    const r=await fetch('/api/cli/me',{cache:'no-store'}),v=await r.json();
+    if(r.ok){signin.hidden=true;status.textContent='Signed in as '+v.user.login+'. Confirm the code from your CLI.';buttons.forEach(button=>button.disabled=false);}
+    else if(r.status===401){signin.hidden=false;status.textContent=new URL(location.href).searchParams.has('error')?'GitHub sign-in did not finish. Start again here in this tab; do not reload the GitHub callback.':'Sign in with GitHub to approve this CLI.';}
+    else status.textContent=r.status===403?'Your GitHub account does not have internal inference access.':'Sign-in could not be checked. Reload this page to retry.';
+  }catch{status.textContent='Sign-in could not be checked. Reload this page to retry.';}
+}
+signin.onclick=async()=>{
+  if(signin.disabled)return;
+  signin.disabled=true;
+  const callback=new URL(location.href);callback.search='';callback.searchParams.set('user_code',input.value.trim());
+  history.replaceState(null,'',callback);
+  try{
+    const r=await fetch('/api/auth/sign-in/social',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:'github',callbackURL:callback.href,errorCallbackURL:callback.href})}),v=await r.json();
+    if(r.ok&&v.url){status.textContent='Opening GitHub…';location.assign(v.url);}
+    else{status.textContent='Sign-in failed. Try again.';signin.disabled=false;}
+  }catch{status.textContent='Sign-in unavailable. Try again.';signin.disabled=false;}
+};
+form.onsubmit=async(e)=>{
+  e.preventDefault();buttons.forEach(button=>button.disabled=true);
+  try{
+    const r=await fetch('/api/cli/approve',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({user_code:input.value,action:e.submitter.value})});
+    if(r.ok){status.textContent='Confirmation saved. Return to your CLI.';return;}
+    if(r.status===401){await checkIdentity();return;}
+    status.textContent=r.status===403?'Your account cannot approve this CLI.':'Code expired, already used, or invalid. Start CLI login again.';
+  }catch{status.textContent='Confirmation unavailable. Try again.';}
+  buttons.forEach(button=>button.disabled=false);
+};
+checkIdentity();
 </script></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer", "content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`, "x-content-type-options": "nosniff" } });
 }
