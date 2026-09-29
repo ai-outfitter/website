@@ -31,6 +31,7 @@ export class InternalInferenceLimit extends DurableObject<Env> {
 
 export async function internalInference(request: Request, env: Env): Promise<Response> {
   let lease: string | null = null;
+  let stage = "authorization";
   const limit = env.INTERNAL_INFERENCE_LIMIT.getByName("spark");
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const abort = new AbortController();
@@ -54,6 +55,7 @@ export async function internalInference(request: Request, env: Env): Promise<Res
     if (!env.SPARK_BASE_URL || !env.SPARK_AUTHORIZATION) return reply("Spark unavailable", 503);
     const base = new URL(env.SPARK_BASE_URL);
     if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash || !base.pathname.endsWith("/v1")) return reply("Spark unavailable", 503);
+    stage = "reservation";
     lease = await limit.acquire(user.id);
     if (!lease) return reply("Request limit reached; retry shortly", 429);
     timeout = setTimeout(() => abort.abort(), 180000);
@@ -63,6 +65,7 @@ export async function internalInference(request: Request, env: Env): Promise<Res
     for (const key of ["messages", "stream", "stream_options", "tools", "tool_choice", "parallel_tool_calls", "temperature", "top_p", "stop", "seed", "frequency_penalty", "presence_penalty"]) {
       if (input[key] !== undefined) payload[key] = input[key];
     }
+    stage = "upstream";
     const upstream = await fetch(`${base.href}/chat/completions`, {
       method: "POST", redirect: "error", signal: abort.signal,
       headers: { authorization: env.SPARK_AUTHORIZATION, "content-type": "application/json" }, body: JSON.stringify(payload),
@@ -80,6 +83,7 @@ export async function internalInference(request: Request, env: Env): Promise<Res
   } catch (error) {
     abort.abort(); await cleanup();
     if (error instanceof Response) return error;
+    console.error("Internal inference failure", { stage, name: error instanceof Error ? error.name : "unknown", message: error instanceof Error ? error.message : "unknown" });
     return reply("Inference temporarily unavailable", 503);
   }
 }
