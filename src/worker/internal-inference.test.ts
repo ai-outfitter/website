@@ -28,6 +28,19 @@ describe('internal Spark gateway', () => {
     expect(options.headers).toMatchObject({ authorization: 'Basic server-only' });
     expect(JSON.parse(String(options.body))).toMatchObject({ model: 'GLM-5.3-Flash-EXL3', tools, max_tokens: 4096 });
   });
+  it('rejects upstream redirects without forwarding the Spark credential', async () => {
+    const upstream = vi.fn(async (_url: string, options?: RequestInit) => {
+      // Workers supports follow/manual; error throws before dispatch.
+      if (options?.redirect !== 'manual') throw new TypeError('Unsupported or unsafe redirect mode');
+      return new Response(null, { status: 302, headers: { location: 'https://other.example/' } });
+    });
+    vi.stubGlobal('fetch', upstream);
+    const response = await internalInference(request(), env);
+    expect(response.status).toBe(502);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(response.headers.has('location')).toBe(false);
+    expect(release).toHaveBeenCalledWith('lease');
+  });
   it('releases capacity when upstream fails or the client cancels', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream details', { status: 500 })));
     const failed = await internalInference(request(), env); expect(failed.status).toBe(502); expect(await failed.text()).not.toContain('upstream details'); expect(release).toHaveBeenCalled();
