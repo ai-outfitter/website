@@ -4,6 +4,13 @@ The marketing and documentation site for [AI Outfitter](https://github.com/ai-ou
 built with [Astro](https://astro.build/) and [Starlight](https://starlight.astro.build/)
 and deployed as static assets on Cloudflare Workers.
 
+## Root-domain ownership
+
+The `ai-outfitter/webapp` Worker owns `ai-outfitter.com` and organization
+subdomains. This repository retains its assets and Worker data, but production
+deployments MUST NOT claim the root Custom Domain. Its production `routes` list
+is intentionally empty; pull-request preview deployments remain available.
+
 ## Development
 
 ```sh
