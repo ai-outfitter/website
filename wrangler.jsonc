@@ -8,12 +8,7 @@
   ],
   "main": "src/worker.ts",
   "workers_dev": false,
-  "routes": [
-    {
-      "pattern": "ai-outfitter.com",
-      "custom_domain": true
-    }
-  ],
+  "routes": [],
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist",
